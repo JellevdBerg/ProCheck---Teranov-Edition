@@ -115,6 +115,14 @@ it, an Operator could only see profiles in their own department (the same
 limit a manager has), not the whole company, which the Admin screen needs
 to list everyone.
 
+**Fixed in `20261008201500_admin_create_profile_pgcrypto_schema.sql`:**
+`admin_create_profile`'s `crypt(...)`/`gen_salt(...)` calls failed with
+"function gen_salt(unknown) does not exist" — the function's
+`search_path = public` hides pgcrypto, whose functions live in the
+`extensions` schema on this project. Schema-qualified both calls
+(`extensions.crypt(...)`, `extensions.gen_salt(...)`) instead of widening
+the search path.
+
 ## IT department — Operator's near-equal
 
 `20261008140000_it_department.sql` adds a second admin tier: an IT
