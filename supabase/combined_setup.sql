@@ -578,7 +578,8 @@ insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
   confirmation_token, email_change, email_change_token_new, recovery_token
-) values (
+)
+select
   '00000000-0000-0000-0000-000000000000',
   gen_random_uuid(),
   'authenticated',
@@ -586,11 +587,10 @@ insert into auth.users (
   'dev@procheck.local',
   crypt('testing', gen_salt('bf')),
   now(),
-  '{"provider":"email","providers":["email"]}',
-  '{"username":"Dev","display_name":"Dev"}',
+  '{"provider":"email","providers":["email"]}'::jsonb,
+  '{"username":"Dev","display_name":"Dev"}'::jsonb,
   now(), now(), '', '', '', ''
-)
-on conflict (email) do nothing;
+where not exists (select 1 from auth.users where email = 'dev@procheck.local');
 
 insert into auth.identities (
   id, user_id, provider_id, identity_data, provider,
@@ -605,7 +605,10 @@ select
   now(), now(), now()
 from auth.users u
 where u.email = 'dev@procheck.local'
-on conflict (provider_id, provider) do nothing;
+  and not exists (
+    select 1 from auth.identities i
+    where i.provider = 'email' and i.provider_id = u.id::text
+  );
 
 update profiles
 set role = 'manager',
