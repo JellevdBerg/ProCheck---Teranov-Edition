@@ -18,7 +18,6 @@ const _uuid = Uuid();
 /// `projectsProvider.restoreAll`/`tasksProvider.restoreAll`, which — like a
 /// backup import — replace everything currently stored.
 ({List<Project> projects, List<Task> tasks}) buildTestData({
-  required String workspaceId,
   DateTime? now,
 }) {
   final today = _dateOnly(now ?? DateTime.now());
@@ -31,7 +30,6 @@ const _uuid = Uuid();
     createdAt: at(-10),
     lastOpenedAt: at(-2),
     colorIndex: 0,
-    workspaceId: workspaceId,
   );
   final launchProject = Project(
     id: _uuid.v4(),
@@ -40,7 +38,6 @@ const _uuid = Uuid();
     lastOpenedAt: at(-1),
     colorIndex: 2,
     favorite: true,
-    workspaceId: workspaceId,
   );
   final archivedProject = Project(
     id: _uuid.v4(),
@@ -49,7 +46,6 @@ const _uuid = Uuid();
     lastOpenedAt: at(-30),
     colorIndex: 4,
     archived: true,
-    workspaceId: workspaceId,
   );
 
   Subtask sub(String title, {bool checked = false}) =>
@@ -68,7 +64,6 @@ const _uuid = Uuid();
         sub('Wireframe', checked: true),
         sub('Get stakeholder approval', checked: true),
       ],
-      workspaceId: workspaceId,
     ),
     Task(
       id: _uuid.v4(),
@@ -81,7 +76,6 @@ const _uuid = Uuid();
         sub('Mobile layout'),
         sub('Keyboard nav'),
       ],
-      workspaceId: workspaceId,
     ),
     Task(
       id: _uuid.v4(),
@@ -90,14 +84,12 @@ const _uuid = Uuid();
       dueDate: at(3, 12),
       notes: 'Check tone with marketing before publishing.',
       priorityIndex: TaskPriority.low.index,
-      workspaceId: workspaceId,
     ),
     Task(
       id: _uuid.v4(),
       title: 'Full QA pass',
       createdAt: at(-2),
       dueDate: at(10, 10),
-      workspaceId: workspaceId,
     ),
 
     // Client Launch (favorite project)
@@ -108,7 +100,6 @@ const _uuid = Uuid();
       isChecked: true,
       dueDate: at(-1, 9),
       projectId: launchProject.id,
-      workspaceId: workspaceId,
     ),
     Task(
       id: _uuid.v4(),
@@ -118,7 +109,6 @@ const _uuid = Uuid();
       dueDateEnd: at(4, 17),
       priorityIndex: TaskPriority.med.index,
       projectId: launchProject.id,
-      workspaceId: workspaceId,
     ),
     Task(
       id: _uuid.v4(),
@@ -128,7 +118,6 @@ const _uuid = Uuid();
       notes: 'Waiting on legal sign-off.',
       priorityIndex: TaskPriority.high.index,
       projectId: launchProject.id,
-      workspaceId: workspaceId,
     ),
 
     // Archived project — still has its own (mostly completed) tasks
@@ -139,7 +128,6 @@ const _uuid = Uuid();
       isChecked: true,
       dueDate: at(-50, 9),
       projectId: archivedProject.id,
-      workspaceId: workspaceId,
     ),
     Task(
       id: _uuid.v4(),
@@ -148,7 +136,6 @@ const _uuid = Uuid();
       isChecked: true,
       dueDate: at(-40, 9),
       projectId: archivedProject.id,
-      workspaceId: workspaceId,
     ),
 
     // Standalone tasks
@@ -160,7 +147,6 @@ const _uuid = Uuid();
       recurrenceIndex: 1, // daily
       notes: '5 minutes, right after waking up.',
       priorityIndex: TaskPriority.low.index,
-      workspaceId: workspaceId,
     ),
     Task(
       id: _uuid.v4(),
@@ -168,7 +154,6 @@ const _uuid = Uuid();
       createdAt: at(-14),
       dueDate: at(0, 14),
       recurrenceIndex: 2, // weekly
-      workspaceId: workspaceId,
     ),
     Task(
       id: _uuid.v4(),
@@ -177,7 +162,6 @@ const _uuid = Uuid();
       dueDate: at(2, 9),
       recurrenceIndex: 4, // monthly
       priorityIndex: TaskPriority.med.index,
-      workspaceId: workspaceId,
     ),
     Task(
       id: _uuid.v4(),
@@ -185,7 +169,6 @@ const _uuid = Uuid();
       createdAt: at(0),
       dueDate: at(0, 18),
       priorityIndex: TaskPriority.med.index,
-      workspaceId: workspaceId,
     ),
     Task(
       id: _uuid.v4(),
@@ -193,7 +176,6 @@ const _uuid = Uuid();
       createdAt: at(-6),
       dueDate: at(-2, 17),
       priorityIndex: TaskPriority.high.index,
-      workspaceId: workspaceId,
     ),
     Task(
       id: _uuid.v4(),
@@ -207,7 +189,6 @@ const _uuid = Uuid();
         sub('Send invites'),
         sub('Buy decorations'),
       ],
-      workspaceId: workspaceId,
     ),
     Task(
       id: _uuid.v4(),
@@ -215,14 +196,12 @@ const _uuid = Uuid();
       createdAt: at(-1),
       dueDate: at(30, 9),
       notes: 'Takes 4-6 weeks — start early.',
-      workspaceId: workspaceId,
     ),
     Task(
       id: _uuid.v4(),
       title: 'Read a book',
       createdAt: at(-1),
       priorityIndex: TaskPriority.low.index,
-      workspaceId: workspaceId,
     ),
     Task(
       id: _uuid.v4(),
@@ -230,7 +209,6 @@ const _uuid = Uuid();
       createdAt: at(-3),
       isChecked: true,
       dueDate: at(-1, 9),
-      workspaceId: workspaceId,
     ),
   ];
 

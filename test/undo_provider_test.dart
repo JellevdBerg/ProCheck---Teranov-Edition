@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:procheck/data/hive_setup.dart';
 import 'package:procheck/providers/projects_provider.dart';
-import 'package:procheck/providers/settings_provider.dart';
 import 'package:procheck/providers/tasks_provider.dart';
 import 'package:procheck/providers/undo_provider.dart';
 
@@ -138,20 +137,5 @@ void main() {
         expect(container.read(undoStackProvider), isEmpty);
       },
     );
-
-    test('switching workspaces drops the undo history', () {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-
-      final tasks = container.read(tasksProvider.notifier);
-      final task = tasks.addBlankTask(title: 'Workspace-local task');
-      tasks.deleteTask(task.id);
-      expect(container.read(undoStackProvider), hasLength(1));
-
-      container.read(settingsProvider.notifier).addWorkspace('Second workspace');
-
-      expect(container.read(undoStackProvider), isEmpty);
-      expect(container.read(undoStackProvider.notifier).undoLast(), isNull);
-    });
   });
 }

@@ -529,3 +529,12 @@ create policy "projects_delete"
       and department_id = (select department_id from public.current_profile())
     )
   );
+
+-- ===== 0005_embedded_fields.sql =====
+
+alter table tasks add column subtasks jsonb not null default '[]'::jsonb;
+alter table tasks add column attachments jsonb not null default '[]'::jsonb;
+alter table tasks add column template_id uuid;
+
+alter table projects add column activity_log jsonb not null default '[]'::jsonb;
+alter table projects add column comments jsonb not null default '[]'::jsonb;

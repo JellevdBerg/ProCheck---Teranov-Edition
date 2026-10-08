@@ -5,10 +5,10 @@ import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/hive_setup.dart';
+import '../data/supabase_config.dart';
 import '../models/activity_entry.dart';
 import '../models/project.dart';
 import '../models/project_comment.dart';
-import 'settings_provider.dart';
 import 'tasks_provider.dart';
 import 'undo_provider.dart';
 
@@ -25,26 +25,18 @@ const _maxActivityLogEntries = 200;
 /// for the UI and is updated synchronously, while the on-disk copy catches
 /// up in the background.
 ///
-/// [state] only ever holds the *current workspace's* projects — see
-/// [AppSettings.currentWorkspaceId] — so every screen that reads this
-/// provider gets workspace isolation for free, without filtering it
-/// itself. [_box] remains the full, unfiltered on-disk store; anything
-/// that must reach across workspaces (backup export, wipe-all, removing a
-/// workspace) goes through [allValues] or the `*ForWorkspace` methods
-/// instead of [state].
+/// When Supabase is configured and signed in (see [isSupabaseConfigured]),
+/// every write is additionally mirrored to the `projects` table — also
+/// fire-and-forget — and a one-time pull on construction merges in
+/// whatever's visible to this user there (their own projects, their
+/// department's, per the RLS policies; see [TasksNotifier] for the
+/// identical pattern on tasks). There's no realtime subscription yet, so a
+/// teammate's change shows up on next launch, not live.
 class ProjectsNotifier extends StateNotifier<List<Project>> {
-  ProjectsNotifier(Ref ref)
-    : _ref = ref,
-      super(_initialState(ref)) {
+  ProjectsNotifier(Ref ref) : _ref = ref, super(_box.values.toList()) {
     _sortState();
-    _ref.listen<String>(
-      settingsProvider.select((s) => s.currentWorkspaceId),
-      (previous, next) {
-        if (previous == next) return;
-        state = _box.values.where((p) => p.workspaceId == next).toList();
-        _sortState();
-      },
-    );
+    unawaited(_loadOwnProfile());
+    unawaited(_pullFromSupabase());
   }
 
   final Ref _ref;
@@ -52,28 +44,71 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
   static Box<Project> get _box => Hive.box<Project>(projectBoxName);
   static final _neverOpened = DateTime.fromMillisecondsSinceEpoch(0);
 
-  /// Every project regardless of workspace — used only where that's
-  /// explicitly correct (backup export, Settings > Wipe All Data already
-  /// clearing the whole box).
+  /// Every project — used where that's explicitly correct (backup export,
+  /// Settings > Wipe All Data already clearing the whole box).
   List<Project> get allValues => _box.values.toList();
 
-  static List<Project> _initialState(Ref ref) {
-    final settings = ref.read(settingsProvider);
-    _migrateLegacyWorkspaceIds(settings.workspaceIds.first);
-    return _box.values
-        .where((p) => p.workspaceId == settings.currentWorkspaceId)
-        .toList();
+  /// Cached from the signed-in user's own `profiles` row — used to stamp
+  /// [ownerId]/[departmentId] on projects created after this resolves. A
+  /// project created before it resolves (a narrow window right after
+  /// launch) falls back to blank, same as pure local/offline use.
+  String? _ownerId;
+  String? _departmentId;
+
+  Future<void> _loadOwnProfile() async {
+    if (!isSupabaseConfigured) return;
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      final row = await supabase
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .single();
+      _ownerId = userId;
+      _departmentId = row['department_id'] as String?;
+    } catch (_) {
+      // Best-effort — local-only behavior continues if this fails.
+    }
   }
 
-  /// Projects saved before workspaces had real data isolation have no
-  /// [Project.workspaceId] — a one-time backfill onto the first workspace,
-  /// so filtering by id can rely on it always being set from here on.
-  static void _migrateLegacyWorkspaceIds(String defaultWorkspaceId) {
-    for (final project in _box.values) {
-      if (project.workspaceId == null) {
-        project.workspaceId = defaultWorkspaceId;
-        unawaited(project.save());
+  /// Pulls every project visible to this user on Supabase (per RLS) into
+  /// the local box, then refreshes [state]. Best-effort: a failed/offline
+  /// pull just leaves the local cache as it was.
+  Future<void> _pullFromSupabase() async {
+    if (!isSupabaseConfigured) return;
+    if (supabase.auth.currentUser == null) return;
+    try {
+      final rows = await supabase.from('projects').select();
+      for (final row in rows as List) {
+        final project = Project.fromSupabase(row as Map<String, dynamic>);
+        await _box.put(project.id, project);
       }
+      state = _box.values.toList();
+      _sortState();
+    } catch (_) {
+      // Best-effort — local cache stays as it was.
+    }
+  }
+
+  Future<void> _mirrorUpsert(Project project) async {
+    if (!isSupabaseConfigured) return;
+    if (supabase.auth.currentUser == null) return;
+    try {
+      await supabase.from('projects').upsert(project.toSupabase());
+    } catch (_) {
+      // Best-effort — the local Hive copy is still correct; it just hasn't
+      // reached the backend (offline, or an RLS policy refused it).
+    }
+  }
+
+  Future<void> _mirrorDelete(String projectId) async {
+    if (!isSupabaseConfigured) return;
+    if (supabase.auth.currentUser == null) return;
+    try {
+      await supabase.from('projects').delete().eq('id', projectId);
+    } catch (_) {
+      // Best-effort.
     }
   }
 
@@ -95,7 +130,8 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
       name: name,
       createdAt: DateTime.now(),
       colorIndex: colorIndex,
-      workspaceId: _ref.read(settingsProvider).currentWorkspaceId,
+      ownerId: _ownerId ?? '',
+      departmentId: _departmentId ?? '',
     );
     project.activityLog.add(
       ActivityEntry(
@@ -105,6 +141,7 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
       ),
     );
     unawaited(_box.put(project.id, project));
+    unawaited(_mirrorUpsert(project));
     state = [...state, project];
     _sortState();
     return project;
@@ -117,6 +154,7 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
   /// selectors to detect the edit.
   void _persist(Project project) {
     unawaited(_box.put(project.id, project));
+    unawaited(_mirrorUpsert(project));
     state = [
       for (final p in state)
         if (p.id == project.id) project else p,
@@ -220,6 +258,7 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
     // Deleting a project takes its tasks (and their subtasks) with it.
     _ref.read(tasksProvider.notifier).deleteTasksInProject(id);
     unawaited(_box.delete(id));
+    unawaited(_mirrorDelete(id));
     state = state.where((p) => p.id != id).toList();
     _ref
         .read(undoStackProvider.notifier)
@@ -231,50 +270,24 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
   /// restored separately, by the same undo entry.
   void restoreProject(Project project) {
     unawaited(_box.put(project.id, project));
+    unawaited(_mirrorUpsert(project));
     state = [...state, project];
     _sortState();
   }
 
-  /// How many projects belong to [workspaceId] — shown in the "remove
-  /// workspace" confirmation before [deleteAllForWorkspace] runs.
-  int countForWorkspace(String workspaceId) =>
-      _box.values.where((p) => p.workspaceId == workspaceId).length;
-
-  /// Deletes every project (and, via [ProjectsNotifier.deleteProject]'s own
-  /// cascade, every task filed under one) that belongs to [workspaceId].
-  /// Used when the workspace itself is removed — see the sidebar's
-  /// workspace context menu, which confirms this with the user first via
-  /// [countForWorkspace].
-  void deleteAllForWorkspace(String workspaceId) {
-    final ids = _box.values
-        .where((p) => p.workspaceId == workspaceId)
-        .map((p) => p.id)
-        .toList();
-    for (final id in ids) {
-      deleteProject(id);
-    }
-  }
-
-  /// Wipes every project. Used by Settings > Wipe All Data.
+  /// Wipes every project. Used by Settings > Wipe All Data. Local only —
+  /// this never deletes anything from Supabase, since a wipe is meant to
+  /// reset *this device*, not every teammate's shared data.
   void clearAll() {
     unawaited(_box.clear());
     state = [];
   }
 
   /// Replaces every project with [projects]. Used when restoring from a
-  /// backup — anything currently stored is discarded first. [projects] may
-  /// span every workspace (a full backup), so [state] is narrowed back down
-  /// to the current one afterward, same as normal operation.
+  /// backup — anything currently stored is discarded first.
   void restoreAll(List<Project> projects) {
     unawaited(_replaceBoxContents(projects));
-    final settings = _ref.read(settingsProvider);
-    final defaultWorkspaceId = settings.workspaceIds.first;
-    state = projects
-        .where(
-          (p) => (p.workspaceId ?? defaultWorkspaceId) ==
-              settings.currentWorkspaceId,
-        )
-        .toList();
+    state = [...projects];
     _sortState();
   }
 
@@ -287,7 +300,5 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
   Future<void> _replaceBoxContents(List<Project> projects) async {
     await _box.clear();
     await _box.putAll({for (final p in projects) p.id: p});
-    final settings = _ref.read(settingsProvider);
-    _migrateLegacyWorkspaceIds(settings.workspaceIds.first);
   }
 }

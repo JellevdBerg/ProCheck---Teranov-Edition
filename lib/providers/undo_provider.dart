@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/project.dart';
 import '../models/task.dart';
 import 'projects_provider.dart';
-import 'settings_provider.dart';
 import 'tasks_provider.dart';
 
 /// A single deletion that can be walked back with Ctrl+Z. Captures
@@ -50,19 +49,7 @@ final undoStackProvider =
 /// by [TasksNotifier.deleteTask] and [ProjectsNotifier.deleteProject]
 /// directly, so nothing has to remember to record it at the UI layer.
 class UndoStackNotifier extends StateNotifier<List<UndoEntry>> {
-  UndoStackNotifier(this._ref) : super(const []) {
-    // Entries hold onto Project/Task objects tied to whichever workspace
-    // was active when they were deleted — restoring one after switching
-    // workspaces would resurrect it into the wrong workspace's lists, so
-    // the history is dropped on switch rather than carried across.
-    _ref.listen<String>(settingsProvider.select((s) => s.currentWorkspaceId), (
-      previous,
-      next,
-    ) {
-      if (previous == next) return;
-      state = const [];
-    });
-  }
+  UndoStackNotifier(this._ref) : super(const []);
 
   final Ref _ref;
 
