@@ -614,3 +614,444 @@ update profiles
 set role = 'manager',
     department_id = (select id from departments where is_operator)
 where id = (select id from auth.users where email = 'dev@procheck.local');
+
+-- ----- Operator admin provisioning (20261008130000_admin_provisioning.sql) -----
+
+create or replace function public.admin_create_department(p_name text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_id uuid;
+begin
+  if not public.is_operator() then
+    raise exception 'Only an Operator can create departments';
+  end if;
+  if length(trim(p_name)) = 0 then
+    raise exception 'Department name cannot be empty';
+  end if;
+
+  insert into public.departments (name) values (trim(p_name))
+  returning id into new_id;
+
+  return new_id;
+end;
+$$;
+
+revoke all on function public.admin_create_department(text) from public;
+grant execute on function public.admin_create_department(text) to authenticated;
+
+create or replace function public.admin_create_profile(
+  p_username text,
+  p_password text,
+  p_display_name text,
+  p_role text default 'member',
+  p_department_id uuid default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_user_id uuid;
+  synthetic_email text;
+  clean_username text;
+begin
+  if not public.is_operator() then
+    raise exception 'Only an Operator can create accounts';
+  end if;
+  if p_role not in ('member', 'manager') then
+    raise exception 'role must be ''member'' or ''manager''';
+  end if;
+
+  clean_username := lower(trim(p_username));
+  if length(clean_username) = 0 then
+    raise exception 'Username cannot be empty';
+  end if;
+  if length(p_password) < 6 then
+    raise exception 'Password must be at least 6 characters';
+  end if;
+  if exists (select 1 from public.profiles where username = clean_username) then
+    raise exception 'Username "%" is already taken', clean_username;
+  end if;
+
+  synthetic_email := clean_username || '@procheck.local';
+  new_user_id := gen_random_uuid();
+
+  insert into auth.users (
+    instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, email_change, email_change_token_new, recovery_token
+  ) values (
+    '00000000-0000-0000-0000-000000000000',
+    new_user_id,
+    'authenticated',
+    'authenticated',
+    synthetic_email,
+    crypt(p_password, gen_salt('bf')),
+    now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    jsonb_build_object('username', clean_username, 'display_name', trim(p_display_name)),
+    now(), now(), '', '', '', ''
+  );
+
+  insert into auth.identities (
+    id, user_id, provider_id, identity_data, provider,
+    last_sign_in_at, created_at, updated_at
+  ) values (
+    gen_random_uuid(),
+    new_user_id,
+    new_user_id::text,
+    jsonb_build_object('sub', new_user_id::text, 'email', synthetic_email),
+    'email',
+    now(), now(), now()
+  );
+
+  update public.profiles
+  set role = p_role::user_role,
+      department_id = p_department_id
+  where id = new_user_id;
+
+  return new_user_id;
+end;
+$$;
+
+revoke all on function public.admin_create_profile(text, text, text, text, uuid) from public;
+grant execute on function public.admin_create_profile(text, text, text, text, uuid) to authenticated;
+
+create policy "profiles_select_as_operator"
+  on profiles for select
+  to authenticated
+  using (public.is_operator());
+
+-- ----- IT department tier (20261008140000_it_department.sql) -----
+
+alter table departments add column is_it boolean not null default false;
+
+create unique index departments_single_it_idx
+  on departments (is_it)
+  where is_it;
+
+create function public.is_admin()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select coalesce(
+    (
+      select d.is_operator or d.is_it
+      from public.profiles p
+      join public.departments d on d.id = p.department_id
+      where p.id = auth.uid()
+    ),
+    false
+  );
+$$;
+
+drop policy "tasks_select" on tasks;
+drop policy "tasks_insert_own" on tasks;
+drop policy "tasks_update" on tasks;
+drop policy "tasks_delete" on tasks;
+
+create policy "tasks_select"
+  on tasks for select
+  to authenticated
+  using (
+    owner_id = auth.uid()
+    or assignee_id = auth.uid()
+    or public.is_admin()
+    or (
+      (select role from public.current_profile()) = 'manager'
+      and department_id = (select department_id from public.current_profile())
+    )
+  );
+
+create policy "tasks_insert_own"
+  on tasks for insert
+  to authenticated
+  with check (
+    owner_id = auth.uid()
+    and (
+      department_id = (select department_id from public.current_profile())
+      or public.is_admin()
+    )
+    and (
+      project_id is null
+      or (select role from public.current_profile()) = 'manager'
+      or public.is_admin()
+    )
+  );
+
+create policy "tasks_update"
+  on tasks for update
+  to authenticated
+  using (
+    owner_id = auth.uid()
+    or assignee_id = auth.uid()
+    or public.is_admin()
+    or (
+      (select role from public.current_profile()) = 'manager'
+      and department_id = (select department_id from public.current_profile())
+    )
+  )
+  with check (
+    (
+      department_id = (select department_id from public.current_profile())
+      or public.is_admin()
+    )
+    and (
+      project_id is null
+      or (select role from public.current_profile()) = 'manager'
+      or public.is_admin()
+    )
+  );
+
+create policy "tasks_delete"
+  on tasks for delete
+  to authenticated
+  using (
+    owner_id = auth.uid()
+    or public.is_admin()
+    or (
+      (select role from public.current_profile()) = 'manager'
+      and department_id = (select department_id from public.current_profile())
+    )
+  );
+
+drop policy "projects_select" on projects;
+drop policy "projects_insert_own" on projects;
+drop policy "projects_update" on projects;
+drop policy "projects_delete" on projects;
+
+create policy "projects_select"
+  on projects for select
+  to authenticated
+  using (
+    owner_id = auth.uid()
+    or public.is_admin()
+    or department_id = (select department_id from public.current_profile())
+  );
+
+create policy "projects_insert_own"
+  on projects for insert
+  to authenticated
+  with check (
+    owner_id = auth.uid()
+    and (
+      department_id = (select department_id from public.current_profile())
+      or public.is_admin()
+    )
+  );
+
+create policy "projects_update"
+  on projects for update
+  to authenticated
+  using (
+    owner_id = auth.uid()
+    or public.is_admin()
+    or (
+      (select role from public.current_profile()) = 'manager'
+      and department_id = (select department_id from public.current_profile())
+    )
+  )
+  with check (
+    department_id = (select department_id from public.current_profile())
+    or public.is_admin()
+  );
+
+create policy "projects_delete"
+  on projects for delete
+  to authenticated
+  using (
+    owner_id = auth.uid()
+    or public.is_admin()
+    or (
+      (select role from public.current_profile()) = 'manager'
+      and department_id = (select department_id from public.current_profile())
+    )
+  );
+
+drop policy "profiles_select_as_operator" on profiles;
+
+create policy "profiles_select_as_admin"
+  on profiles for select
+  to authenticated
+  using (public.is_admin());
+
+drop function if exists public.admin_create_department(text);
+
+create function public.admin_create_department(p_name text, p_is_it boolean default false)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_id uuid;
+begin
+  if not public.is_admin() then
+    raise exception 'Only an Operator or IT can create departments';
+  end if;
+  if p_is_it and not public.is_operator() then
+    raise exception 'Only an Operator can create the IT department';
+  end if;
+  if length(trim(p_name)) = 0 then
+    raise exception 'Department name cannot be empty';
+  end if;
+  if p_is_it and exists (select 1 from public.departments where is_it) then
+    raise exception 'An IT department already exists';
+  end if;
+
+  insert into public.departments (name, is_it) values (trim(p_name), p_is_it)
+  returning id into new_id;
+
+  return new_id;
+end;
+$$;
+
+revoke all on function public.admin_create_department(text, boolean) from public;
+grant execute on function public.admin_create_department(text, boolean) to authenticated;
+
+create or replace function public.admin_create_profile(
+  p_username text,
+  p_password text,
+  p_display_name text,
+  p_role text default 'member',
+  p_department_id uuid default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_user_id uuid;
+  synthetic_email text;
+  clean_username text;
+  target_is_admin_tier boolean;
+  effective_role text;
+begin
+  if not public.is_admin() then
+    raise exception 'Only an Operator or IT can create accounts';
+  end if;
+
+  target_is_admin_tier := coalesce(
+    (select d.is_operator or d.is_it from public.departments d where d.id = p_department_id),
+    false
+  );
+  if target_is_admin_tier and not public.is_operator() then
+    raise exception 'Only an Operator can create accounts in the Operator or IT department';
+  end if;
+
+  effective_role := case when target_is_admin_tier then 'manager' else p_role end;
+  if effective_role not in ('member', 'manager') then
+    raise exception 'role must be ''member'' or ''manager''';
+  end if;
+
+  clean_username := lower(trim(p_username));
+  if length(clean_username) = 0 then
+    raise exception 'Username cannot be empty';
+  end if;
+  if length(p_password) < 6 then
+    raise exception 'Password must be at least 6 characters';
+  end if;
+  if exists (select 1 from public.profiles where username = clean_username) then
+    raise exception 'Username "%" is already taken', clean_username;
+  end if;
+
+  synthetic_email := clean_username || '@procheck.local';
+  new_user_id := gen_random_uuid();
+
+  insert into auth.users (
+    instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, email_change, email_change_token_new, recovery_token
+  ) values (
+    '00000000-0000-0000-0000-000000000000',
+    new_user_id,
+    'authenticated',
+    'authenticated',
+    synthetic_email,
+    crypt(p_password, gen_salt('bf')),
+    now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    jsonb_build_object('username', clean_username, 'display_name', trim(p_display_name)),
+    now(), now(), '', '', '', ''
+  );
+
+  insert into auth.identities (
+    id, user_id, provider_id, identity_data, provider,
+    last_sign_in_at, created_at, updated_at
+  ) values (
+    gen_random_uuid(),
+    new_user_id,
+    new_user_id::text,
+    jsonb_build_object('sub', new_user_id::text, 'email', synthetic_email),
+    'email',
+    now(), now(), now()
+  );
+
+  update public.profiles
+  set role = effective_role::user_role,
+      department_id = p_department_id
+  where id = new_user_id;
+
+  return new_user_id;
+end;
+$$;
+
+-- ----- Protect profile privileges (20261008150000_protect_profile_privileges.sql) -----
+
+-- Thomas asked (2026-10-08) to make sure the Dev account always stays in
+-- the Operator department. Checking how that could ever change surfaced
+-- a real gap, not just a Dev-specific one: `profiles_update_own` (from
+-- 20261001091500_rls_policies.sql) lets anyone update their own profile
+-- row with no column restriction at all — `role` and `department_id`
+-- included. RLS's `with check` can't compare against the row's previous
+-- value, so the fix is a trigger, not a tighter policy.
+--
+-- (Confirmed nothing in the app actually relies on self-service profile
+-- updates today — nothing in lib/ calls `.update()` on `profiles` at
+-- all — so tightening this changes no current behavior.)
+
+create function public.protect_profile_privileges()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- The Dev account is a permanent fixture of the Operator department
+  -- (see 20261008101500_username_auth_and_dev_seed.sql) for verifying
+  -- role behavior — pinned even against an admin-authored change, not
+  -- just self-service ones. If it ever genuinely needs to move, drop
+  -- this trigger (or this username check) first.
+  if old.username = 'dev' then
+    if new.department_id is distinct from old.department_id
+        or new.role is distinct from old.role then
+      raise exception 'The Dev account is pinned to Operator and cannot be reassigned';
+    end if;
+  end if;
+
+  -- Everyone else: role/department changes are an admin-tier action
+  -- (admin_create_profile already enforces this on creation) — a plain
+  -- self-update, like `profiles_update_own` allows, may not touch them.
+  if not public.is_admin() then
+    if new.role is distinct from old.role
+        or new.department_id is distinct from old.department_id then
+      raise exception 'Only an Operator or IT can change role or department';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger protect_profile_privileges_trigger
+  before update on profiles
+  for each row execute function public.protect_profile_privileges();

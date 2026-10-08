@@ -13,7 +13,7 @@ exact moment a migration was actually applied, only its relative order.
 ## Applying the setup (dashboard SQL editor — simplest)
 
 1. Open your Supabase project → **SQL Editor** → **New query**.
-2. Open **[`combined_setup.sql`](https://github.com/JellevdBerg/ProCheck---Teranov-Edition/blob/feature/supabase-foundation/supabase/combined_setup.sql)**
+2. Open **[`combined_setup.sql`](https://github.com/JellevdBerg/ProCheck---Teranov-Edition/blob/main/supabase/combined_setup.sql)**
    on GitHub (the repo's private, so use this page, not a raw link) and hit
    **Copy raw file** (or **Raw** then select-all) to copy its contents.
 3. **Paste the copied SQL text itself into the SQL editor** — not the file's
@@ -53,19 +53,30 @@ about them — see the project memory/chat for the one-time
 it doesn't try to re-run them. `combined_setup.sql` is only there for the
 dashboard path above; keep it in sync with `migrations/` if either changes.
 
-## Username/password auth, no email in the UI
+## Username/password auth, no email in the UI, no self-signup
 
 ProCheck signs people in by username, not email — but Supabase Auth still
 requires an email address internally, so the app maps each username to a
 synthetic `<username>@procheck.local` address (see
 `lib/providers/auth_provider.dart`'s `emailForUsername`). Nothing is ever
-sent to that address, which means:
+sent to that address.
 
-- **"Confirm email" must be turned off** for the Email provider —
-  **Authentication → Providers → Email → uncheck "Confirm email"** in the
-  Supabase dashboard. A synthetic address can never receive a confirmation
-  mail, so leaving this on locks every new sign-up out after they create
-  an account. This is a dashboard-only toggle; no migration can set it.
+There's no "create account" screen — accounts are created by an Operator,
+from the app's own Admin screen (see
+`20261008130000_admin_provisioning.sql`'s `admin_create_profile`), which
+inserts a pre-confirmed account directly, the same way the Dev seed below
+does. Because of that, the dashboard's **"Confirm email"** toggle
+(Authentication → Providers → Email) doesn't actually matter for account
+creation going forward — it only mattered back when sign-up went through
+Supabase's own public email/password flow, which this edition no longer
+uses at all.
+
+Removing the sign-up screen only stops the *app* from calling the public
+sign-up API — the publishable key can still call it directly. So also
+turn off **"Allow new users to sign up"** (Authentication → Providers →
+Email) in the dashboard, to close that off too. `admin_create_profile`
+isn't affected either way — it inserts into `auth.users` directly rather
+than going through that API.
 
 ### The permanent "Dev" / Operator test account
 
@@ -86,6 +97,85 @@ insert may error. If it does, create the account the normal way instead
 `testing`, confirm it), then run just the final `update profiles set
 role = 'manager', department_id = ...` statement from that file by hand.
 
+## Operator admin provisioning
+
+`20261008130000_admin_provisioning.sql` adds two SQL functions the app
+calls via `supabase.rpc(...)` from its Admin screen:
+
+- `admin_create_department(p_name)` — adds a department.
+- `admin_create_profile(p_username, p_password, p_display_name, p_role, p_department_id)`
+  — creates a new account the same way the Dev seed above does (same
+  caveat: relies on the current GoTrue schema shape).
+
+Both are `SECURITY DEFINER` and re-check `is_operator()` themselves, so
+they're safe to expose to the `authenticated` role — being signed in
+isn't enough to call them, only being in the Operator department is. This
+migration also adds a `profiles_select_as_operator` RLS policy: without
+it, an Operator could only see profiles in their own department (the same
+limit a manager has), not the whole company, which the Admin screen needs
+to list everyone.
+
+## IT department — Operator's near-equal
+
+`20261008140000_it_department.sql` adds a second admin tier: an IT
+department with "nearly identical privileges" to Operator (full
+company-wide visibility, same Admin screen) except for one asymmetry —
+only Operator can create the IT department or place an account into
+Operator or IT itself; IT can create ordinary departments and accounts,
+but not more admin-tier ones.
+
+This splits the old `is_operator()` check into two functions:
+- `is_admin()` — true for Operator **or** IT. Now what the
+  tasks/projects/`profiles_select_as_operator` (renamed
+  `profiles_select_as_admin`) RLS policies check, and what
+  `admin_create_department`/`admin_create_profile` require just to act
+  at all.
+- `is_operator()` — unchanged, true for Operator only. Now the extra gate
+  on the IT-only actions: `admin_create_department`'s new `p_is_it`
+  parameter, and placing an account's `p_department_id` into whichever
+  department is Operator or IT. An account created into either is forced
+  to the `manager` role regardless of the requested role, same as the Dev
+  seed.
+
+Same cap as Operator: a unique index allows at most one IT department.
+
+## Operator developer panel
+
+A section at the bottom of the Admin screen, visible only to Operator
+(not IT) — app version, which Supabase project this build points at and
+whether its realtime socket is connected, the signed-in user's own
+id/role/department, the newest migration this build shipped with (a
+compile-time constant in `lib/data/latest_migration.dart`, kept manually
+in sync — there's no client-readable table saying what's actually been
+applied, since migrations here are often pasted into the SQL editor
+rather than run through the CLI), and recent sync errors. That last one
+is new instrumentation, not new behavior: `tasks_provider.dart`/
+`projects_provider.dart`'s pull/mirror-write failures have always been
+caught and silently ignored by design (so a flaky connection or an RLS
+rejection never blocks the UI) — `sync_log_provider.dart` just gives
+those catch blocks somewhere to report to, capped at the last 20.
+
+## Protecting role/department from self-escalation
+
+`20261008150000_protect_profile_privileges.sql` adds a `BEFORE UPDATE`
+trigger on `profiles`. It closes two things at once:
+
+- **The Dev account is pinned to Operator.** Even an admin-authored
+  change (Operator or IT updating someone else's row) can't move or
+  demote the `dev` account out of Operator — only dropping the trigger
+  (or the username check inside it) first would allow that.
+- **No one can grant themselves `role`/`department_id`.** The existing
+  `profiles_update_own` RLS policy (from `20261001091500_rls_policies.sql`)
+  lets any signed-in user update their own profile row with no column
+  restriction — RLS's `with check` can't compare against the row's
+  *previous* value, so it couldn't express "don't let this column
+  change" on its own. The trigger blocks any `role`/`department_id`
+  change on a self-update unless the caller is Operator or IT (which
+  `admin_create_profile` already was, on creation).
+
+Nothing in the app currently calls `.update()` on `profiles` directly, so
+this closes a real gap with no change to current behavior.
+
 ## Credentials
 
 - **Project URL** and **anon/publishable key**: safe to pass to the app via
@@ -103,4 +193,4 @@ eyes before any pilot starts — a wrong policy fails open silently. They
 currently encode: a member sees/edits their own tasks, tasks assigned to
 them, and tasks shared with their department; a manager additionally
 sees/edits everyone's tasks within their own department(s); the Operator
-department sees/edits everything.
+and IT departments see/edit everything.

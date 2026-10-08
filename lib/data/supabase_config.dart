@@ -20,6 +20,11 @@ const _supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 bool get isSupabaseConfigured =>
     _supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty;
 
+/// The project URL this build was pointed at — shown on the Operator
+/// developer panel. Safe to display: it's the client-facing URL, not a
+/// secret (see `supabase/README.md`'s Credentials section).
+String get supabaseUrl => _supabaseUrl;
+
 Future<void> setUpSupabase() async {
   if (!isSupabaseConfigured) return;
   await Supabase.initialize(

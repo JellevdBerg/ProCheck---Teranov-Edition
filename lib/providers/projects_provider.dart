@@ -10,6 +10,7 @@ import '../data/supabase_config.dart';
 import '../models/activity_entry.dart';
 import '../models/project.dart';
 import '../models/project_comment.dart';
+import 'sync_log_provider.dart';
 import 'tasks_provider.dart';
 import 'undo_provider.dart';
 
@@ -136,8 +137,12 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
       }
       state = _box.values.toList();
       _sortState();
-    } catch (_) {
+      _ref.read(syncLogProvider.notifier).recordSuccessfulPull();
+    } catch (e) {
       // Best-effort — local cache stays as it was.
+      _ref
+          .read(syncLogProvider.notifier)
+          .recordError(source: 'projects', action: 'pull', error: e);
     }
   }
 
@@ -146,9 +151,12 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
     if (supabase.auth.currentUser == null) return;
     try {
       await supabase.from('projects').upsert(project.toSupabase());
-    } catch (_) {
+    } catch (e) {
       // Best-effort — the local Hive copy is still correct; it just hasn't
       // reached the backend (offline, or an RLS policy refused it).
+      _ref
+          .read(syncLogProvider.notifier)
+          .recordError(source: 'projects', action: 'upsert', error: e);
     }
   }
 
@@ -157,8 +165,11 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
     if (supabase.auth.currentUser == null) return;
     try {
       await supabase.from('projects').delete().eq('id', projectId);
-    } catch (_) {
+    } catch (e) {
       // Best-effort.
+      _ref
+          .read(syncLogProvider.notifier)
+          .recordError(source: 'projects', action: 'delete', error: e);
     }
   }
 

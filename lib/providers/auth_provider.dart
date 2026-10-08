@@ -42,7 +42,7 @@ class AuthException implements Exception {
 String emailForUsername(String username) =>
     '${username.trim().toLowerCase()}@procheck.local';
 
-/// Sign-in/sign-up actions for the login screen. Kept as plain async
+/// Sign-in/sign-out actions for the login screen. Kept as plain async
 /// methods rather than a StateNotifier — there's no persisted state here
 /// beyond what Supabase's own client already tracks (see
 /// [authStateProvider]).
@@ -55,22 +55,6 @@ class AuthController {
       await supabase.auth.signInWithPassword(
         email: emailForUsername(username),
         password: password,
-      );
-    } on AuthApiException catch (e) {
-      throw AuthException(e.message);
-    }
-  }
-
-  Future<void> signUp({
-    required String username,
-    required String password,
-    required String displayName,
-  }) async {
-    try {
-      await supabase.auth.signUp(
-        email: emailForUsername(username),
-        password: password,
-        data: {'display_name': displayName, 'username': username.trim()},
       );
     } on AuthApiException catch (e) {
       throw AuthException(e.message);
