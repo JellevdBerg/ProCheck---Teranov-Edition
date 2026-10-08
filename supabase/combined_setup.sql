@@ -538,3 +538,10 @@ alter table tasks add column template_id uuid;
 
 alter table projects add column activity_log jsonb not null default '[]'::jsonb;
 alter table projects add column comments jsonb not null default '[]'::jsonb;
+
+-- ===== 20261008091500_realtime_and_estimates.sql =====
+
+alter table tasks add column estimated_minutes integer;
+
+alter publication supabase_realtime add table tasks;
+alter publication supabase_realtime add table projects;

@@ -3,8 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/supabase_config.dart';
 import '../models/task.dart';
 import '../models/task_priority.dart';
+import '../models/profile.dart';
+import '../providers/auth_provider.dart';
+import '../providers/department_members_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
@@ -357,12 +361,19 @@ class ExpandedTaskDetail extends ConsumerWidget {
               ],
             ),
           );
+          final teamRow = isSupabaseConfigured
+              ? Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _AssigneeAndEstimateRow(task: task),
+                )
+              : const SizedBox.shrink();
 
           if (constraints.maxWidth >= breakpoint) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 topRow,
+                teamRow,
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -378,6 +389,7 @@ class ExpandedTaskDetail extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               topRow,
+              teamRow,
               notesAndAttachments,
               const SizedBox(height: 12),
               subtasks,
@@ -600,6 +612,88 @@ class _PriorityRow extends ConsumerWidget {
       onChanged: (p) =>
           ref.read(tasksProvider.notifier).setTaskPriority(task.id, p),
     );
+  }
+}
+
+/// Shown only once Supabase is configured — who this task is assigned to,
+/// and how long it's expected to take. Only a manager/Operator can actually
+/// change the assignee (the `tasks_update` RLS policy enforces that
+/// server-side; a member sees it read-only). The estimate is editable by
+/// whoever can edit the task at all, same as notes/priority.
+class _AssigneeAndEstimateRow extends ConsumerWidget {
+  const _AssigneeAndEstimateRow({required this.task});
+
+  final Task task;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final profile = ref.watch(currentProfileProvider).valueOrNull;
+    final canAssign = profile?.isManager ?? false;
+    final members =
+        ref.watch(departmentMembersProvider).valueOrNull ?? const <Profile>[];
+
+    return Row(
+      children: [
+        Icon(Icons.person_outline, size: 18, color: theme.hintColor),
+        const SizedBox(width: 8),
+        if (canAssign)
+          DropdownButton<String?>(
+            value: task.assigneeId,
+            hint: const Text('Unassigned'),
+            underline: const SizedBox.shrink(),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('Unassigned'),
+              ),
+              for (final member in members)
+                DropdownMenuItem<String?>(
+                  value: member.id,
+                  child: Text(member.displayName),
+                ),
+            ],
+            onChanged: (assigneeId) => ref
+                .read(tasksProvider.notifier)
+                .assignTask(task.id, assigneeId),
+          )
+        else
+          Text(
+            _assigneeLabel(task.assigneeId, members),
+            style: TextStyle(color: theme.hintColor),
+          ),
+        const SizedBox(width: 20),
+        Icon(Icons.timer_outlined, size: 18, color: theme.hintColor),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 72,
+          child: TextFormField(
+            key: ValueKey('estimate-${task.id}-${task.estimatedMinutes}'),
+            initialValue: task.estimatedMinutes?.toString() ?? '',
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              isDense: true,
+              hintText: 'min',
+              border: OutlineInputBorder(),
+            ),
+            onFieldSubmitted: (value) {
+              final minutes = int.tryParse(value.trim());
+              ref
+                  .read(tasksProvider.notifier)
+                  .setTaskEstimate(task.id, minutes);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _assigneeLabel(String? assigneeId, List<Profile> members) {
+    if (assigneeId == null) return 'Unassigned';
+    for (final member in members) {
+      if (member.id == assigneeId) return member.displayName;
+    }
+    return 'Unassigned';
   }
 }
 

@@ -13,4 +13,5 @@ enum AppScreen {
   archived,
   settings,
   dashboard,
+  team,
 }
