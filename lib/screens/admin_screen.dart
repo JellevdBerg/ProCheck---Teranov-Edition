@@ -70,7 +70,12 @@ class AdminScreen extends ConsumerWidget {
                           child: LinearProgressIndicator(),
                         ),
                     error: (error, _) => Text('Could not load departments: $error'),
-                    data: (departments) => _DepartmentList(departments: departments),
+                    data: (departments) => _DepartmentList(
+                      departments: departments,
+                      isOperator: isOperator,
+                      onDelete: (department) =>
+                          _deleteDepartment(context, ref, department),
+                    ),
                   ),
                   const SizedBox(height: 32),
                   _SectionHeader(
@@ -94,6 +99,9 @@ class AdminScreen extends ConsumerWidget {
                     data: (people) => _PeopleList(
                       people: people,
                       departments: departmentsAsync.valueOrNull ?? const [],
+                      isOperator: isOperator,
+                      currentUserId: supabase.auth.currentUser?.id,
+                      onDelete: (person) => _deleteAccount(context, ref, person),
                     ),
                   ),
                   if (isOperator) ...[
@@ -161,6 +169,74 @@ class AdminScreen extends ConsumerWidget {
     } on AuthException catch (e) {
       if (context.mounted) _showError(context, e.message);
     }
+  }
+
+  Future<void> _deleteDepartment(
+    BuildContext context,
+    WidgetRef ref,
+    Department department,
+  ) async {
+    final confirmed = await _confirmDelete(
+      context,
+      title: 'Delete department?',
+      message:
+          'This removes "${department.name}". Its members stay, just '
+          'unassigned.',
+    );
+    if (!confirmed) return;
+
+    try {
+      await ref.read(adminControllerProvider).deleteDepartment(department.id);
+      ref.invalidate(departmentsProvider);
+      ref.invalidate(departmentMembersProvider);
+    } on AuthException catch (e) {
+      if (context.mounted) _showError(context, e.message);
+    }
+  }
+
+  Future<void> _deleteAccount(
+    BuildContext context,
+    WidgetRef ref,
+    Profile person,
+  ) async {
+    final confirmed = await _confirmDelete(
+      context,
+      title: 'Delete account?',
+      message: 'This permanently removes @${person.username}.',
+    );
+    if (!confirmed) return;
+
+    try {
+      await ref.read(adminControllerProvider).deleteAccount(person.id);
+      ref.invalidate(departmentMembersProvider);
+    } on AuthException catch (e) {
+      if (context.mounted) _showError(context, e.message);
+    }
+  }
+
+  Future<bool> _confirmDelete(
+    BuildContext context, {
+    required String title,
+    required String message,
+  }) async {
+    final confirmed = await showBlurredDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
   }
 
   void _showError(BuildContext context, String message) {
@@ -399,9 +475,15 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _DepartmentList extends StatelessWidget {
-  const _DepartmentList({required this.departments});
+  const _DepartmentList({
+    required this.departments,
+    required this.isOperator,
+    required this.onDelete,
+  });
 
   final List<Department> departments;
+  final bool isOperator;
+  final ValueChanged<Department> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -413,11 +495,22 @@ class _DepartmentList extends StatelessWidget {
             dense: true,
             leading: const Icon(Icons.apartment_outlined),
             title: Text(department.name),
-            trailing: department.isOperator
-                ? const Text('Operator')
-                : department.isIt
-                ? const Text('IT')
-                : null,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (department.isOperator)
+                  const Text('Operator')
+                else if (department.isIt)
+                  const Text('IT'),
+                // Only an Operator can remove the Operator/IT department
+                // itself — same asymmetry as creating one.
+                if (isOperator || !department.isAdminTier)
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                    onPressed: () => onDelete(department),
+                  ),
+              ],
+            ),
           ),
       ],
     );
@@ -425,10 +518,19 @@ class _DepartmentList extends StatelessWidget {
 }
 
 class _PeopleList extends StatelessWidget {
-  const _PeopleList({required this.people, required this.departments});
+  const _PeopleList({
+    required this.people,
+    required this.departments,
+    required this.isOperator,
+    required this.currentUserId,
+    required this.onDelete,
+  });
 
   final List<Profile> people;
   final List<Department> departments;
+  final bool isOperator;
+  final String? currentUserId;
+  final ValueChanged<Profile> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -448,10 +550,32 @@ class _PeopleList extends StatelessWidget {
             ),
             title: Text(person.displayName),
             subtitle: Text('@${person.username}'),
-            trailing: Text(_departmentLabel(person, departments)),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_departmentLabel(person, departments)),
+                if (_canDelete(person))
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                    onPressed: () => onDelete(person),
+                  ),
+              ],
+            ),
           ),
       ],
     );
+  }
+
+  bool _canDelete(Profile person) {
+    if (person.id == currentUserId) return false;
+    if (person.username.toLowerCase() == 'dev') return false;
+    final department = departments
+        .where((d) => d.id == person.departmentId)
+        .firstOrNull;
+    // Only an Operator can remove someone from the Operator/IT department —
+    // same asymmetry as creating an account there.
+    if (department?.isAdminTier ?? false) return isOperator;
+    return true;
   }
 
   String _departmentLabel(Profile person, List<Department> departments) {

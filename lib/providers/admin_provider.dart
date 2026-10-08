@@ -43,6 +43,25 @@ class AdminController {
       throw AuthException(e.message);
     }
   }
+
+  Future<void> deleteDepartment(String departmentId) async {
+    try {
+      await supabase.rpc(
+        'admin_delete_department',
+        params: {'p_department_id': departmentId},
+      );
+    } on PostgrestException catch (e) {
+      throw AuthException(e.message);
+    }
+  }
+
+  Future<void> deleteAccount(String userId) async {
+    try {
+      await supabase.rpc('admin_delete_profile', params: {'p_user_id': userId});
+    } on PostgrestException catch (e) {
+      throw AuthException(e.message);
+    }
+  }
 }
 
 final adminControllerProvider = Provider((ref) => AdminController());
