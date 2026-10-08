@@ -52,6 +52,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ).pushReplacement(MaterialPageRoute(builder: (_) => const AppShell()));
     } on AuthException catch (e) {
       setState(() => _errorText = e.message);
+    } catch (e) {
+      // supabase_flutter can throw its own exception types here (e.g. a
+      // network-level AuthException that isn't an AuthApiException, or a
+      // connectivity error) that don't match the catch above — without
+      // this, those fell through silently: the spinner reset and nothing
+      // else happened, with no indication anything had gone wrong.
+      setState(() => _errorText = 'Sign-in failed: $e');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
