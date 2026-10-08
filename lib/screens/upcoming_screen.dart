@@ -51,7 +51,7 @@ class UpcomingScreen extends ConsumerWidget {
 
     // See today_screen.dart's build method for why this is a
     // CustomScrollView/SliverList rather than a Column-in-a-Card: Upcoming
-    // is the smart view most likely to hold most of a workspace's open
+    // is the smart view most likely to hold most of the user's open
     // tasks, so lazily building only the visible rows matters most here.
     return CustomScrollView(
       slivers: [
