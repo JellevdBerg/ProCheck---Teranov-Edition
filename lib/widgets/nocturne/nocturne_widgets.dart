@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import '../../models/task_priority.dart';
 import '../../theme/nocturne_theme.dart';
 
-/// The design system's three button voices: `.btn-primary` (accent
-/// outline), `.btn-secondary` (neutral outline), `.btn-ghost` (no border,
-/// accent text).
+/// The design system's three button voices: `.btn-primary` (solid accent
+/// fill — revamped from the original outlined treatment for a bolder,
+/// higher-contrast primary action), `.btn-secondary` (neutral outline),
+/// `.btn-ghost` (no border, accent text).
 enum NocturneButtonVariant { primary, secondary, ghost }
 
-/// An outlined icon+label button matching the Nocturne `.btn` classes —
-/// primary actions are never solid-filled in this design system.
+/// An icon+label button matching the Nocturne `.btn` classes.
 class NocturneButton extends StatelessWidget {
   const NocturneButton({
     super.key,
@@ -36,12 +36,11 @@ class NocturneButton extends StatelessWidget {
     final tokens = context.nocturne;
     final accent = color ?? context.nocturneAccent;
 
+    final onAccent = accent.computeLuminance() > 0.5
+        ? Colors.black
+        : Colors.white;
     final (Color fg, Color? border, Color? bg) = switch (variant) {
-      NocturneButtonVariant.primary => (
-        accent,
-        accent,
-        accent.withValues(alpha: 0.12),
-      ),
+      NocturneButtonVariant.primary => (onAccent, null, accent),
       NocturneButtonVariant.secondary => (tokens.text, tokens.divider, null),
       NocturneButtonVariant.ghost => (accent, null, null),
     };
@@ -58,7 +57,7 @@ class NocturneButton extends StatelessWidget {
           style: TextStyle(
             color: fg,
             fontSize: dense ? 13 : 14,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
@@ -66,6 +65,8 @@ class NocturneButton extends StatelessWidget {
 
     return Material(
       color: bg ?? Colors.transparent,
+      elevation: variant == NocturneButtonVariant.primary ? 2 : 0,
+      shadowColor: accent.withValues(alpha: 0.5),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(NocturneRadius.md),
         side: border != null ? BorderSide(color: border) : BorderSide.none,

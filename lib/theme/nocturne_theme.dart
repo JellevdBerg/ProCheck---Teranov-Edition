@@ -14,9 +14,9 @@ class NocturneSpace {
 }
 
 class NocturneRadius {
-  static const sm = 4.0;
-  static const md = 8.0;
-  static const lg = 14.0;
+  static const sm = 6.0;
+  static const md = 12.0;
+  static const lg = 20.0;
 }
 
 /// Dark-ground color roles (Nocturne's native theme). A light counterpart is
@@ -145,14 +145,20 @@ ThemeData buildNocturneTheme({
     onSurface: tokens.text,
   );
 
-  // Headings never go past the design system's 500 weight — even though
-  // Material's default TextTheme assigns bolder weights to larger styles.
+  // Revamped from the original handoff's flat 500-weight headings: larger
+  // display sizes now step up to 600/700 for real typographic contrast
+  // against body text, with tighter tracking to read as deliberately bold
+  // rather than just "big", Linear/Raycast-style.
   TextStyle heading(double size) => TextStyle(
     fontFamily: _fontFamily,
-    fontWeight: FontWeight.w500,
+    fontWeight: size >= 25
+        ? FontWeight.w700
+        : size >= 19
+        ? FontWeight.w600
+        : FontWeight.w500,
     fontSize: size,
     color: tokens.text,
-    letterSpacing: -0.2,
+    letterSpacing: size >= 19 ? -0.4 : -0.2,
   );
   TextStyle body(double size, {FontWeight weight = FontWeight.w400}) =>
       TextStyle(
@@ -192,16 +198,15 @@ ThemeData buildNocturneTheme({
     ),
     cardTheme: CardThemeData(
       color: tokens.surface,
-      elevation: 3,
+      elevation: 6,
       clipBehavior: Clip.antiAlias,
-      // A soft neutral drop shadow (never accent-tinted — see
-      // NocturneColors doc comment) gives cards a hint of lift over the flat
-      // elevation:0 + border look, without reading as a generic Material
-      // card shadow.
-      shadowColor: Colors.black.withValues(alpha: 0.35),
+      // Revamped from the original flat elevation:0 + hairline-border card:
+      // no border at all now — the surface color plus a real neutral drop
+      // shadow (never accent-tinted — see NocturneColors doc comment) does
+      // the separating, so cards read as lifted panels rather than boxes.
+      shadowColor: Colors.black.withValues(alpha: 0.45),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(NocturneRadius.md),
-        side: BorderSide(color: tokens.neutral800, width: 1),
+        borderRadius: BorderRadius.circular(NocturneRadius.lg),
       ),
     ),
     dialogTheme: DialogThemeData(
