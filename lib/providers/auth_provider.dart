@@ -34,29 +34,43 @@ class AuthException implements Exception {
   String toString() => message;
 }
 
+/// ProCheck is username/password only — no email appears anywhere in the
+/// UI. Supabase Auth still requires one under the hood, so each username
+/// maps deterministically to a synthetic `<username>@procheck.local`
+/// address; nothing ever needs to be sent to it (see `supabase/README.md`
+/// for the "Confirm email" dashboard setting this relies on being off).
+String emailForUsername(String username) =>
+    '${username.trim().toLowerCase()}@procheck.local';
+
 /// Sign-in/sign-up actions for the login screen. Kept as plain async
 /// methods rather than a StateNotifier — there's no persisted state here
 /// beyond what Supabase's own client already tracks (see
 /// [authStateProvider]).
 class AuthController {
-  Future<void> signIn({required String email, required String password}) async {
+  Future<void> signIn({
+    required String username,
+    required String password,
+  }) async {
     try {
-      await supabase.auth.signInWithPassword(email: email, password: password);
+      await supabase.auth.signInWithPassword(
+        email: emailForUsername(username),
+        password: password,
+      );
     } on AuthApiException catch (e) {
       throw AuthException(e.message);
     }
   }
 
   Future<void> signUp({
-    required String email,
+    required String username,
     required String password,
     required String displayName,
   }) async {
     try {
       await supabase.auth.signUp(
-        email: email,
+        email: emailForUsername(username),
         password: password,
-        data: {'display_name': displayName},
+        data: {'display_name': displayName, 'username': username.trim()},
       );
     } on AuthApiException catch (e) {
       throw AuthException(e.message);

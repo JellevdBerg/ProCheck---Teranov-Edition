@@ -53,6 +53,39 @@ about them — see the project memory/chat for the one-time
 it doesn't try to re-run them. `combined_setup.sql` is only there for the
 dashboard path above; keep it in sync with `migrations/` if either changes.
 
+## Username/password auth, no email in the UI
+
+ProCheck signs people in by username, not email — but Supabase Auth still
+requires an email address internally, so the app maps each username to a
+synthetic `<username>@procheck.local` address (see
+`lib/providers/auth_provider.dart`'s `emailForUsername`). Nothing is ever
+sent to that address, which means:
+
+- **"Confirm email" must be turned off** for the Email provider —
+  **Authentication → Providers → Email → uncheck "Confirm email"** in the
+  Supabase dashboard. A synthetic address can never receive a confirmation
+  mail, so leaving this on locks every new sign-up out after they create
+  an account. This is a dashboard-only toggle; no migration can set it.
+
+### The permanent "Dev" / Operator test account
+
+`20261008101500_username_auth_and_dev_seed.sql` seeds a permanent account
+— username `Dev`, password `testing`, in the Operator department as a
+manager — so you can always sign in and verify how the app looks and
+behaves for any role.
+
+**This is dev/testing only.** `testing` is a deliberately weak password on
+a live project. Either remove this account or change its password before
+any real company rollout.
+
+That migration inserts directly into `auth.users`/`auth.identities`,
+which isn't a documented/supported Supabase API — it matches the current
+GoTrue schema, but if a future Supabase upgrade changes that schema, the
+insert may error. If it does, create the account the normal way instead
+(**Authentication → Add user**, email `dev@procheck.local`, password
+`testing`, confirm it), then run just the final `update profiles set
+role = 'manager', department_id = ...` statement from that file by hand.
+
 ## Credentials
 
 - **Project URL** and **anon/publishable key**: safe to pass to the app via

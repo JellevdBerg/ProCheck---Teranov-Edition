@@ -14,13 +14,21 @@ class Profile {
   const Profile({
     required this.id,
     required this.email,
+    required this.username,
     required this.displayName,
     required this.role,
     this.departmentId,
   });
 
   final String id;
+
+  /// The synthetic `<username>@procheck.local` address Supabase Auth
+  /// actually stores — never shown in the UI (see [username]).
   final String email;
+
+  /// What the person actually signs in with and sees — ProCheck is
+  /// username/password only, no email anywhere in the UI.
+  final String username;
   final String displayName;
   final UserRole role;
   final String? departmentId;
@@ -30,6 +38,7 @@ class Profile {
   factory Profile.fromJson(Map<String, dynamic> json) => Profile(
     id: json['id'] as String,
     email: json['email'] as String,
+    username: json['username'] as String,
     displayName: json['display_name'] as String,
     role: _roleFromString(json['role'] as String),
     departmentId: json['department_id'] as String?,

@@ -545,3 +545,69 @@ alter table tasks add column estimated_minutes integer;
 
 alter publication supabase_realtime add table tasks;
 alter publication supabase_realtime add table projects;
+
+-- ===== 20261008101500_username_auth_and_dev_seed.sql =====
+
+alter table profiles add column username text;
+
+update profiles set username = split_part(email, '@', 1) where username is null;
+
+alter table profiles alter column username set not null;
+alter table profiles add constraint profiles_username_key unique (username);
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, email, username, display_name)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data ->> 'username', split_part(new.email, '@', 1)),
+    coalesce(new.raw_user_meta_data ->> 'display_name', new.email)
+  );
+  return new;
+end;
+$$;
+
+-- DEV/TESTING ONLY — see the standalone migration file for the full note.
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+  confirmation_token, email_change, email_change_token_new, recovery_token
+) values (
+  '00000000-0000-0000-0000-000000000000',
+  gen_random_uuid(),
+  'authenticated',
+  'authenticated',
+  'dev@procheck.local',
+  crypt('testing', gen_salt('bf')),
+  now(),
+  '{"provider":"email","providers":["email"]}',
+  '{"username":"Dev","display_name":"Dev"}',
+  now(), now(), '', '', '', ''
+)
+on conflict (email) do nothing;
+
+insert into auth.identities (
+  id, user_id, provider_id, identity_data, provider,
+  last_sign_in_at, created_at, updated_at
+)
+select
+  gen_random_uuid(),
+  u.id,
+  u.id::text,
+  jsonb_build_object('sub', u.id::text, 'email', u.email),
+  'email',
+  now(), now(), now()
+from auth.users u
+where u.email = 'dev@procheck.local'
+on conflict (provider_id, provider) do nothing;
+
+update profiles
+set role = 'manager',
+    department_id = (select id from departments where is_operator)
+where id = (select id from auth.users where email = 'dev@procheck.local');

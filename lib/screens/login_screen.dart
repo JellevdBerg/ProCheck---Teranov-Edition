@@ -5,10 +5,12 @@ import '../providers/auth_provider.dart';
 import '../widgets/app_logo.dart';
 import 'app_shell.dart';
 
-/// Email/password sign-in and sign-up, shown instead of [AppShell] when no
-/// Supabase session exists. A pilot-scale starting point — no SSO, no
-/// password reset flow yet; see the write-up's "Email/password vs. company
-/// SSO" note.
+/// Username/password sign-in and sign-up, shown instead of [AppShell] when
+/// no Supabase session exists. No email anywhere in this UI — each username
+/// maps to a synthetic address under the hood (see
+/// `auth_provider.dart`'s `emailForUsername`). A pilot-scale starting
+/// point — no SSO, no password reset flow yet; see the write-up's
+/// "Email/password vs. company SSO" note.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -18,7 +20,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _displayNameController = TextEditingController();
 
@@ -28,7 +30,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _usernameController.dispose();
     _passwordController.dispose();
     _displayNameController.dispose();
     super.dispose();
@@ -45,13 +47,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       if (_isSignUp) {
         await auth.signUp(
-          email: _emailController.text.trim(),
+          username: _usernameController.text.trim(),
           password: _passwordController.text,
           displayName: _displayNameController.text.trim(),
         );
       } else {
         await auth.signIn(
-          email: _emailController.text.trim(),
+          username: _usernameController.text.trim(),
           password: _passwordController.text,
         );
       }
@@ -103,13 +105,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 16),
                   ],
                   TextFormField(
-                    controller: _emailController,
-                    decoration: const InputDecoration(labelText: 'Email'),
-                    keyboardType: TextInputType.emailAddress,
+                    controller: _usernameController,
+                    decoration: const InputDecoration(labelText: 'Username'),
+                    autocorrect: false,
                     validator: (value) =>
-                        (value == null || !value.contains('@'))
-                        ? 'Enter a valid email'
+                        (value == null || value.trim().isEmpty)
+                        ? 'Enter a username'
                         : null,
+                    onFieldSubmitted: (_) {
+                      if (!_isSignUp) _submit();
+                    },
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
