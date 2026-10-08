@@ -176,6 +176,13 @@ trigger on `profiles`. It closes two things at once:
 Nothing in the app currently calls `.update()` on `profiles` directly, so
 this closes a real gap with no change to current behavior.
 
+**Fixed in `20261008180000_dev_pin_case_insensitive.sql`:** the trigger's
+Dev check originally compared `username = 'dev'`, but the seeded account's
+username is actually stored as `Dev` (capital D) — a case-sensitive match
+that silently never fired, so the pin above did nothing until this fix.
+Caught by checking the live database directly rather than assuming the
+migration's own literal casing was correct.
+
 ## Credentials
 
 - **Project URL** and **anon/publishable key**: safe to pass to the app via
