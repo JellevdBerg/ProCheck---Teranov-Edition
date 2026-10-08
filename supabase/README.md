@@ -164,6 +164,25 @@ specifically to remove the Operator/IT department itself or an account
 inside it. Also blocked: deleting your own account, and deleting the
 permanent Dev test account.
 
+## Checking off a task already in a project
+
+**Fixed in `20261008204720_task_checkoff_project_rls.sql`:** `tasks_update`'s
+`with check` originally required `project_id is null or role = 'manager' or
+is_admin()` on *every* update — meant to stop a member filing/moving a task
+into a project (`20261003120000_member_task_restrictions.sql`), but as
+written it also blocked a member from checking off a task a manager had
+already assigned into a project, since toggling `is_checked` is an update
+too. The checkoff silently 403'd and never reached the server, so nobody
+else ever saw it happen.
+
+Fix: the `with check` no longer looks at `project_id` at all (the
+department check is unchanged), and a new `protect_task_project_assignment`
+trigger enforces the actual rule — only a manager or Operator/IT can change
+`project_id` — by comparing `old.project_id` to `new.project_id` directly.
+Same reasoning as `protect_profile_privileges`: RLS's `with check` can't see
+a row's previous value, so a trigger is the only way to restrict just the
+field that changed.
+
 ## Operator developer panel
 
 A section at the bottom of the Admin screen, visible only to Operator
