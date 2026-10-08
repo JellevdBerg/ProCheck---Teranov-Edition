@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/app_logo.dart';
+import '../widgets/industrial/chassis_background.dart';
 import 'app_shell.dart';
 
 /// Username/password sign-in, shown instead of [AppShell] when no Supabase
@@ -73,15 +74,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: RadialGradient(
-                center: const Alignment(0, -0.3),
-                radius: 1.3,
-                colors: [tokens.surface, tokens.bg],
-              ),
-            ),
-          ),
+          const ChassisBackground(),
           Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(32),

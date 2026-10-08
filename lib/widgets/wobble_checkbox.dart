@@ -37,13 +37,19 @@ class _WobbleCheckboxState extends State<WobbleCheckbox>
     TweenSequenceItem(tween: Tween(begin: -0.15, end: 0.12), weight: 1),
     TweenSequenceItem(tween: Tween(begin: 0.12, end: -0.06), weight: 1),
     TweenSequenceItem(tween: Tween(begin: -0.06, end: 0.0), weight: 1),
-  ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+  // Industrial Skeuomorphism retune: a snappier mechanical-click curve than
+  // the original plain ease-out, same duration. Not `easeOutBack` —
+  // shortcut: that curve overshoots past t=1.0, which `TweenSequence`
+  // asserts against (it isn't a `Tween`-only-safe curve), so a true
+  // spring-overshoot feel here would need rebuilding this as nested plain
+  // `Tween`s instead of one `TweenSequence`; upgrade this if that's wanted.
+  ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutQuart));
 
   late final Animation<double> _scale = TweenSequence<double>([
     TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.25), weight: 1),
     TweenSequenceItem(tween: Tween(begin: 1.25, end: 0.95), weight: 1),
     TweenSequenceItem(tween: Tween(begin: 0.95, end: 1.0), weight: 2),
-  ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+  ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutQuart));
 
   @override
   void didUpdateWidget(covariant WobbleCheckbox oldWidget) {

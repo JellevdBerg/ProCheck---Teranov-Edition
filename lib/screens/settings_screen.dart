@@ -17,6 +17,7 @@ import '../providers/task_templates_provider.dart';
 import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/color_spectrum_picker.dart';
+import '../widgets/industrial/screw_dot.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
 import '../widgets/text_prompt_dialog.dart';
 
@@ -105,7 +106,14 @@ class _AppearanceCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _CardTitle('Appearance'),
+            const Row(
+              children: [
+                Expanded(child: _CardTitle('Appearance')),
+                ScrewDot(),
+                SizedBox(width: 10),
+                ScrewDot(),
+              ],
+            ),
             const NocturneSectionLabel('THEME', padding: EdgeInsets.only(bottom: 8)),
             RadioGroup<ThemeMode>(
               groupValue: settings.themeMode,

@@ -480,7 +480,13 @@ class _StatCard extends StatelessWidget {
         children: [
           Text(
             value,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: valueColor),
+            // Monospace for the stat count — the Industrial Skeuomorphism
+            // redesign's "data terminal" tell for numeric displays (§7).
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              color: valueColor,
+              fontFamily: 'monospace',
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 4),
           Text(

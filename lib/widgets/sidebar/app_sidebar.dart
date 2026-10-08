@@ -16,6 +16,7 @@ import '../../screens/login_screen.dart';
 import '../../theme/nocturne_theme.dart';
 import '../app_logo.dart';
 import '../blurred_dialog.dart';
+import '../industrial/status_led.dart';
 import '../project_name_lookup.dart';
 import 'mini_calendar.dart';
 
@@ -121,6 +122,17 @@ class AppSidebar extends ConsumerWidget {
                 onTap: () => _confirmSignOut(context, ref),
               ),
             ),
+            if (expanded) ...[
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: StatusLed(
+                  label: 'Synced',
+                  color: NocturneStatus.done,
+                  reduceMotion: settings.reduceMotion,
+                ),
+              ),
+            ],
           ],
           const SizedBox(height: 10),
           // The nav sections scroll independently of the calendar/Settings

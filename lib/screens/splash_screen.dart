@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../data/supabase_config.dart';
-import '../theme/nocturne_theme.dart';
 import '../widgets/app_logo.dart';
+import '../widgets/industrial/chassis_background.dart';
 import 'app_shell.dart';
 import 'login_screen.dart';
 
@@ -56,7 +56,7 @@ class _SplashScreenState extends State<SplashScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          const _BrandBackdrop(),
+          const ChassisBackground(),
           Center(
             child: FadeTransition(
               opacity: _controller,
@@ -83,28 +83,6 @@ class _SplashScreenState extends State<SplashScreen>
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// A quiet radial vignette behind the brand mark — built from the theme's
-/// own neutral ramp (never the accent, which is reserved for interactive
-/// elements) so it reads as a deliberate backdrop rather than a flat
-/// `Scaffold` background, and stays correct whatever accent the user picks.
-class _BrandBackdrop extends StatelessWidget {
-  const _BrandBackdrop();
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = context.nocturne;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: RadialGradient(
-          center: const Alignment(0, -0.2),
-          radius: 1.2,
-          colors: [tokens.surface, tokens.bg],
-        ),
       ),
     );
   }

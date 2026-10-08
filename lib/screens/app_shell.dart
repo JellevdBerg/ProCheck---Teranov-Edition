@@ -10,6 +10,7 @@ import '../providers/settings_provider.dart';
 import '../providers/undo_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/create_task_sheet.dart';
+import '../widgets/industrial/chassis_background.dart';
 import '../widgets/sidebar/app_sidebar.dart';
 import '../widgets/text_prompt_dialog.dart';
 import 'admin_screen.dart';
@@ -306,21 +307,12 @@ class _AppShellState extends ConsumerState<AppShell>
                     return Stack(
                       key: _mainAreaKey,
                       children: [
-                        // A quiet neutral vignette (never accent-tinted —
-                        // see NocturneColors doc comment) behind every
-                        // screen, so the main content area reads as a
-                        // designed surface rather than one flat fill color.
-                        Positioned.fill(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: RadialGradient(
-                                center: const Alignment(0, -1),
-                                radius: 1.6,
-                                colors: [tokens.surface, tokens.bg],
-                              ),
-                            ),
-                          ),
-                        ),
+                        // The Industrial Skeuomorphism "chassis": a
+                        // textured, lit backdrop behind every screen (Level
+                        // 0 in the elevation model), so the main content
+                        // area reads as a physical surface everything else
+                        // is mounted to, not a flat fill color.
+                        const Positioned.fill(child: ChassisBackground()),
                         Positioned.fill(child: _buildScreen()),
                         if (_detailProjectId != null)
                           _buildDetailOverlay(constraints),

@@ -17,6 +17,7 @@ class NocturneRadius {
   static const sm = 6.0;
   static const md = 12.0;
   static const lg = 20.0;
+  static const xl = 24.0;
 }
 
 /// Dark-ground color roles (Nocturne's native theme). A light counterpart is
@@ -198,52 +199,70 @@ ThemeData buildNocturneTheme({
     ),
     cardTheme: CardThemeData(
       color: tokens.surface,
-      elevation: 6,
+      // Industrial Skeuomorphism "bolted panel" emboss: pushed well past a
+      // normal Material card shadow (elevation 6 -> 14, darker/bigger) so
+      // every card reads as a physical panel resting on the chassis, not a
+      // flat tinted rectangle. A literal dual light+dark neumorphic shadow
+      // pair needs a custom widget per call site (`panelShadow()` in
+      // industrial_shadows.dart is there for the few spots that use it
+      // directly); this single bolder shadow is the app-wide approximation.
+      elevation: 14,
       clipBehavior: Clip.antiAlias,
-      // Revamped from the original flat elevation:0 + hairline-border card:
-      // no border at all now — the surface color plus a real neutral drop
-      // shadow (never accent-tinted — see NocturneColors doc comment) does
-      // the separating, so cards read as lifted panels rather than boxes.
-      shadowColor: Colors.black.withValues(alpha: 0.45),
+      shadowColor: Colors.black.withValues(alpha: 0.55),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(NocturneRadius.lg),
+        borderRadius: BorderRadius.circular(NocturneRadius.xl),
       ),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: tokens.surface,
+      elevation: 14,
+      shadowColor: Colors.black.withValues(alpha: 0.55),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(NocturneRadius.lg),
+        borderRadius: BorderRadius.circular(NocturneRadius.xl),
       ),
       titleTextStyle: heading(20),
     ),
+    // Industrial Skeuomorphism "data well": inputs are recessed into the
+    // chassis rather than outlined — no border at rest, depth communicated
+    // by a darker-than-surface fill instead; focus swaps to an accent glow
+    // rather than a thicker border line.
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: tokens.surface,
+      // tokens.bg, not tokens.surface — bg is reliably the darker of the two
+      // in both themes (see NocturneColors.dark/.light), which is what
+      // makes a "recessed" fill actually read as sunken below the panel.
+      fillColor: tokens.bg,
       hintStyle: TextStyle(color: tokens.neutral400),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(NocturneRadius.md),
-        borderSide: BorderSide(color: tokens.divider),
+        borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(NocturneRadius.md),
-        borderSide: BorderSide(color: tokens.divider),
+        borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(NocturneRadius.md),
-        borderSide: BorderSide(color: accent, width: 1.5),
+        borderSide: BorderSide(color: accent, width: 2),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
     ),
+    // "Physical keys": a chassis-colored fill (not transparent) plus a
+    // floating-level shadow instead of a flat outline, so secondary buttons
+    // read as pressable objects too, not just accent-text-on-nothing.
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: accent,
-        side: BorderSide(color: accent),
+        backgroundColor: tokens.surface,
+        foregroundColor: tokens.text,
+        side: BorderSide.none,
+        elevation: 4,
+        shadowColor: Colors.black.withValues(alpha: 0.4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(NocturneRadius.md),
         ),
         textStyle: const TextStyle(
           fontFamily: _fontFamily,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
         ),
       ),
     ),
@@ -259,9 +278,12 @@ ThemeData buildNocturneTheme({
       style: FilledButton.styleFrom(
         backgroundColor: accent,
         foregroundColor: onAccent,
+        elevation: 6,
+        shadowColor: accent.withValues(alpha: 0.6),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(NocturneRadius.md),
         ),
+        textStyle: const TextStyle(fontWeight: FontWeight.w600),
       ),
     ),
     iconTheme: IconThemeData(color: tokens.neutral300),

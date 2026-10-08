@@ -9,8 +9,10 @@ import '../../theme/nocturne_theme.dart';
 /// `.btn-ghost` (no border, accent text).
 enum NocturneButtonVariant { primary, secondary, ghost }
 
-/// An icon+label button matching the Nocturne `.btn` classes.
-class NocturneButton extends StatelessWidget {
+/// An icon+label button matching the Nocturne `.btn` classes. Depresses
+/// (translates down + drops its shadow) on press, like a physical key —
+/// the Industrial Skeuomorphism redesign's "mechanical" interaction.
+class NocturneButton extends StatefulWidget {
   const NocturneButton({
     super.key,
     required this.label,
@@ -32,14 +34,21 @@ class NocturneButton extends StatelessWidget {
   final bool dense;
 
   @override
+  State<NocturneButton> createState() => _NocturneButtonState();
+}
+
+class _NocturneButtonState extends State<NocturneButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     final tokens = context.nocturne;
-    final accent = color ?? context.nocturneAccent;
+    final accent = widget.color ?? context.nocturneAccent;
 
     final onAccent = accent.computeLuminance() > 0.5
         ? Colors.black
         : Colors.white;
-    final (Color fg, Color? border, Color? bg) = switch (variant) {
+    final (Color fg, Color? border, Color? bg) = switch (widget.variant) {
       NocturneButtonVariant.primary => (onAccent, null, accent),
       NocturneButtonVariant.secondary => (tokens.text, tokens.divider, null),
       NocturneButtonVariant.ghost => (accent, null, null),
@@ -48,38 +57,61 @@ class NocturneButton extends StatelessWidget {
     final child = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (icon != null) ...[
-          Icon(icon, size: 16, color: fg),
+        if (widget.icon != null) ...[
+          Icon(widget.icon, size: 16, color: fg),
           const SizedBox(width: 6),
         ],
         Text(
-          label,
+          widget.label,
           style: TextStyle(
             color: fg,
-            fontSize: dense ? 13 : 14,
+            fontSize: widget.dense ? 13 : 14,
             fontWeight: FontWeight.w600,
           ),
         ),
       ],
     );
 
-    return Material(
-      color: bg ?? Colors.transparent,
-      elevation: variant == NocturneButtonVariant.primary ? 2 : 0,
-      shadowColor: accent.withValues(alpha: 0.5),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(NocturneRadius.md),
-        side: border != null ? BorderSide(color: border) : BorderSide.none,
-      ),
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(NocturneRadius.md),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: dense ? 10 : 12,
-            vertical: dense ? 6 : 8,
+    final baseElevation = widget.variant == NocturneButtonVariant.primary
+        ? 4.0
+        : 0.0;
+
+    // A single InkWell drives both the tap and the press-state tracking
+    // (via onHighlightChanged) — an extra GestureDetector wrapping it would
+    // add a second, competing tap recognizer in the same gesture arena and
+    // make taps unreliable.
+    return AnimatedScale(
+      scale: _pressed ? 0.96 : 1.0,
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOut,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        transform: _pressed
+            ? (Matrix4.identity()..translateByDouble(0.0, 1.5, 0.0, 1.0))
+            : Matrix4.identity(),
+        child: Material(
+          color: bg ?? Colors.transparent,
+          elevation: _pressed ? baseElevation * 0.3 : baseElevation,
+          shadowColor: accent.withValues(alpha: 0.5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(NocturneRadius.md),
+            side: border != null
+                ? BorderSide(color: border)
+                : BorderSide.none,
           ),
-          child: child,
+          child: InkWell(
+            onTap: widget.onPressed,
+            onHighlightChanged: (highlighted) =>
+                setState(() => _pressed = highlighted),
+            borderRadius: BorderRadius.circular(NocturneRadius.md),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: widget.dense ? 10 : 12,
+                vertical: widget.dense ? 6 : 8,
+              ),
+              child: child,
+            ),
+          ),
         ),
       ),
     );
