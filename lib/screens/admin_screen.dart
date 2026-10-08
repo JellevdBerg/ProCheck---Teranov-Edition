@@ -480,6 +480,7 @@ class _DevPanel extends ConsumerWidget {
     final packageInfo = ref.watch(packageInfoProvider);
     final profile = ref.watch(currentProfileProvider).valueOrNull;
     final departments = ref.watch(departmentsProvider).valueOrNull ?? const [];
+    final people = ref.watch(departmentMembersProvider).valueOrNull ?? const [];
     final syncLog = ref.watch(syncLogProvider);
     final userId = supabase.auth.currentUser?.id;
 
@@ -519,6 +520,26 @@ class _DevPanel extends ConsumerWidget {
           value: syncLog.lastSyncAt?.toLocal().toString() ?? 'never',
         ),
         _DevRow(label: 'Latest migration', value: latestMigration),
+        _DevRow(label: 'Accounts', value: '${people.length}'),
+        _DevRow(label: 'Departments', value: '${departments.length}'),
+        const SizedBox(height: 12),
+        Text(
+          'Accounts by department',
+          style: Theme.of(context).textTheme.labelLarge,
+        ),
+        const SizedBox(height: 4),
+        if (departments.isEmpty)
+          Text('None.', style: TextStyle(color: tokens.neutral500))
+        else
+          for (final department in departments)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Text(
+                '${department.name}: '
+                '${people.where((p) => p.departmentId == department.id).length}',
+                style: TextStyle(fontSize: 12, color: tokens.neutral500),
+              ),
+            ),
         const SizedBox(height: 12),
         Text(
           'Recent sync errors',
