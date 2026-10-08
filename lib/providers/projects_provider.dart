@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/hive_setup.dart';
@@ -36,12 +37,61 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
   ProjectsNotifier(Ref ref) : _ref = ref, super(_box.values.toList()) {
     _sortState();
     unawaited(_loadOwnProfile());
-    unawaited(_pullFromSupabase());
+    unawaited(_pullFromSupabase().then((_) => _subscribeRealtime()));
   }
 
   final Ref _ref;
+  RealtimeChannel? _channel;
 
   static Box<Project> get _box => Hive.box<Project>(projectBoxName);
+
+  @override
+  void dispose() {
+    final channel = _channel;
+    if (channel != null) {
+      unawaited(supabase.removeChannel(channel));
+    }
+    super.dispose();
+  }
+
+  /// Subscribes to live inserts/updates/deletes on the `projects` table —
+  /// see [TasksNotifier._subscribeRealtime] for the identical pattern and
+  /// its caveats (RLS-governed, best-effort).
+  void _subscribeRealtime() {
+    if (!isSupabaseConfigured) return;
+    if (supabase.auth.currentUser == null) return;
+    _channel = supabase
+        .channel('projects_changes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'projects',
+          callback: _handleRealtimeChange,
+        )
+        .subscribe();
+  }
+
+  void _handleRealtimeChange(PostgresChangePayload payload) {
+    switch (payload.eventType) {
+      case PostgresChangeEvent.delete:
+        final id = payload.oldRecord['id'] as String?;
+        if (id == null) return;
+        unawaited(_box.delete(id));
+        state = state.where((p) => p.id != id).toList();
+      case PostgresChangeEvent.insert:
+      case PostgresChangeEvent.update:
+        final project = Project.fromSupabase(payload.newRecord);
+        unawaited(_box.put(project.id, project));
+        state = [
+          for (final p in state)
+            if (p.id == project.id) project else p,
+          if (!state.any((p) => p.id == project.id)) project,
+        ];
+        _sortState();
+      case PostgresChangeEvent.all:
+        break;
+    }
+  }
   static final _neverOpened = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// Every project — used where that's explicitly correct (backup export,

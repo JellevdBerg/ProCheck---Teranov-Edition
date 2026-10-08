@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/hive_setup.dart';
@@ -36,12 +37,65 @@ class TasksNotifier extends StateNotifier<List<Task>> {
   TasksNotifier(Ref ref) : _ref = ref, super(_box.values.toList()) {
     _sortState();
     unawaited(_loadOwnProfile());
-    unawaited(_pullFromSupabase());
+    unawaited(_pullFromSupabase().then((_) => _subscribeRealtime()));
   }
 
   final Ref _ref;
+  RealtimeChannel? _channel;
 
   static Box<Task> get _box => Hive.box<Task>(taskBoxName);
+
+  @override
+  void dispose() {
+    final channel = _channel;
+    if (channel != null) {
+      unawaited(supabase.removeChannel(channel));
+    }
+    super.dispose();
+  }
+
+  /// Subscribes to live inserts/updates/deletes on the `tasks` table so a
+  /// teammate's change shows up immediately rather than only on next
+  /// launch. RLS still governs which rows this client actually receives —
+  /// this just reacts to whatever comes through. Best-effort: a failed
+  /// subscribe leaves the app working exactly as it did with only the
+  /// launch-time pull.
+  void _subscribeRealtime() {
+    if (!isSupabaseConfigured) return;
+    if (supabase.auth.currentUser == null) return;
+    _channel = supabase
+        .channel('tasks_changes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'tasks',
+          callback: _handleRealtimeChange,
+        )
+        .subscribe();
+  }
+
+  void _handleRealtimeChange(PostgresChangePayload payload) {
+    switch (payload.eventType) {
+      case PostgresChangeEvent.delete:
+        // The old row only carries its primary key once deleted.
+        final id = payload.oldRecord['id'] as String?;
+        if (id == null) return;
+        unawaited(_box.delete(id));
+        state = state.where((t) => t.id != id).toList();
+      case PostgresChangeEvent.insert:
+      case PostgresChangeEvent.update:
+        final task = Task.fromSupabase(payload.newRecord);
+        unawaited(_box.put(task.id, task));
+        if (state.any((t) => t.id == task.id)) {
+          _replace(task);
+        } else {
+          state = [task, ...state];
+        }
+        _sortState();
+      case PostgresChangeEvent.all:
+        break;
+    }
+  }
 
   /// Every task — used where that's explicitly correct (backup export,
   /// Settings > Wipe All Data already clearing the whole box).
@@ -269,6 +323,14 @@ class TasksNotifier extends StateNotifier<List<Task>> {
     final task = _box.get(taskId);
     if (task == null) return;
     _persist(task.copyWith(assigneeId: assigneeId));
+  }
+
+  /// Sets how long this task is expected to take, in minutes — shown in the
+  /// team dashboard's occupancy totals. Pass null to clear it.
+  void setTaskEstimate(String taskId, int? estimatedMinutes) {
+    final task = _box.get(taskId);
+    if (task == null) return;
+    _persist(task.copyWith(estimatedMinutes: estimatedMinutes));
   }
 
   void deleteTask(String taskId) {

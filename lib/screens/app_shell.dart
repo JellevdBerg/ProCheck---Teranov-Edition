@@ -20,6 +20,7 @@ import 'day_screen.dart';
 import 'project_detail_overlay.dart';
 import 'projects_screen.dart';
 import 'settings_screen.dart';
+import 'team_screen.dart';
 import 'templates_screen.dart';
 import 'today_screen.dart';
 import 'upcoming_screen.dart';
@@ -405,6 +406,7 @@ class _AppShellState extends ConsumerState<AppShell>
         onOpenProject: _openProjectFromCard,
         onOpenTask: _openTask,
       ),
+      AppScreen.team => const TeamScreen(),
     };
   }
 }

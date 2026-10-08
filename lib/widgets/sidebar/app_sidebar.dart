@@ -141,6 +141,17 @@ class AppSidebar extends ConsumerWidget {
                           accent: accent,
                           onTap: () => onScreenSelected(AppScreen.dashboard),
                         ),
+                        if (profile?.isManager ?? false) ...[
+                          const SizedBox(height: 2),
+                          _NavRow(
+                            icon: Icons.groups_outlined,
+                            label: 'Team',
+                            expanded: expanded,
+                            active: currentScreen == AppScreen.team,
+                            accent: accent,
+                            onTap: () => onScreenSelected(AppScreen.team),
+                          ),
+                        ],
                         const SizedBox(height: 2),
                         _NavRow(
                           icon: Icons.calendar_month_outlined,

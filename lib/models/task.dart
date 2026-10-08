@@ -39,6 +39,7 @@ class Task extends HiveObject {
     this.ownerId = '',
     this.assigneeId,
     this.departmentId = '',
+    this.estimatedMinutes,
   }) : subtasks = subtasks ?? [],
        attachments = attachments ?? [],
        sortOrder = sortOrder ?? createdAt.millisecondsSinceEpoch.toDouble();
@@ -130,6 +131,12 @@ class Task extends HiveObject {
   @HiveField(18, defaultValue: '')
   String departmentId;
 
+  /// How long this task is expected to take, in minutes — used by the team
+  /// dashboard's occupancy view to total up a teammate's remaining
+  /// workload. Null when no estimate has been given.
+  @HiveField(19)
+  int? estimatedMinutes;
+
   TaskPriority get priority => TaskPriority.fromIndex(priorityIndex);
   set priority(TaskPriority value) => priorityIndex = value.index;
 
@@ -165,6 +172,7 @@ class Task extends HiveObject {
     String? ownerId,
     Object? assigneeId = _unset,
     String? departmentId,
+    Object? estimatedMinutes = _unset,
   }) => Task(
     id: id,
     title: title ?? this.title,
@@ -194,6 +202,9 @@ class Task extends HiveObject {
         ? this.assigneeId
         : assigneeId as String?,
     departmentId: departmentId ?? this.departmentId,
+    estimatedMinutes: identical(estimatedMinutes, _unset)
+        ? this.estimatedMinutes
+        : estimatedMinutes as int?,
   );
 
   static const _subtaskListEquality = ListEquality<Subtask>();
@@ -217,6 +228,7 @@ class Task extends HiveObject {
       other.ownerId == ownerId &&
       other.assigneeId == assigneeId &&
       other.departmentId == departmentId &&
+      other.estimatedMinutes == estimatedMinutes &&
       _subtaskListEquality.equals(other.subtasks, subtasks) &&
       _attachmentListEquality.equals(other.attachments, attachments);
 
@@ -237,6 +249,7 @@ class Task extends HiveObject {
     ownerId,
     assigneeId,
     departmentId,
+    estimatedMinutes,
     _subtaskListEquality.hash(subtasks),
     _attachmentListEquality.hash(attachments),
   );
@@ -259,6 +272,7 @@ class Task extends HiveObject {
     'ownerId': ownerId,
     'assigneeId': assigneeId,
     'departmentId': departmentId,
+    'estimatedMinutes': estimatedMinutes,
   };
 
   factory Task.fromJson(Map<String, dynamic> json) => Task(
@@ -289,6 +303,7 @@ class Task extends HiveObject {
     ownerId: json['ownerId'] as String? ?? '',
     assigneeId: json['assigneeId'] as String?,
     departmentId: json['departmentId'] as String? ?? '',
+    estimatedMinutes: json['estimatedMinutes'] as int?,
   );
 
   /// Maps a `tasks` table row (snake_case Postgres columns) to a [Task].
@@ -320,6 +335,7 @@ class Task extends HiveObject {
     ownerId: row['owner_id'] as String,
     assigneeId: row['assignee_id'] as String?,
     departmentId: row['department_id'] as String,
+    estimatedMinutes: row['estimated_minutes'] as int?,
   );
 
   /// Maps this [Task] to a `tasks` table row for insert/update. Omits `id`
@@ -341,5 +357,6 @@ class Task extends HiveObject {
     'owner_id': ownerId,
     'assignee_id': assigneeId,
     'department_id': departmentId,
+    'estimated_minutes': estimatedMinutes,
   };
 }
