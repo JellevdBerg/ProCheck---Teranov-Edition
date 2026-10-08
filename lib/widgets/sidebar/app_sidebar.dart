@@ -400,14 +400,30 @@ class _Header extends StatelessWidget {
           const AppLogo(size: 24),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              'ProCheck',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w500,
-                fontSize: 16,
-                color: tokens.text,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'ProCheck',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 16,
+                    color: tokens.text,
+                  ),
+                ),
+                Text(
+                  'TERANOV EDITION',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 9,
+                    letterSpacing: 0.08,
+                    color: tokens.neutral500,
+                  ),
+                ),
+              ],
             ),
           ),
           IconButton(

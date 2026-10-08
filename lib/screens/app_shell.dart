@@ -306,6 +306,21 @@ class _AppShellState extends ConsumerState<AppShell>
                     return Stack(
                       key: _mainAreaKey,
                       children: [
+                        // A quiet neutral vignette (never accent-tinted —
+                        // see NocturneColors doc comment) behind every
+                        // screen, so the main content area reads as a
+                        // designed surface rather than one flat fill color.
+                        Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: RadialGradient(
+                                center: const Alignment(0, -1),
+                                radius: 1.6,
+                                colors: [tokens.surface, tokens.bg],
+                              ),
+                            ),
+                          ),
+                        ),
                         Positioned.fill(child: _buildScreen()),
                         if (_detailProjectId != null)
                           _buildDetailOverlay(constraints),
