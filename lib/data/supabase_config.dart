@@ -30,6 +30,9 @@ Future<void> setUpSupabase() async {
   await Supabase.initialize(
     url: _supabaseUrl,
     publishableKey: _supabaseAnonKey,
+    // No "remember me": sessions live in memory only, so closing the app
+    // always requires signing in again.
+    authOptions: const FlutterAuthClientOptions(localStorage: EmptyLocalStorage()),
   );
 }
 
