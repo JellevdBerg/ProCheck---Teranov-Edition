@@ -22,7 +22,10 @@ bool get isSupabaseConfigured =>
 
 Future<void> setUpSupabase() async {
   if (!isSupabaseConfigured) return;
-  await Supabase.initialize(url: _supabaseUrl, anonKey: _supabaseAnonKey);
+  await Supabase.initialize(
+    url: _supabaseUrl,
+    publishableKey: _supabaseAnonKey,
+  );
 }
 
 SupabaseClient get supabase => Supabase.instance.client;
