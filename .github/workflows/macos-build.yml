@@ -29,7 +29,10 @@ jobs:
         run: flutter config --enable-macos-desktop
 
       - name: Build macOS release
-        run: flutter build macos --release
+        run: >
+          flutter build macos --release
+          --dart-define=SUPABASE_URL=https://xfcmumvfaknprmgisaar.supabase.co
+          --dart-define=SUPABASE_ANON_KEY=sb_publishable_M932WvNHZ6hMs23ugQmskw_JbFNhEO0
 
       - name: Compute version
         id: version
