@@ -12,6 +12,7 @@ import '../theme/nocturne_theme.dart';
 import '../widgets/create_task_sheet.dart';
 import '../widgets/sidebar/app_sidebar.dart';
 import '../widgets/text_prompt_dialog.dart';
+import 'admin_screen.dart';
 import 'app_screen.dart';
 import 'archived_screen.dart';
 import 'calendar_screen.dart';
@@ -407,6 +408,7 @@ class _AppShellState extends ConsumerState<AppShell>
         onOpenTask: _openTask,
       ),
       AppScreen.team => const TeamScreen(),
+      AppScreen.admin => const AdminScreen(),
     };
   }
 }

@@ -5,6 +5,7 @@ import '../../data/supabase_config.dart';
 import '../../models/project.dart';
 import '../../models/task.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/departments_provider.dart';
 import '../../providers/projects_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_templates_provider.dart';
@@ -57,6 +58,9 @@ class AppSidebar extends ConsumerWidget {
     final profile = signedIn
         ? ref.watch(currentProfileProvider).valueOrNull
         : null;
+    final isOperator = signedIn
+        ? ref.watch(isOperatorProvider).valueOrNull ?? false
+        : false;
 
     final now = DateTime.now();
     final todayCount = tasks
@@ -150,6 +154,17 @@ class AppSidebar extends ConsumerWidget {
                             active: currentScreen == AppScreen.team,
                             accent: accent,
                             onTap: () => onScreenSelected(AppScreen.team),
+                          ),
+                        ],
+                        if (isOperator) ...[
+                          const SizedBox(height: 2),
+                          _NavRow(
+                            icon: Icons.admin_panel_settings_outlined,
+                            label: 'Admin',
+                            expanded: expanded,
+                            active: currentScreen == AppScreen.admin,
+                            accent: accent,
+                            onTap: () => onScreenSelected(AppScreen.admin),
                           ),
                         ],
                         const SizedBox(height: 2),

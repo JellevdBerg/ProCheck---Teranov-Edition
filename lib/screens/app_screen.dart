@@ -14,4 +14,5 @@ enum AppScreen {
   settings,
   dashboard,
   team,
+  admin,
 }

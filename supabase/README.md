@@ -53,19 +53,23 @@ about them — see the project memory/chat for the one-time
 it doesn't try to re-run them. `combined_setup.sql` is only there for the
 dashboard path above; keep it in sync with `migrations/` if either changes.
 
-## Username/password auth, no email in the UI
+## Username/password auth, no email in the UI, no self-signup
 
 ProCheck signs people in by username, not email — but Supabase Auth still
 requires an email address internally, so the app maps each username to a
 synthetic `<username>@procheck.local` address (see
 `lib/providers/auth_provider.dart`'s `emailForUsername`). Nothing is ever
-sent to that address, which means:
+sent to that address.
 
-- **"Confirm email" must be turned off** for the Email provider —
-  **Authentication → Providers → Email → uncheck "Confirm email"** in the
-  Supabase dashboard. A synthetic address can never receive a confirmation
-  mail, so leaving this on locks every new sign-up out after they create
-  an account. This is a dashboard-only toggle; no migration can set it.
+There's no "create account" screen — accounts are created by an Operator,
+from the app's own Admin screen (see
+`20261008130000_admin_provisioning.sql`'s `admin_create_profile`), which
+inserts a pre-confirmed account directly, the same way the Dev seed below
+does. Because of that, the dashboard's **"Confirm email"** toggle
+(Authentication → Providers → Email) doesn't actually matter for account
+creation going forward — it only mattered back when sign-up went through
+Supabase's own public email/password flow, which this edition no longer
+uses at all.
 
 ### The permanent "Dev" / Operator test account
 
@@ -85,6 +89,24 @@ insert may error. If it does, create the account the normal way instead
 (**Authentication → Add user**, email `dev@procheck.local`, password
 `testing`, confirm it), then run just the final `update profiles set
 role = 'manager', department_id = ...` statement from that file by hand.
+
+## Operator admin provisioning
+
+`20261008130000_admin_provisioning.sql` adds two SQL functions the app
+calls via `supabase.rpc(...)` from its Admin screen:
+
+- `admin_create_department(p_name)` — adds a department.
+- `admin_create_profile(p_username, p_password, p_display_name, p_role, p_department_id)`
+  — creates a new account the same way the Dev seed above does (same
+  caveat: relies on the current GoTrue schema shape).
+
+Both are `SECURITY DEFINER` and re-check `is_operator()` themselves, so
+they're safe to expose to the `authenticated` role — being signed in
+isn't enough to call them, only being in the Operator department is. This
+migration also adds a `profiles_select_as_operator` RLS policy: without
+it, an Operator could only see profiles in their own department (the same
+limit a manager has), not the whole company, which the Admin screen needs
+to list everyone.
 
 ## Credentials
 

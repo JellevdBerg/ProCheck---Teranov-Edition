@@ -614,3 +614,115 @@ update profiles
 set role = 'manager',
     department_id = (select id from departments where is_operator)
 where id = (select id from auth.users where email = 'dev@procheck.local');
+
+-- ----- Operator admin provisioning (20261008130000_admin_provisioning.sql) -----
+
+create or replace function public.admin_create_department(p_name text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_id uuid;
+begin
+  if not public.is_operator() then
+    raise exception 'Only an Operator can create departments';
+  end if;
+  if length(trim(p_name)) = 0 then
+    raise exception 'Department name cannot be empty';
+  end if;
+
+  insert into public.departments (name) values (trim(p_name))
+  returning id into new_id;
+
+  return new_id;
+end;
+$$;
+
+revoke all on function public.admin_create_department(text) from public;
+grant execute on function public.admin_create_department(text) to authenticated;
+
+create or replace function public.admin_create_profile(
+  p_username text,
+  p_password text,
+  p_display_name text,
+  p_role text default 'member',
+  p_department_id uuid default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_user_id uuid;
+  synthetic_email text;
+  clean_username text;
+begin
+  if not public.is_operator() then
+    raise exception 'Only an Operator can create accounts';
+  end if;
+  if p_role not in ('member', 'manager') then
+    raise exception 'role must be ''member'' or ''manager''';
+  end if;
+
+  clean_username := lower(trim(p_username));
+  if length(clean_username) = 0 then
+    raise exception 'Username cannot be empty';
+  end if;
+  if length(p_password) < 6 then
+    raise exception 'Password must be at least 6 characters';
+  end if;
+  if exists (select 1 from public.profiles where username = clean_username) then
+    raise exception 'Username "%" is already taken', clean_username;
+  end if;
+
+  synthetic_email := clean_username || '@procheck.local';
+  new_user_id := gen_random_uuid();
+
+  insert into auth.users (
+    instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, email_change, email_change_token_new, recovery_token
+  ) values (
+    '00000000-0000-0000-0000-000000000000',
+    new_user_id,
+    'authenticated',
+    'authenticated',
+    synthetic_email,
+    crypt(p_password, gen_salt('bf')),
+    now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    jsonb_build_object('username', clean_username, 'display_name', trim(p_display_name)),
+    now(), now(), '', '', '', ''
+  );
+
+  insert into auth.identities (
+    id, user_id, provider_id, identity_data, provider,
+    last_sign_in_at, created_at, updated_at
+  ) values (
+    gen_random_uuid(),
+    new_user_id,
+    new_user_id::text,
+    jsonb_build_object('sub', new_user_id::text, 'email', synthetic_email),
+    'email',
+    now(), now(), now()
+  );
+
+  update public.profiles
+  set role = p_role::user_role,
+      department_id = p_department_id
+  where id = new_user_id;
+
+  return new_user_id;
+end;
+$$;
+
+revoke all on function public.admin_create_profile(text, text, text, text, uuid) from public;
+grant execute on function public.admin_create_profile(text, text, text, text, uuid) to authenticated;
+
+create policy "profiles_select_as_operator"
+  on profiles for select
+  to authenticated
+  using (public.is_operator());

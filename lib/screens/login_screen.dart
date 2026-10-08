@@ -5,12 +5,12 @@ import '../providers/auth_provider.dart';
 import '../widgets/app_logo.dart';
 import 'app_shell.dart';
 
-/// Username/password sign-in and sign-up, shown instead of [AppShell] when
-/// no Supabase session exists. No email anywhere in this UI — each username
-/// maps to a synthetic address under the hood (see
-/// `auth_provider.dart`'s `emailForUsername`). A pilot-scale starting
-/// point — no SSO, no password reset flow yet; see the write-up's
-/// "Email/password vs. company SSO" note.
+/// Username/password sign-in, shown instead of [AppShell] when no Supabase
+/// session exists. No self-signup — accounts are created by an Operator
+/// (see `admin_screen.dart`), not by whoever opens the app, so this is
+/// sign-in only. No email anywhere in this UI — each username maps to a
+/// synthetic address under the hood (see `auth_provider.dart`'s
+/// `emailForUsername`).
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -22,9 +22,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _displayNameController = TextEditingController();
 
-  bool _isSignUp = false;
   bool _isSubmitting = false;
   String? _errorText;
 
@@ -32,7 +30,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
-    _displayNameController.dispose();
     super.dispose();
   }
 
@@ -45,18 +42,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     final auth = ref.read(authControllerProvider);
     try {
-      if (_isSignUp) {
-        await auth.signUp(
-          username: _usernameController.text.trim(),
-          password: _passwordController.text,
-          displayName: _displayNameController.text.trim(),
-        );
-      } else {
-        await auth.signIn(
-          username: _usernameController.text.trim(),
-          password: _passwordController.text,
-        );
-      }
+      await auth.signIn(
+        username: _usernameController.text.trim(),
+        password: _passwordController.text,
+      );
       if (!mounted) return;
       Navigator.of(
         context,
@@ -93,17 +82,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 32),
-                  if (_isSignUp) ...[
-                    TextFormField(
-                      controller: _displayNameController,
-                      decoration: const InputDecoration(labelText: 'Name'),
-                      validator: (value) =>
-                          (value == null || value.trim().isEmpty)
-                          ? 'Enter your name'
-                          : null,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
                   TextFormField(
                     controller: _usernameController,
                     decoration: const InputDecoration(labelText: 'Username'),
@@ -112,9 +90,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         (value == null || value.trim().isEmpty)
                         ? 'Enter a username'
                         : null,
-                    onFieldSubmitted: (_) {
-                      if (!_isSignUp) _submit();
-                    },
+                    onFieldSubmitted: (_) => _submit(),
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -142,21 +118,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : Text(_isSignUp ? 'Create account' : 'Sign in'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: _isSubmitting
-                        ? null
-                        : () => setState(() {
-                            _isSignUp = !_isSignUp;
-                            _errorText = null;
-                          }),
-                    child: Text(
-                      _isSignUp
-                          ? 'Already have an account? Sign in'
-                          : "Don't have an account? Create one",
-                    ),
+                        : const Text('Sign in'),
                   ),
                 ],
               ),
