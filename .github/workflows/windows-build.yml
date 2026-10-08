@@ -45,19 +45,6 @@ jobs:
           echo "tag=$tag" >> $env:GITHUB_OUTPUT
           echo "semver=$semver" >> $env:GITHUB_OUTPUT
 
-      - name: Check for existing release
-        id: check_release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release view "${{ steps.version.outputs.tag }}" --repo "${{ github.repository }}" *> $null
-          if ($LASTEXITCODE -eq 0) {
-            echo "exists=true" >> $env:GITHUB_OUTPUT
-          } else {
-            echo "exists=false" >> $env:GITHUB_OUTPUT
-          }
-
       - name: Package build output
         id: package
         shell: pwsh
@@ -73,7 +60,6 @@ jobs:
           retention-days: 30
 
       - name: Publish to GitHub Releases
-        if: steps.check_release.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
