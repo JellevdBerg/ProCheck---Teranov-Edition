@@ -155,6 +155,27 @@ caught and silently ignored by design (so a flaky connection or an RLS
 rejection never blocks the UI) — `sync_log_provider.dart` just gives
 those catch blocks somewhere to report to, capped at the last 20.
 
+## Protecting role/department from self-escalation
+
+`20261008150000_protect_profile_privileges.sql` adds a `BEFORE UPDATE`
+trigger on `profiles`. It closes two things at once:
+
+- **The Dev account is pinned to Operator.** Even an admin-authored
+  change (Operator or IT updating someone else's row) can't move or
+  demote the `dev` account out of Operator — only dropping the trigger
+  (or the username check inside it) first would allow that.
+- **No one can grant themselves `role`/`department_id`.** The existing
+  `profiles_update_own` RLS policy (from `20261001091500_rls_policies.sql`)
+  lets any signed-in user update their own profile row with no column
+  restriction — RLS's `with check` can't compare against the row's
+  *previous* value, so it couldn't express "don't let this column
+  change" on its own. The trigger blocks any `role`/`department_id`
+  change on a self-update unless the caller is Operator or IT (which
+  `admin_create_profile` already was, on creation).
+
+Nothing in the app currently calls `.update()` on `profiles` directly, so
+this closes a real gap with no change to current behavior.
+
 ## Credentials
 
 - **Project URL** and **anon/publishable key**: safe to pass to the app via
