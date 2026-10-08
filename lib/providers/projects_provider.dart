@@ -149,6 +149,10 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
   Future<void> _mirrorUpsert(Project project) async {
     if (!isSupabaseConfigured) return;
     if (supabase.auth.currentUser == null) return;
+    // ownerId is blank for a project created before _loadOwnProfile
+    // resolves — sending that as a uuid column fails server-side. Treat it
+    // as local-only, same as being offline, instead of sending garbage.
+    if (project.ownerId.isEmpty) return;
     try {
       await supabase.from('projects').upsert(project.toSupabase());
     } catch (e) {
