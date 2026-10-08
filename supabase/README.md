@@ -13,7 +13,7 @@ exact moment a migration was actually applied, only its relative order.
 ## Applying the setup (dashboard SQL editor — simplest)
 
 1. Open your Supabase project → **SQL Editor** → **New query**.
-2. Open **[`combined_setup.sql`](https://github.com/JellevdBerg/ProCheck---Teranov-Edition/blob/feature/supabase-foundation/supabase/combined_setup.sql)**
+2. Open **[`combined_setup.sql`](https://github.com/JellevdBerg/ProCheck---Teranov-Edition/blob/main/supabase/combined_setup.sql)**
    on GitHub (the repo's private, so use this page, not a raw link) and hit
    **Copy raw file** (or **Raw** then select-all) to copy its contents.
 3. **Paste the copied SQL text itself into the SQL editor** — not the file's
