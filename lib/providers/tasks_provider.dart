@@ -152,6 +152,12 @@ class TasksNotifier extends StateNotifier<List<Task>> {
   Future<void> _mirrorUpsert(Task task) async {
     if (!isSupabaseConfigured) return;
     if (supabase.auth.currentUser == null) return;
+    // ownerId/departmentId are blank for a task created before
+    // _loadOwnProfile resolves — sending that as a uuid column fails
+    // server-side (and a task left pointing at a project that failed to
+    // sync the same way then fails its own foreign key). Treat it as
+    // local-only, same as being offline, instead of sending garbage.
+    if (task.ownerId.isEmpty) return;
     try {
       await supabase.from('tasks').upsert(task.toSupabase());
     } catch (e) {
