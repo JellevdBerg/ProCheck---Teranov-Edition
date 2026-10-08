@@ -5,6 +5,7 @@ import '../models/task_template.dart';
 import '../providers/task_templates_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/create_task_sheet.dart';
+import '../widgets/industrial/industrial_panel.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
 import 'empty_state.dart';
 import 'task_template_editor_screen.dart';
@@ -87,7 +88,7 @@ class _TemplateRowState extends State<_TemplateRow> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
-      child: Card(
+      child: IndustrialPanel(
         margin: EdgeInsets.zero,
         child: Padding(
           padding: const EdgeInsets.all(11.2),

@@ -17,6 +17,7 @@ import '../providers/task_templates_provider.dart';
 import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/color_spectrum_picker.dart';
+import '../widgets/industrial/industrial_panel.dart';
 import '../widgets/industrial/screw_dot.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
 import '../widgets/text_prompt_dialog.dart';
@@ -99,7 +100,7 @@ class _AppearanceCard extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
 
-    return Card(
+    return IndustrialPanel(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16.8),
@@ -282,7 +283,7 @@ class _TaskDefaultsCard extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
 
-    return Card(
+    return IndustrialPanel(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16.8),
@@ -341,7 +342,7 @@ class _BackupCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Card(
+    return IndustrialPanel(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16.8),
@@ -550,7 +551,7 @@ class _ShortcutsCard extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
 
-    return Card(
+    return IndustrialPanel(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16.8),

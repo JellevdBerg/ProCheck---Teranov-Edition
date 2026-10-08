@@ -12,6 +12,7 @@ import '../providers/tasks_provider.dart';
 import '../providers/undo_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/create_task_sheet.dart';
+import '../widgets/industrial/industrial_panel.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
 import '../widgets/pop_out_removal.dart';
 import '../widgets/project_card.dart';
@@ -233,7 +234,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
             ),
           )
         else
-          Card(
+          IndustrialPanel(
             margin: EdgeInsets.zero,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 11.2),

@@ -11,6 +11,7 @@ import '../providers/projects_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
+import '../widgets/industrial/industrial_panel.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
 
 /// True for an unchecked task with no due date, or one overdue — it needs
@@ -498,7 +499,7 @@ class _StatCard extends StatelessWidget {
         ],
       ),
     );
-    return Card(
+    return IndustrialPanel(
       margin: EdgeInsets.zero,
       color: tint,
       child: onTap == null ? content : InkWell(onTap: onTap, child: content),
@@ -572,7 +573,7 @@ class _AttentionCardState extends State<_AttentionCard> {
         ? Color.alphaBlend(context.nocturneAccent.withValues(alpha: 0.18), tokens.surface)
         : null;
 
-    return Card(
+    return IndustrialPanel(
       margin: EdgeInsets.zero,
       color: tint,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(NocturneRadius.md)),
@@ -790,7 +791,7 @@ class _ProjectsTableCardState extends State<ProjectsTableCard> {
   @override
   Widget build(BuildContext context) {
     final summaries = _sortedSummaries;
-    return Card(
+    return IndustrialPanel(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16.8),
@@ -1067,7 +1068,7 @@ class _RecentActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return IndustrialPanel(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16.8),

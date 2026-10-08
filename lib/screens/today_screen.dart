@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/projects_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
+import '../theme/industrial_shadows.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/project_name_lookup.dart';
 import '../widgets/smart_view_task_row.dart';
@@ -44,11 +45,11 @@ class TodayScreen extends ConsumerWidget {
     final projectNames = buildProjectNameLookup(projects);
     final tokens = context.nocturne;
 
-    // A CustomScrollView + SliverList, not the Column-in-a-Card used
+    // A CustomScrollView + SliverList, not the Column-in-a-Panel used
     // elsewhere in the app, so that with thousands of tasks due today only
     // the rows actually on screen get built — the DecoratedSliver
-    // replicates the app's flat (elevation: 0) CardThemeData so this looks
-    // identical to a real Card.
+    // replicates IndustrialPanel's look (same radius + dual shadow) so this
+    // reads identically to one.
     return CustomScrollView(
       slivers: [
         SliverPadding(
@@ -63,7 +64,7 @@ class TodayScreen extends ConsumerWidget {
             decoration: BoxDecoration(
               color: tokens.surface,
               borderRadius: BorderRadius.circular(NocturneRadius.md),
-              border: Border.all(color: tokens.neutral800),
+              boxShadow: panelShadow(tokens),
             ),
             sliver: SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 11.2),

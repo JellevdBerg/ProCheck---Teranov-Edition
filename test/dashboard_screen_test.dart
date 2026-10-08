@@ -11,6 +11,7 @@ import 'package:procheck/providers/projects_provider.dart';
 import 'package:procheck/providers/tasks_provider.dart';
 import 'package:procheck/screens/dashboard_screen.dart';
 import 'package:procheck/theme/nocturne_theme.dart';
+import 'package:procheck/widgets/industrial/industrial_panel.dart';
 
 void main() {
   final now = DateTime(2026, 9, 16, 12);
@@ -325,7 +326,7 @@ void main() {
         // the value Text sits before the label Text in that card's tree.
         String statValueFor(String label) {
           final cardFinder = find
-              .ancestor(of: find.text(label), matching: find.byType(Card))
+              .ancestor(of: find.text(label), matching: find.byType(IndustrialPanel))
               .first;
           final texts = tester
               .widgetList<Text>(
@@ -374,7 +375,7 @@ void main() {
 
         String statValueFor(String label) {
           final cardFinder = find
-              .ancestor(of: find.text(label), matching: find.byType(Card))
+              .ancestor(of: find.text(label), matching: find.byType(IndustrialPanel))
               .first;
           final texts = tester
               .widgetList<Text>(
@@ -565,7 +566,7 @@ void main() {
         // Activity — scoping to the Projects card (found via its own
         // PROJECT header) isolates the table row.
         final projectsCard = find
-            .ancestor(of: find.text('PROJECT'), matching: find.byType(Card))
+            .ancestor(of: find.text('PROJECT'), matching: find.byType(IndustrialPanel))
             .first;
         double tableRowY(String projectName) => tester
             .getTopLeft(
@@ -605,11 +606,11 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        Card attentionCard() => tester.widget<Card>(
+        IndustrialPanel attentionCard() => tester.widget<IndustrialPanel>(
           find
               .ancestor(
                 of: find.text('Today & Needs Attention'),
-                matching: find.byType(Card),
+                matching: find.byType(IndustrialPanel),
               )
               .first,
         );

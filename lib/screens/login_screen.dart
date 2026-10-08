@@ -5,6 +5,7 @@ import '../providers/auth_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/industrial/chassis_background.dart';
+import '../widgets/industrial/industrial_panel.dart';
 import 'app_shell.dart';
 
 /// Username/password sign-in, shown instead of [AppShell] when no Supabase
@@ -101,7 +102,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 28),
-                    Card(
+                    IndustrialPanel(
                       margin: EdgeInsets.zero,
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),

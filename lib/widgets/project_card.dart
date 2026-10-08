@@ -4,6 +4,7 @@ import '../models/project.dart';
 import '../models/task.dart';
 import '../providers/settings_provider.dart';
 import '../theme/nocturne_theme.dart';
+import 'industrial/industrial_panel.dart';
 import 'nocturne/nocturne_widgets.dart';
 import 'text_prompt_dialog.dart';
 
@@ -256,7 +257,7 @@ class _ProjectCardState extends State<ProjectCard> {
     final totalCount = widget.tasks.length;
     final progress = totalCount == 0 ? 0.0 : doneCount / totalCount;
 
-    return Card(
+    return IndustrialPanel(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: widget.onTap,

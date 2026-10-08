@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/projects_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
+import '../theme/industrial_shadows.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/create_task_sheet.dart';
+import '../widgets/industrial/industrial_panel.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
 import '../widgets/project_name_lookup.dart';
 import '../widgets/smart_view_task_row.dart';
@@ -90,7 +92,7 @@ class DayScreen extends ConsumerWidget {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16.8, 16.8, 16.8, 16.8),
             sliver: SliverToBoxAdapter(
-              child: Card(
+              child: IndustrialPanel(
                 margin: EdgeInsets.zero,
                 child: Padding(
                   padding: const EdgeInsets.all(22.4),
@@ -111,7 +113,7 @@ class DayScreen extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: tokens.surface,
                 borderRadius: BorderRadius.circular(NocturneRadius.md),
-                border: Border.all(color: tokens.neutral800),
+                boxShadow: panelShadow(tokens),
               ),
               sliver: SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 11.2),

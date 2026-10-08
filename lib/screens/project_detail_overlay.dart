@@ -10,6 +10,7 @@ import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/create_task_sheet.dart';
+import '../widgets/industrial/industrial_panel.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
 import '../widgets/pop_out_removal.dart';
 import '../widgets/task_tile.dart';
@@ -163,7 +164,7 @@ class _ProjectDetailOverlayState extends ConsumerState<ProjectDetailOverlay> {
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       )
-                    : Card(
+                    : IndustrialPanel(
                         margin: EdgeInsets.zero,
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
@@ -411,7 +412,7 @@ class _ActivityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nocturne;
     final entries = project.activityLog.reversed.toList();
-    return Card(
+    return IndustrialPanel(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 11.2, vertical: 8.4),
@@ -513,7 +514,7 @@ class _CommentsCardState extends ConsumerState<_CommentsCard> {
     final tokens = context.nocturne;
     final comments = widget.project.comments;
 
-    return Card(
+    return IndustrialPanel(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 11.2, vertical: 8.4),
