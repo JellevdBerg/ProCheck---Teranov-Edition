@@ -54,39 +54,6 @@ void main() {
     );
   });
 
-  test('a fresh install has exactly one workspace, "Personal"', () {
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
-
-    expect(container.read(settingsProvider).workspaceNames, ['Personal']);
-    expect(container.read(settingsProvider).currentWorkspaceName, 'Personal');
-  });
-
-  test('workspace add/rename/remove, with a guard against removing the last one', () {
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
-    final notifier = container.read(settingsProvider.notifier);
-
-    notifier.addWorkspace('Acme Co.');
-    expect(container.read(settingsProvider).workspaceNames, ['Personal', 'Acme Co.']);
-    // addWorkspace also switches to the newly-added one.
-    expect(container.read(settingsProvider).currentWorkspaceName, 'Acme Co.');
-
-    notifier.renameWorkspace(0, 'Personal projects');
-    expect(
-      container.read(settingsProvider).workspaceNames,
-      ['Personal projects', 'Acme Co.'],
-    );
-
-    final removedSecond = notifier.removeWorkspace(1);
-    expect(removedSecond, isTrue);
-    expect(container.read(settingsProvider).workspaceNames, ['Personal projects']);
-
-    final removedLast = notifier.removeWorkspace(0);
-    expect(removedLast, isFalse);
-    expect(container.read(settingsProvider).workspaceNames, ['Personal projects']);
-  });
-
   test('ShortcutBinding.sameCombo detects a duplicate across actions', () {
     const a = ShortcutBinding(key: LogicalKeyboardKey.keyN, cmdOrCtrl: true);
     const b = ShortcutBinding(key: LogicalKeyboardKey.keyN, cmdOrCtrl: true);

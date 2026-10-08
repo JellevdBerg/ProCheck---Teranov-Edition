@@ -4,6 +4,12 @@
 *.pyc
 *.swp
 .DS_Store
+
+# Supabase credentials passed via --dart-define-from-file — never commit
+# the Project URL/anon key, even though they're the low-sensitivity client
+# keys (the service-role key and DB password never belong in this repo at
+# all; see supabase/README.md).
+supabase.local.json
 .atom/
 .build/
 .buildlog/

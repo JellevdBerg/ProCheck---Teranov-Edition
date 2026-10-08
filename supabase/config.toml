@@ -1,0 +1,5 @@
+# Minimal config for the Supabase CLI/GitHub integration — ties this repo's
+# `supabase/migrations/` to the Teranov edition's actual project (not a
+# secret: this is just the "xfcmumvfaknprmgisaar" ref already visible in the
+# project URL https://xfcmumvfaknprmgisaar.supabase.co).
+project_id = "xfcmumvfaknprmgisaar"

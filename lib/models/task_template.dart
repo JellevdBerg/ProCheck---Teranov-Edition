@@ -15,7 +15,6 @@ class TaskTemplate extends HiveObject {
     required this.createdAt,
     this.notes,
     List<Attachment>? attachments,
-    this.workspaceId,
   }) : attachments = attachments ?? [];
 
   @HiveField(0)
@@ -40,12 +39,8 @@ class TaskTemplate extends HiveObject {
   @HiveField(5, defaultValue: [])
   List<Attachment> attachments;
 
-  /// Which workspace this template belongs to (see AppSettings.workspaceIds
-  /// in settings_provider.dart) — null on templates saved before workspaces
-  /// had real data isolation, backfilled to the first workspace's id at
-  /// startup (see TaskTemplatesNotifier).
-  @HiveField(6)
-  String? workspaceId;
+  /// Field 6 used to be a local "workspace" id — retired along with the
+  /// whole concept (see Task's field 12 note); not reused.
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -54,7 +49,6 @@ class TaskTemplate extends HiveObject {
     'createdAt': createdAt.toIso8601String(),
     'notes': notes,
     'attachments': attachments.map((a) => a.toJson()).toList(),
-    'workspaceId': workspaceId,
   };
 
   factory TaskTemplate.fromJson(Map<String, dynamic> json) => TaskTemplate(
@@ -68,6 +62,5 @@ class TaskTemplate extends HiveObject {
     attachments: (json['attachments'] as List<dynamic>? ?? [])
         .map((a) => Attachment.fromJson(a as Map<String, dynamic>))
         .toList(),
-    workspaceId: json['workspaceId'] as String?,
   );
 }

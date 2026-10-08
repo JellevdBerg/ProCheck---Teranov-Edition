@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/supabase_config.dart';
 import '../../models/project.dart';
 import '../../models/task.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/projects_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_templates_provider.dart';
@@ -12,12 +14,12 @@ import '../../screens/dashboard_screen.dart';
 import '../../theme/nocturne_theme.dart';
 import '../app_logo.dart';
 import '../project_name_lookup.dart';
-import '../text_prompt_dialog.dart';
 import 'mini_calendar.dart';
 
-/// The persistent left navigation column: workspace switcher, smart views
-/// (Today/Upcoming), Favorites, the Projects/Templates/Archived library,
-/// a mini calendar, and Settings — collapsible to an icon-only rail.
+/// The persistent left navigation column: a sign-out row (once Supabase is
+/// configured and signed in), smart views (Today/Upcoming), Favorites, the
+/// Projects/Templates/Archived library, a mini calendar, and Settings —
+/// collapsible to an icon-only rail.
 class AppSidebar extends ConsumerWidget {
   const AppSidebar({
     super.key,
@@ -51,6 +53,10 @@ class AppSidebar extends ConsumerWidget {
     final tokens = context.nocturne;
     final accent = context.nocturneAccent;
     final expanded = settings.sidebarExpanded;
+    final signedIn = isSupabaseConfigured && supabase.auth.currentUser != null;
+    final profile = signedIn
+        ? ref.watch(currentProfileProvider).valueOrNull
+        : null;
 
     final now = DateTime.now();
     final todayCount = tasks
@@ -93,30 +99,20 @@ class AppSidebar extends ConsumerWidget {
                 .read(settingsProvider.notifier)
                 .setSidebarExpanded(!expanded),
           ),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: _NavRow(
-              icon: Icons.business,
-              label: settings.currentWorkspaceName,
-              expanded: expanded,
-              background: tokens.neutral800,
-              trailing: expanded
-                  ? Icon(
-                      Icons.unfold_more,
-                      size: 13,
-                      color: tokens.neutral400,
-                    )
-                  : null,
-              onTap: () => ref.read(settingsProvider.notifier).cycleWorkspace(),
-              onSecondaryTapDown: (details) => _showWorkspaceContextMenu(
-                context,
-                ref,
-                settings.workspaceIndex,
-                details.globalPosition,
+          if (signedIn) ...[
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: _NavRow(
+                icon: Icons.logout,
+                label: profile?.displayName ?? 'Sign out',
+                expanded: expanded,
+                background: tokens.neutral800,
+                onTap: () =>
+                    ref.read(authControllerProvider).signOut(),
               ),
             ),
-          ),
+          ],
           const SizedBox(height: 10),
           // The nav sections scroll independently of the calendar/Settings
           // pinned below: enough favorited/archived/templated content would
@@ -279,125 +275,6 @@ class AppSidebar extends ConsumerWidget {
   static bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
-  static Future<void> _showWorkspaceContextMenu(
-    BuildContext context,
-    WidgetRef ref,
-    int workspaceIndex,
-    Offset globalPosition,
-  ) async {
-    final overlay =
-        Overlay.of(context).context.findRenderObject()! as RenderBox;
-    final position = RelativeRect.fromRect(
-      globalPosition & const Size(1, 1),
-      Offset.zero & overlay.size,
-    );
-    final selected = await showMenu<_WorkspaceAction>(
-      context: context,
-      position: position,
-      items: const [
-        PopupMenuItem(
-          value: _WorkspaceAction.add,
-          child: ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.add_business_outlined),
-            title: Text('Add workspace'),
-          ),
-        ),
-        PopupMenuItem(
-          value: _WorkspaceAction.edit,
-          child: ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.edit_outlined),
-            title: Text('Edit workspace'),
-          ),
-        ),
-        PopupMenuItem(
-          value: _WorkspaceAction.remove,
-          child: ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.delete_outline),
-            title: Text('Remove workspace'),
-          ),
-        ),
-      ],
-    );
-    if (!context.mounted || selected == null) return;
-
-    final notifier = ref.read(settingsProvider.notifier);
-    switch (selected) {
-      case _WorkspaceAction.add:
-        final name = await showTextPromptDialog(
-          context,
-          title: 'Add workspace',
-          confirmLabel: 'Add',
-        );
-        if (name != null) notifier.addWorkspace(name);
-      case _WorkspaceAction.edit:
-        final currentName = ref.read(settingsProvider).currentWorkspaceName;
-        final name = await showTextPromptDialog(
-          context,
-          title: 'Edit workspace',
-          initialValue: currentName,
-        );
-        if (name != null) notifier.renameWorkspace(workspaceIndex, name);
-      case _WorkspaceAction.remove:
-        await _removeWorkspace(context, ref, workspaceIndex);
-    }
-  }
-
-  /// Removing a workspace is destructive — unlike a rename, it takes every
-  /// project/task/template tagged with that workspace down with it (see
-  /// AppSettings.workspaceIds) — so this confirms with the user first,
-  /// naming exactly how much would be deleted, then cascades the delete
-  /// through each data provider before dropping the workspace itself.
-  static Future<void> _removeWorkspace(
-    BuildContext context,
-    WidgetRef ref,
-    int workspaceIndex,
-  ) async {
-    final settings = ref.read(settingsProvider);
-    if (settings.workspaceNames.length <= 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Can't remove the only workspace.")),
-      );
-      return;
-    }
-
-    final workspaceId = settings.workspaceIds[workspaceIndex];
-    final workspaceName = settings.workspaceNames[workspaceIndex];
-    final projectCount = ref
-        .read(projectsProvider.notifier)
-        .countForWorkspace(workspaceId);
-    final taskCount = ref
-        .read(tasksProvider.notifier)
-        .countForWorkspace(workspaceId);
-    final templateCount = ref
-        .read(taskTemplatesProvider.notifier)
-        .countForWorkspace(workspaceId);
-
-    final isEmpty = projectCount == 0 && taskCount == 0 && templateCount == 0;
-    final message = isEmpty
-        ? 'This workspace has no projects, tasks, or templates. This cannot be undone.'
-        : 'This permanently deletes $projectCount project(s), $taskCount '
-              'task(s), and $templateCount template(s) in "$workspaceName". '
-              'This cannot be undone.';
-
-    final confirmed = await showConfirmDialog(
-      context,
-      title: 'Remove workspace?',
-      message: message,
-      confirmLabel: 'Remove',
-    );
-    if (!confirmed) return;
-
-    // Projects first — deleting one cascades to its own tasks — then a
-    // sweep for whatever's left (unfiled tasks, templates).
-    ref.read(projectsProvider.notifier).deleteAllForWorkspace(workspaceId);
-    ref.read(tasksProvider.notifier).deleteAllForWorkspace(workspaceId);
-    ref.read(taskTemplatesProvider.notifier).deleteAllForWorkspace(workspaceId);
-    ref.read(settingsProvider.notifier).removeWorkspace(workspaceIndex);
-  }
-
   static Future<void> _showFavoriteContextMenu(
     BuildContext context,
     WidgetRef ref,
@@ -431,8 +308,6 @@ class AppSidebar extends ConsumerWidget {
 }
 
 enum _FavoriteAction { unfavorite }
-
-enum _WorkspaceAction { add, edit, remove }
 
 class _Header extends StatelessWidget {
   const _Header({required this.expanded, required this.onToggle});
@@ -673,7 +548,6 @@ class _NavRow extends StatelessWidget {
     this.accent,
     this.iconColor,
     this.background,
-    this.trailing,
     required this.onTap,
     this.onSecondaryTapDown,
   });
@@ -686,7 +560,6 @@ class _NavRow extends StatelessWidget {
   final Color? accent;
   final Color? iconColor;
   final Color? background;
-  final Widget? trailing;
   final VoidCallback onTap;
   final void Function(TapDownDetails details)? onSecondaryTapDown;
 
@@ -742,10 +615,6 @@ class _NavRow extends StatelessWidget {
                       '$count',
                       style: TextStyle(fontSize: 12, color: tokens.neutral400),
                     ),
-                  if (trailing != null) ...[
-                    const SizedBox(width: 4),
-                    trailing!,
-                  ],
                 ],
               ],
             ),

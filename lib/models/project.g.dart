@@ -28,14 +28,15 @@ class ProjectAdapter extends TypeAdapter<Project> {
           fields[7] == null ? [] : (fields[7] as List?)?.cast<ActivityEntry>(),
       comments:
           fields[8] == null ? [] : (fields[8] as List?)?.cast<ProjectComment>(),
-      workspaceId: fields[9] as String?,
+      ownerId: fields[10] == null ? '' : fields[10] as String,
+      departmentId: fields[11] == null ? '' : fields[11] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, Project obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(11)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -54,8 +55,10 @@ class ProjectAdapter extends TypeAdapter<Project> {
       ..write(obj.activityLog)
       ..writeByte(8)
       ..write(obj.comments)
-      ..writeByte(9)
-      ..write(obj.workspaceId);
+      ..writeByte(10)
+      ..write(obj.ownerId)
+      ..writeByte(11)
+      ..write(obj.departmentId);
   }
 
   @override

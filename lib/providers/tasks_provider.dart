@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../data/hive_setup.dart';
 import '../data/notification_service.dart';
 import '../data/sound_service.dart';
+import '../data/supabase_config.dart';
 import '../models/activity_entry.dart';
 import '../models/attachment.dart';
 import '../models/subtask.dart';
@@ -14,61 +15,100 @@ import '../models/task.dart';
 import '../models/task_priority.dart';
 import '../models/task_template.dart';
 import 'projects_provider.dart';
-import 'settings_provider.dart';
 import 'undo_provider.dart';
 
 final tasksProvider = StateNotifierProvider<TasksNotifier, List<Task>>((ref) {
   return TasksNotifier(ref);
 });
 
-/// Persistence to Hive is fire-and-forget: [state] is the source of truth
-/// for the UI and is updated synchronously, while the on-disk copy catches
-/// up in the background.
+/// Persistence to Hive is fire-and-forget, same as the local-only app
+/// always has: [state] is the source of truth for the UI and is updated
+/// synchronously, while the on-disk copy catches up in the background.
 ///
-/// [state] only ever holds the *current workspace's* tasks — see
-/// [AppSettings.currentWorkspaceId] — so every screen that reads this
-/// provider gets workspace isolation for free. [_box] remains the full,
-/// unfiltered on-disk store; backup export, wipe-all, and removing a
-/// workspace go through [allValues]/`*ForWorkspace` instead of [state].
+/// When Supabase is configured and signed in (see [isSupabaseConfigured]),
+/// every write is additionally mirrored to the `tasks` table — also
+/// fire-and-forget, so a flaky connection never blocks the UI — and a
+/// one-time pull on construction merges in whatever's visible to this
+/// user there (their own tasks, what's assigned to them, their
+/// department's, per the RLS policies). There's no realtime subscription
+/// yet, so a teammate's change shows up on next launch, not live.
 class TasksNotifier extends StateNotifier<List<Task>> {
-  TasksNotifier(Ref ref) : _ref = ref, super(_initialState(ref)) {
+  TasksNotifier(Ref ref) : _ref = ref, super(_box.values.toList()) {
     _sortState();
-    _ref.listen<String>(
-      settingsProvider.select((s) => s.currentWorkspaceId),
-      (previous, next) {
-        if (previous == next) return;
-        state = _box.values.where((t) => t.workspaceId == next).toList();
-        _sortState();
-      },
-    );
+    unawaited(_loadOwnProfile());
+    unawaited(_pullFromSupabase());
   }
 
   final Ref _ref;
 
   static Box<Task> get _box => Hive.box<Task>(taskBoxName);
 
-  /// Every task regardless of workspace — used only where that's
-  /// explicitly correct (backup export, Settings > Wipe All Data already
-  /// clearing the whole box).
+  /// Every task — used where that's explicitly correct (backup export,
+  /// Settings > Wipe All Data already clearing the whole box).
   List<Task> get allValues => _box.values.toList();
 
-  static List<Task> _initialState(Ref ref) {
-    final settings = ref.read(settingsProvider);
-    _migrateLegacyWorkspaceIds(settings.workspaceIds.first);
-    return _box.values
-        .where((t) => t.workspaceId == settings.currentWorkspaceId)
-        .toList();
+  /// Cached from the signed-in user's own `profiles` row — used to stamp
+  /// [ownerId]/[departmentId] on tasks created after this resolves. A task
+  /// created before it resolves (a narrow window right after launch) falls
+  /// back to blank, same as pure local/offline use.
+  String? _ownerId;
+  String? _departmentId;
+
+  Future<void> _loadOwnProfile() async {
+    if (!isSupabaseConfigured) return;
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      final row = await supabase
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .single();
+      _ownerId = userId;
+      _departmentId = row['department_id'] as String?;
+    } catch (_) {
+      // Best-effort — local-only behavior continues if this fails.
+    }
   }
 
-  /// Tasks saved before workspaces had real data isolation have no
-  /// [Task.workspaceId] — a one-time backfill onto the first workspace, so
-  /// filtering by id can rely on it always being set from here on.
-  static void _migrateLegacyWorkspaceIds(String defaultWorkspaceId) {
-    for (final task in _box.values) {
-      if (task.workspaceId == null) {
-        task.workspaceId = defaultWorkspaceId;
-        unawaited(task.save());
+  /// Pulls every task visible to this user on Supabase (per RLS) into the
+  /// local box, then refreshes [state]. Best-effort: a failed/offline pull
+  /// just leaves the local cache as it was.
+  Future<void> _pullFromSupabase() async {
+    if (!isSupabaseConfigured) return;
+    if (supabase.auth.currentUser == null) return;
+    try {
+      final rows = await supabase.from('tasks').select();
+      for (final row in rows as List) {
+        final task = Task.fromSupabase(row as Map<String, dynamic>);
+        await _box.put(task.id, task);
       }
+      state = _box.values.toList();
+      _sortState();
+    } catch (_) {
+      // Best-effort — local cache stays as it was.
+    }
+  }
+
+  Future<void> _mirrorUpsert(Task task) async {
+    if (!isSupabaseConfigured) return;
+    if (supabase.auth.currentUser == null) return;
+    try {
+      await supabase.from('tasks').upsert(task.toSupabase());
+    } catch (_) {
+      // Best-effort — the local Hive copy is still correct; it just hasn't
+      // reached the backend (offline, or an RLS policy refused it, e.g. a
+      // member trying to file a task into a project).
+    }
+  }
+
+  Future<void> _mirrorDelete(String taskId) async {
+    if (!isSupabaseConfigured) return;
+    if (supabase.auth.currentUser == null) return;
+    try {
+      await supabase.from('tasks').delete().eq('id', taskId);
+    } catch (_) {
+      // Best-effort.
     }
   }
 
@@ -113,6 +153,7 @@ class TasksNotifier extends StateNotifier<List<Task>> {
   /// very same object, always equal regardless of what changed.
   void _persist(Task task) {
     unawaited(_box.put(task.id, task));
+    unawaited(_mirrorUpsert(task));
     _replace(task);
   }
 
@@ -189,9 +230,11 @@ class TasksNotifier extends StateNotifier<List<Task>> {
       attachments: attachments,
       dueDate: dueDate,
       dueDateEnd: dueDate == null ? null : dueDateEnd,
-      workspaceId: _ref.read(settingsProvider).currentWorkspaceId,
+      ownerId: _ownerId ?? '',
+      departmentId: _departmentId ?? '',
     );
     unawaited(_box.put(task.id, task));
+    unawaited(_mirrorUpsert(task));
     state = [task, ...state];
     _logActivity(task, ActivityKind.taskAdded, 'You added "${task.title}"');
     if (dueDate != null) {
@@ -218,12 +261,23 @@ class TasksNotifier extends StateNotifier<List<Task>> {
     _persist(task.copyWith(projectId: projectId));
   }
 
+  /// Assigns [taskId] to [assigneeId] (or clears the assignment when null).
+  /// Only a manager's assignment actually lands once Supabase is
+  /// configured — the `tasks_update` RLS policy enforces that server-side;
+  /// this client doesn't duplicate that check.
+  void assignTask(String taskId, String? assigneeId) {
+    final task = _box.get(taskId);
+    if (task == null) return;
+    _persist(task.copyWith(assigneeId: assigneeId));
+  }
+
   void deleteTask(String taskId) {
     final task = _box.get(taskId);
     if (task != null) {
       unawaited(NotificationService.instance.cancelForTask(task));
     }
     unawaited(_box.delete(taskId));
+    unawaited(_mirrorDelete(taskId));
     state = state.where((t) => t.id != taskId).toList();
     if (task != null) {
       _ref.read(undoStackProvider.notifier).push(TaskDeletionEntry(task));
@@ -235,6 +289,7 @@ class TasksNotifier extends StateNotifier<List<Task>> {
   /// one and isn't checked off.
   void restoreTask(Task task) {
     unawaited(_box.put(task.id, task));
+    unawaited(_mirrorUpsert(task));
     state = [task, ...state];
     _sortState();
     if (task.dueDate != null && !task.isChecked) {
@@ -258,6 +313,7 @@ class TasksNotifier extends StateNotifier<List<Task>> {
       if (task == null) continue;
       final updated = task.copyWith(sortOrder: (n - i).toDouble());
       unawaited(_box.put(updated.id, updated));
+      unawaited(_mirrorUpsert(updated));
       updatedById[updated.id] = updated;
     }
     if (updatedById.isEmpty) return;
@@ -420,36 +476,15 @@ class TasksNotifier extends StateNotifier<List<Task>> {
     for (final task in toDelete) {
       unawaited(NotificationService.instance.cancelForTask(task));
       unawaited(_box.delete(task.id));
+      unawaited(_mirrorDelete(task.id));
     }
     final idsToDelete = toDelete.map((t) => t.id).toSet();
     state = state.where((t) => !idsToDelete.contains(t.id)).toList();
   }
 
-  /// How many tasks belong to [workspaceId] (filed or unfiled) — shown in
-  /// the "remove workspace" confirmation before [deleteAllForWorkspace]
-  /// runs.
-  int countForWorkspace(String workspaceId) =>
-      _box.values.where((t) => t.workspaceId == workspaceId).length;
-
-  /// Deletes every task belonging to [workspaceId], filed or not. Used when
-  /// the workspace itself is removed — see the sidebar's workspace context
-  /// menu. Filed tasks are normally already gone by then (their project's
-  /// own deletion cascades via [deleteTasksInProject]); this is what
-  /// catches the unfiled ones, and acts as a backstop for the rest.
-  void deleteAllForWorkspace(String workspaceId) {
-    final toDelete = _box.values
-        .where((t) => t.workspaceId == workspaceId)
-        .toList();
-    if (toDelete.isEmpty) return;
-    for (final task in toDelete) {
-      unawaited(NotificationService.instance.cancelForTask(task));
-      unawaited(_box.delete(task.id));
-    }
-    final idsToDelete = toDelete.map((t) => t.id).toSet();
-    state = state.where((t) => !idsToDelete.contains(t.id)).toList();
-  }
-
-  /// Wipes every task. Used by Settings > Wipe All Data.
+  /// Wipes every task. Used by Settings > Wipe All Data. Local only — this
+  /// never deletes anything from Supabase, since a wipe is meant to reset
+  /// *this device*, not every teammate's shared data.
   void clearAll() {
     unawaited(NotificationService.instance.cancelAll());
     unawaited(_box.clear());
@@ -457,20 +492,11 @@ class TasksNotifier extends StateNotifier<List<Task>> {
   }
 
   /// Replaces every task with [tasks]. Used when restoring from a backup —
-  /// anything currently stored is discarded first. [tasks] may span every
-  /// workspace (a full backup), so [state] is narrowed back down to the
-  /// current one afterward, same as normal operation.
+  /// anything currently stored locally is discarded first.
   void restoreAll(List<Task> tasks) {
     unawaited(NotificationService.instance.cancelAll());
     unawaited(_replaceBoxContents(tasks));
-    final settings = _ref.read(settingsProvider);
-    final defaultWorkspaceId = settings.workspaceIds.first;
-    state = tasks
-        .where(
-          (t) => (t.workspaceId ?? defaultWorkspaceId) ==
-              settings.currentWorkspaceId,
-        )
-        .toList();
+    state = [...tasks];
     _sortState();
     for (final task in tasks) {
       if (task.dueDate != null && !task.isChecked) {
@@ -492,7 +518,5 @@ class TasksNotifier extends StateNotifier<List<Task>> {
   Future<void> _replaceBoxContents(List<Task> tasks) async {
     await _box.clear();
     await _box.putAll({for (final t in tasks) t.id: t});
-    final settings = _ref.read(settingsProvider);
-    _migrateLegacyWorkspaceIds(settings.workspaceIds.first);
   }
 }

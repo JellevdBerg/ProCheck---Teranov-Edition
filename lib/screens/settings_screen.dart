@@ -386,8 +386,6 @@ class _BackupCard extends ConsumerWidget {
   }
 
   Future<void> _exportBackup(BuildContext context, WidgetRef ref) async {
-    // .allValues, not the (now workspace-scoped) provider state — a backup
-    // spans every workspace, not just whichever one is active right now.
     final json = buildBackupJson(
       projects: ref.read(projectsProvider.notifier).allValues,
       tasks: ref.read(tasksProvider.notifier).allValues,
@@ -466,9 +464,6 @@ class _BackupCard extends ConsumerWidget {
     );
     if (!confirmed) return;
 
-    // Settings first: it carries the workspace list, which the data
-    // restores below need in place to know which workspace is "current"
-    // when they narrow their own state back down to it.
     ref.read(settingsProvider.notifier).restoreAll(data.settings);
     ref.read(projectsProvider.notifier).restoreAll(data.projects);
     ref.read(tasksProvider.notifier).restoreAll(data.tasks);
@@ -503,8 +498,7 @@ class _BackupCard extends ConsumerWidget {
     );
     if (!confirmed) return;
 
-    final workspaceId = ref.read(settingsProvider).currentWorkspaceId;
-    final data = buildTestData(workspaceId: workspaceId);
+    final data = buildTestData();
     ref.read(projectsProvider.notifier).restoreAll(data.projects);
     ref.read(tasksProvider.notifier).restoreAll(data.tasks);
 

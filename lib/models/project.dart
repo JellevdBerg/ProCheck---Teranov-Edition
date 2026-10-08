@@ -11,6 +11,8 @@ part 'project.g.dart';
 /// apart.
 const _unset = Object();
 
+/// Still a local Hive object — see the note on [Task] in task.dart for how
+/// this mirrors to Supabase once configured.
 @HiveType(typeId: 2)
 class Project extends HiveObject {
   Project({
@@ -23,7 +25,8 @@ class Project extends HiveObject {
     this.favorite = false,
     List<ActivityEntry>? activityLog,
     List<ProjectComment>? comments,
-    this.workspaceId,
+    this.ownerId = '',
+    this.departmentId = '',
   }) : activityLog = activityLog ?? [],
        comments = comments ?? [];
 
@@ -66,19 +69,26 @@ class Project extends HiveObject {
   @HiveField(8, defaultValue: [])
   List<ProjectComment> comments;
 
-  /// Which workspace this project belongs to (see AppSettings.workspaceIds
-  /// in settings_provider.dart) — null on projects saved before workspaces
-  /// had real data isolation, backfilled to the first workspace's id at
-  /// startup (see ProjectsNotifier).
-  @HiveField(9)
-  String? workspaceId;
+  /// Field 9 used to be a local "workspace" id — retired along with the
+  /// whole concept (see [Task]'s field 12 note); not reused.
+
+  /// Who created this project — the signed-in user's id once Supabase is
+  /// configured, blank in pure local/offline use.
+  @HiveField(10, defaultValue: '')
+  String ownerId;
+
+  /// The department this project is scoped to (see
+  /// `supabase/migrations/0004_department_scoping.sql`) — blank in pure
+  /// local/offline use.
+  @HiveField(11, defaultValue: '')
+  String departmentId;
 
   /// Builds a new [Project] with the given fields replaced — used instead
   /// of mutating this instance's fields so that value-equality-based
   /// Riverpod selectors (see [operator ==]) can tell an edited project
   /// apart from the unedited one still referenced by whatever watched it
-  /// before the edit. Pass `null` explicitly for [lastOpenedAt]/
-  /// [workspaceId] to clear them; omit to leave them as-is.
+  /// before the edit. Pass `null` explicitly for [lastOpenedAt] to clear
+  /// it; omit to leave it as-is.
   Project copyWith({
     String? name,
     Object? lastOpenedAt = _unset,
@@ -87,7 +97,8 @@ class Project extends HiveObject {
     bool? favorite,
     List<ActivityEntry>? activityLog,
     List<ProjectComment>? comments,
-    Object? workspaceId = _unset,
+    String? ownerId,
+    String? departmentId,
   }) => Project(
     id: id,
     name: name ?? this.name,
@@ -100,9 +111,8 @@ class Project extends HiveObject {
     favorite: favorite ?? this.favorite,
     activityLog: activityLog ?? [...this.activityLog],
     comments: comments ?? [...this.comments],
-    workspaceId: identical(workspaceId, _unset)
-        ? this.workspaceId
-        : workspaceId as String?,
+    ownerId: ownerId ?? this.ownerId,
+    departmentId: departmentId ?? this.departmentId,
   );
 
   static const _activityLogEquality = ListEquality<ActivityEntry>();
@@ -118,7 +128,8 @@ class Project extends HiveObject {
       other.colorIndex == colorIndex &&
       other.archived == archived &&
       other.favorite == favorite &&
-      other.workspaceId == workspaceId &&
+      other.ownerId == ownerId &&
+      other.departmentId == departmentId &&
       _activityLogEquality.equals(other.activityLog, activityLog) &&
       _commentsEquality.equals(other.comments, comments);
 
@@ -131,7 +142,8 @@ class Project extends HiveObject {
     colorIndex,
     archived,
     favorite,
-    workspaceId,
+    ownerId,
+    departmentId,
     _activityLogEquality.hash(activityLog),
     _commentsEquality.hash(comments),
   );
@@ -146,7 +158,8 @@ class Project extends HiveObject {
     'favorite': favorite,
     'activityLog': activityLog.map((a) => a.toJson()).toList(),
     'comments': comments.map((c) => c.toJson()).toList(),
-    'workspaceId': workspaceId,
+    'ownerId': ownerId,
+    'departmentId': departmentId,
   };
 
   factory Project.fromJson(Map<String, dynamic> json) => Project(
@@ -165,6 +178,44 @@ class Project extends HiveObject {
     comments: (json['comments'] as List<dynamic>? ?? [])
         .map((c) => ProjectComment.fromJson(c as Map<String, dynamic>))
         .toList(),
-    workspaceId: json['workspaceId'] as String?,
+    ownerId: json['ownerId'] as String? ?? '',
+    departmentId: json['departmentId'] as String? ?? '',
   );
+
+  /// Maps a `projects` table row (snake_case Postgres columns) to a
+  /// [Project].
+  factory Project.fromSupabase(Map<String, dynamic> row) => Project(
+    id: row['id'] as String,
+    name: row['name'] as String,
+    createdAt: DateTime.parse(row['created_at'] as String),
+    lastOpenedAt: row['last_opened_at'] == null
+        ? null
+        : DateTime.parse(row['last_opened_at'] as String),
+    colorIndex: row['color_index'] as int? ?? 0,
+    archived: row['archived'] as bool? ?? false,
+    favorite: row['favorite'] as bool? ?? false,
+    activityLog: ((row['activity_log'] as List<dynamic>?) ?? [])
+        .map((a) => ActivityEntry.fromJson(a as Map<String, dynamic>))
+        .toList(),
+    comments: ((row['comments'] as List<dynamic>?) ?? [])
+        .map((c) => ProjectComment.fromJson(c as Map<String, dynamic>))
+        .toList(),
+    ownerId: row['owner_id'] as String,
+    departmentId: row['department_id'] as String,
+  );
+
+  /// Maps this [Project] to a `projects` table row for insert/update. Omits
+  /// `created_at`, which the database owns.
+  Map<String, dynamic> toSupabase() => {
+    'id': id,
+    'name': name,
+    'last_opened_at': lastOpenedAt?.toIso8601String(),
+    'color_index': colorIndex,
+    'archived': archived,
+    'favorite': favorite,
+    'activity_log': activityLog.map((a) => a.toJson()).toList(),
+    'comments': comments.map((c) => c.toJson()).toList(),
+    'owner_id': ownerId,
+    'department_id': departmentId,
+  };
 }

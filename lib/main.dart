@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'data/hive_setup.dart';
 import 'data/notification_service.dart';
+import 'data/supabase_config.dart';
 import 'providers/settings_provider.dart';
 import 'screens/splash_screen.dart';
 import 'theme/nocturne_theme.dart';
@@ -27,6 +28,7 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await setUpHive();
+  await setUpSupabase();
   await NotificationService.instance.initialize();
   runApp(const ProviderScope(child: ProcheckApp()));
 }

@@ -1,8 +1,10 @@
-# ProCheck
+# ProCheck — Teranov Edition
 
 A fast, cross-platform task manager for people who think in projects, not just to-do lists.
 
-Organize work into projects, see everything that matters on one dashboard, and plan it on a real calendar — all without an account, a server, or your data leaving your device.
+Organize work into projects, see everything that matters on one dashboard, and plan it on a real calendar.
+
+> **This is the team/multi-user fork** of [ProCheck](https://github.com/JellevdBerg/procheck-listing-app), forked at v1.0.0. It adds logins, manager roles, task assignment and a team dashboard on top of a Supabase backend — see [`supabase/README.md`](supabase/README.md) for the backend setup. The original local-only app (no account, no server, nothing leaving your device) continues to live at its own repo, unaffected by this fork.
 
 ![Dashboard](docs/screenshots/dashboard.png)
 

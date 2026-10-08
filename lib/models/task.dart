@@ -11,6 +11,13 @@ part 'task.g.dart';
 /// [Task.copyWith], since a bare `= null` default can't tell the two apart.
 const _unset = Object();
 
+/// Still a local Hive object — the on-device cache/UI driver, unchanged in
+/// spirit from the local app. What's new for the Teranov edition: when
+/// Supabase is configured and signed in (see [isSupabaseConfigured] in
+/// supabase_config.dart), [TasksNotifier] additionally mirrors every write
+/// to the `tasks` table and pulls remote rows in on launch — see
+/// [Task.toSupabase]/[Task.fromSupabase]. Without Supabase configured, this
+/// behaves exactly like the local-only app always has.
 @HiveType(typeId: 1)
 class Task extends HiveObject {
   Task({
@@ -27,9 +34,11 @@ class Task extends HiveObject {
     double? sortOrder,
     this.priorityIndex = 0,
     List<Attachment>? attachments,
-    this.workspaceId,
     this.recurrenceIndex = 0,
     this.completedAt,
+    this.ownerId = '',
+    this.assigneeId,
+    this.departmentId = '',
   }) : subtasks = subtasks ?? [],
        attachments = attachments ?? [],
        sortOrder = sortOrder ?? createdAt.millisecondsSinceEpoch.toDouble();
@@ -49,7 +58,9 @@ class Task extends HiveObject {
   @HiveField(4)
   List<Subtask> subtasks;
 
-  /// Null when the task isn't filed under any project.
+  /// Null when the task isn't filed under any project — only a manager can
+  /// set this once Supabase is configured (see `tasks_insert_own`/
+  /// `tasks_update` RLS policies).
   @HiveField(5)
   String? projectId;
 
@@ -68,21 +79,14 @@ class Task extends HiveObject {
 
   /// End of a due-date range, when this task's due date spans more than one
   /// day (e.g. "due Sep 20 - Sep 25") rather than a single moment. Null for
-  /// an ordinary single-day due date. Reminder notifications still fire off
-  /// [dueDate] alone; this only affects how the due date is displayed and
-  /// which calendar days show this task.
+  /// an ordinary single-day due date.
   @HiveField(13)
   DateTime? dueDateEnd;
 
-  /// Controls this task's position within whichever list it's shown in (a
-  /// project's task list, or the home screen's unfiled tasks) — higher
-  /// sorts first. Defaults to its creation time so new tasks land at the
-  /// top like before; dragging a task to reorder it re-assigns this to a
-  /// small integer instead (see TasksNotifier.reorderTasks), which — being
-  /// far smaller than any real timestamp — always sorts below any
-  /// not-yet-manually-ordered task without disturbing the others' relative
-  /// order. Tasks saved before this field existed default to 0, i.e. below
-  /// everything else, falling back to createdAt to order amongst themselves.
+  /// Controls this task's position within whichever list it's shown in —
+  /// higher sorts first. Defaults to its creation time so new tasks land at
+  /// the top; dragging a task to reorder it re-assigns this to a small
+  /// integer instead (see TasksNotifier.reorderTasks).
   @HiveField(9, defaultValue: 0.0)
   double sortOrder;
 
@@ -94,19 +98,14 @@ class Task extends HiveObject {
   @HiveField(11, defaultValue: [])
   List<Attachment> attachments;
 
-  /// Which workspace this task belongs to (see AppSettings.workspaceIds in
-  /// settings_provider.dart) — set even for tasks filed under a project,
-  /// since unfiled tasks have no project to inherit it from. Null on tasks
-  /// saved before workspaces had real data isolation, backfilled to the
-  /// first workspace's id at startup (see TasksNotifier).
-  @HiveField(12)
-  String? workspaceId;
+  /// Field 12 used to be a local "workspace" id — the Teranov edition
+  /// replaces that whole concept with department (see [departmentId]), so
+  /// this index is retired rather than reused, same as [14]/recurrenceIndex
+  /// below.
 
   /// Leftover from a removed recurring-tasks feature. Kept (unused) so
   /// existing Hive field 14 slots and previously-saved data still read
-  /// cleanly — removing a Hive field outright risks breaking deserialization
-  /// of records written while it was active, and the index shouldn't be
-  /// reused for something else without a migration.
+  /// cleanly.
   @HiveField(14, defaultValue: 0)
   int recurrenceIndex;
 
@@ -115,6 +114,21 @@ class Task extends HiveObject {
   /// count; unrelated to [dueDate]/notifications.
   @HiveField(15)
   DateTime? completedAt;
+
+  /// Who created this task — the signed-in user's id once Supabase is
+  /// configured, blank in pure local/offline use.
+  @HiveField(16, defaultValue: '')
+  String ownerId;
+
+  /// Who this task is for — null until a manager assigns it to someone.
+  @HiveField(17)
+  String? assigneeId;
+
+  /// The department this task is scoped to (see
+  /// `supabase/migrations/0004_department_scoping.sql`) — blank in pure
+  /// local/offline use.
+  @HiveField(18, defaultValue: '')
+  String departmentId;
 
   TaskPriority get priority => TaskPriority.fromIndex(priorityIndex);
   set priority(TaskPriority value) => priorityIndex = value.index;
@@ -132,7 +146,7 @@ class Task extends HiveObject {
   /// selectors (see [operator ==]) can tell an edited task apart from the
   /// unedited one still referenced by whatever watched it before the edit.
   /// Pass `null` explicitly for [notes]/[projectId]/[templateId]/[dueDate]/
-  /// [dueDateEnd]/[workspaceId]/[completedAt] to clear them; omit to leave
+  /// [dueDateEnd]/[completedAt]/[assigneeId] to clear them; omit to leave
   /// them as-is.
   Task copyWith({
     String? title,
@@ -146,9 +160,11 @@ class Task extends HiveObject {
     double? sortOrder,
     int? priorityIndex,
     List<Attachment>? attachments,
-    Object? workspaceId = _unset,
     int? recurrenceIndex,
     Object? completedAt = _unset,
+    String? ownerId,
+    Object? assigneeId = _unset,
+    String? departmentId,
   }) => Task(
     id: id,
     title: title ?? this.title,
@@ -169,13 +185,15 @@ class Task extends HiveObject {
     sortOrder: sortOrder ?? this.sortOrder,
     priorityIndex: priorityIndex ?? this.priorityIndex,
     attachments: attachments ?? [...this.attachments],
-    workspaceId: identical(workspaceId, _unset)
-        ? this.workspaceId
-        : workspaceId as String?,
     recurrenceIndex: recurrenceIndex ?? this.recurrenceIndex,
     completedAt: identical(completedAt, _unset)
         ? this.completedAt
         : completedAt as DateTime?,
+    ownerId: ownerId ?? this.ownerId,
+    assigneeId: identical(assigneeId, _unset)
+        ? this.assigneeId
+        : assigneeId as String?,
+    departmentId: departmentId ?? this.departmentId,
   );
 
   static const _subtaskListEquality = ListEquality<Subtask>();
@@ -195,9 +213,10 @@ class Task extends HiveObject {
       other.dueDateEnd == dueDateEnd &&
       other.sortOrder == sortOrder &&
       other.priorityIndex == priorityIndex &&
-      other.workspaceId == workspaceId &&
-      other.recurrenceIndex == recurrenceIndex &&
       other.completedAt == completedAt &&
+      other.ownerId == ownerId &&
+      other.assigneeId == assigneeId &&
+      other.departmentId == departmentId &&
       _subtaskListEquality.equals(other.subtasks, subtasks) &&
       _attachmentListEquality.equals(other.attachments, attachments);
 
@@ -214,9 +233,10 @@ class Task extends HiveObject {
     dueDateEnd,
     sortOrder,
     priorityIndex,
-    workspaceId,
-    recurrenceIndex,
     completedAt,
+    ownerId,
+    assigneeId,
+    departmentId,
     _subtaskListEquality.hash(subtasks),
     _attachmentListEquality.hash(attachments),
   );
@@ -235,9 +255,10 @@ class Task extends HiveObject {
     'sortOrder': sortOrder,
     'priorityIndex': priorityIndex,
     'attachments': attachments.map((a) => a.toJson()).toList(),
-    'workspaceId': workspaceId,
-    'recurrenceIndex': recurrenceIndex,
     'completedAt': completedAt?.toIso8601String(),
+    'ownerId': ownerId,
+    'assigneeId': assigneeId,
+    'departmentId': departmentId,
   };
 
   factory Task.fromJson(Map<String, dynamic> json) => Task(
@@ -262,10 +283,63 @@ class Task extends HiveObject {
     attachments: (json['attachments'] as List<dynamic>? ?? [])
         .map((a) => Attachment.fromJson(a as Map<String, dynamic>))
         .toList(),
-    workspaceId: json['workspaceId'] as String?,
-    recurrenceIndex: json['recurrenceIndex'] as int? ?? 0,
     completedAt: json['completedAt'] == null
         ? null
         : DateTime.parse(json['completedAt'] as String),
+    ownerId: json['ownerId'] as String? ?? '',
+    assigneeId: json['assigneeId'] as String?,
+    departmentId: json['departmentId'] as String? ?? '',
   );
+
+  /// Maps a `tasks` table row (snake_case Postgres columns) to a [Task].
+  factory Task.fromSupabase(Map<String, dynamic> row) => Task(
+    id: row['id'] as String,
+    title: row['title'] as String,
+    isChecked: row['is_checked'] as bool? ?? false,
+    notes: row['notes'] as String?,
+    subtasks: ((row['subtasks'] as List<dynamic>?) ?? [])
+        .map((s) => Subtask.fromJson(s as Map<String, dynamic>))
+        .toList(),
+    projectId: row['project_id'] as String?,
+    createdAt: DateTime.parse(row['created_at'] as String),
+    templateId: row['template_id'] as String?,
+    dueDate: row['due_date'] == null
+        ? null
+        : DateTime.parse(row['due_date'] as String),
+    dueDateEnd: row['due_date_end'] == null
+        ? null
+        : DateTime.parse(row['due_date_end'] as String),
+    sortOrder: (row['sort_order'] as num?)?.toDouble() ?? 0,
+    priorityIndex: row['priority_index'] as int? ?? 0,
+    attachments: ((row['attachments'] as List<dynamic>?) ?? [])
+        .map((a) => Attachment.fromJson(a as Map<String, dynamic>))
+        .toList(),
+    completedAt: row['completed_at'] == null
+        ? null
+        : DateTime.parse(row['completed_at'] as String),
+    ownerId: row['owner_id'] as String,
+    assigneeId: row['assignee_id'] as String?,
+    departmentId: row['department_id'] as String,
+  );
+
+  /// Maps this [Task] to a `tasks` table row for insert/update. Omits `id`
+  /// and `created_at`, which the database owns.
+  Map<String, dynamic> toSupabase() => {
+    'id': id,
+    'title': title,
+    'is_checked': isChecked,
+    'notes': notes,
+    'subtasks': subtasks.map((s) => s.toJson()).toList(),
+    'project_id': projectId,
+    'template_id': templateId,
+    'due_date': dueDate?.toIso8601String(),
+    'due_date_end': dueDateEnd?.toIso8601String(),
+    'sort_order': sortOrder,
+    'priority_index': priorityIndex,
+    'attachments': attachments.map((a) => a.toJson()).toList(),
+    'completed_at': completedAt?.toIso8601String(),
+    'owner_id': ownerId,
+    'assignee_id': assigneeId,
+    'department_id': departmentId,
+  };
 }
