@@ -13,9 +13,11 @@ import '../../providers/tasks_provider.dart';
 import '../../screens/app_screen.dart';
 import '../../screens/dashboard_screen.dart';
 import '../../screens/login_screen.dart';
+import '../../theme/industrial_shadows.dart';
 import '../../theme/nocturne_theme.dart';
 import '../app_logo.dart';
 import '../blurred_dialog.dart';
+import '../industrial/screw_dot.dart';
 import '../industrial/status_led.dart';
 import '../project_name_lookup.dart';
 import 'mini_calendar.dart';
@@ -93,9 +95,15 @@ class AppSidebar extends ConsumerWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       width: expanded ? 232 : 68,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: tokens.neutral900,
-        border: Border(right: BorderSide(color: tokens.neutral800)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [tokens.neutral800, tokens.neutral900],
+        ),
+        borderRadius: const BorderRadius.horizontal(right: Radius.circular(18)),
+        boxShadow: floatingShadow(tokens),
       ),
       child: Column(
         children: [
@@ -114,7 +122,8 @@ class AppSidebar extends ConsumerWidget {
                 icon: Icons.logout,
                 label: profile?.displayName ?? 'Sign out',
                 expanded: expanded,
-                background: tokens.neutral800,
+                raised: true,
+                uppercase: profile?.displayName == null,
                 // Showing the user's own name next to a logout icon reads
                 // to some people as a profile/account button rather than
                 // a sign-out one — confirm first so a curious tap doesn't
@@ -123,13 +132,21 @@ class AppSidebar extends ConsumerWidget {
               ),
             ),
             if (expanded) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: StatusLed(
-                  label: 'Synced',
-                  color: NocturneStatus.done,
-                  reduceMotion: settings.reduceMotion,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: tokens.neutral900,
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: panelShadow(tokens),
+                  ),
+                  child: StatusLed(
+                    label: 'System operational',
+                    color: NocturneStatus.done,
+                    reduceMotion: settings.reduceMotion,
+                  ),
                 ),
               ),
             ],
@@ -230,6 +247,7 @@ class AppSidebar extends ConsumerWidget {
                               icon: Icons.folder,
                               label: project.name,
                               expanded: expanded,
+                              uppercase: false,
                               iconColor: accentPalette[project.colorIndex],
                               onTap: () => onFavoriteProjectTap(project),
                               onSecondaryTapDown: (details) =>
@@ -391,7 +409,7 @@ class _Header extends StatelessWidget {
     if (!expanded) {
       return Column(
         children: [
-          const AppLogo(size: 24),
+          _LogoHousing(tokens: tokens),
           const SizedBox(height: 12),
           IconButton(
             icon: Icon(
@@ -409,7 +427,7 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          const AppLogo(size: 24),
+          _LogoHousing(tokens: tokens),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -447,6 +465,42 @@ class _Header extends StatelessWidget {
             onPressed: onToggle,
             visualDensity: VisualDensity.compact,
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The logo in a raised circular housing with a corner-screw ring — the
+/// sidebar's one "marquee" skeuomorphic detail, echoing a bolted brand badge
+/// on a physical control panel.
+class _LogoHousing extends StatelessWidget {
+  const _LogoHousing({required this.tokens});
+
+  final NocturneColors tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [tokens.neutral800, tokens.neutral900],
+        ),
+        boxShadow: panelShadow(tokens),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          const AppLogo(size: 20),
+          const Positioned(top: 5, left: 5, child: ScrewDot(size: 3)),
+          const Positioned(top: 5, right: 5, child: ScrewDot(size: 3)),
+          const Positioned(bottom: 5, left: 5, child: ScrewDot(size: 3)),
+          const Positioned(bottom: 5, right: 5, child: ScrewDot(size: 3)),
         ],
       ),
     );
@@ -624,7 +678,11 @@ class _SmallSectionLabel extends StatelessWidget {
   }
 }
 
-class _NavRow extends StatelessWidget {
+/// A nav entry styled as a tactile key: raised and lifting on hover, pressed
+/// flat in on tap, and shown carved-in (an inset gradient + LED) while
+/// [active]. [raised] instead gives it its own permanently-raised module
+/// look, for the one row (sign-out) that sits apart from the nav list.
+class _NavRow extends StatefulWidget {
   const _NavRow({
     required this.icon,
     required this.label,
@@ -633,7 +691,8 @@ class _NavRow extends StatelessWidget {
     this.active = false,
     this.accent,
     this.iconColor,
-    this.background,
+    this.raised = false,
+    this.uppercase = true,
     required this.onTap,
     this.onSecondaryTapDown,
   });
@@ -645,64 +704,125 @@ class _NavRow extends StatelessWidget {
   final bool active;
   final Color? accent;
   final Color? iconColor;
-  final Color? background;
+  final bool raised;
+
+  /// Tactile-key styling uppercases nav labels, but that only suits the
+  /// fixed, generic nav terms (Dashboard, Projects, ...) — a favorited
+  /// project's own name or the signed-in user's display name is user data
+  /// and keeps its natural case.
+  final bool uppercase;
   final VoidCallback onTap;
   final void Function(TapDownDetails details)? onSecondaryTapDown;
 
   @override
+  State<_NavRow> createState() => _NavRowState();
+}
+
+class _NavRowState extends State<_NavRow> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     final tokens = context.nocturne;
-    final activeBg = active && accent != null
-        ? Color.alphaBlend(accent!.withValues(alpha: 0.22), tokens.neutral900)
-        : background;
+    final accent = widget.accent;
+    final activeTint = widget.active && accent != null;
+    const radius = BorderRadius.all(Radius.circular(10));
 
-    return GestureDetector(
-      onSecondaryTapDown: onSecondaryTapDown,
-      child: Material(
-        color: activeBg ?? Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            decoration: active && accent != null
-                ? BoxDecoration(
-                    border: Border(
-                      left: BorderSide(color: accent!, width: 2),
-                    ),
-                    borderRadius: BorderRadius.circular(8),
+    Color bg = Colors.transparent;
+    List<BoxShadow>? shadow;
+    if (!activeTint) {
+      if (widget.raised || _hovered) {
+        bg = tokens.neutral800;
+        if (!_pressed) shadow = panelShadow(tokens);
+      }
+    }
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onSecondaryTapDown: widget.onSecondaryTapDown,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          transform: _pressed
+              ? (Matrix4.identity()..translateByDouble(0.0, 1.0, 0.0, 1.0))
+              : Matrix4.identity(),
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            boxShadow: shadow,
+            gradient: activeTint
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color.alphaBlend(accent.withValues(alpha: 0.30), tokens.neutral800),
+                      Color.alphaBlend(accent.withValues(alpha: 0.14), tokens.neutral900),
+                    ],
                   )
                 : null,
-            padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 14),
-            child: Row(
-              mainAxisAlignment: expanded
-                  ? MainAxisAlignment.start
-                  : MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  size: 17,
-                  color: iconColor ?? (active ? accent : tokens.neutral300),
-                ),
-                if (expanded) ...[
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      label,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: tokens.neutral200,
+            color: activeTint ? null : bg,
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: radius,
+            child: InkWell(
+              onTap: widget.onTap,
+              onHighlightChanged: (highlighted) =>
+                  setState(() => _pressed = highlighted),
+              borderRadius: radius,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 14),
+                child: Row(
+                  mainAxisAlignment: widget.expanded
+                      ? MainAxisAlignment.start
+                      : MainAxisAlignment.center,
+                  children: [
+                    if (activeTint) ...[
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: accent,
+                          boxShadow: glow(accent),
+                        ),
                       ),
+                      const SizedBox(width: 8),
+                    ],
+                    Icon(
+                      widget.icon,
+                      size: 17,
+                      color: widget.iconColor ??
+                          (widget.active ? accent : tokens.neutral300),
                     ),
-                  ),
-                  if (count != null && count! > 0)
-                    Text(
-                      '$count',
-                      style: TextStyle(fontSize: 12, color: tokens.neutral400),
-                    ),
-                ],
-              ],
+                    if (widget.expanded) ...[
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          widget.uppercase ? widget.label.toUpperCase() : widget.label,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.8,
+                            color: widget.active ? tokens.text : tokens.neutral200,
+                          ),
+                        ),
+                      ),
+                      if (widget.count != null && widget.count! > 0)
+                        Text(
+                          '${widget.count}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontFamily: 'monospace',
+                            color: tokens.neutral400,
+                          ),
+                        ),
+                    ],
+                  ],
+                ),
+              ),
             ),
           ),
         ),

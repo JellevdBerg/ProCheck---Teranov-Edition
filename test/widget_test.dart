@@ -495,9 +495,10 @@ void main() {
       await tester.tap(find.byIcon(Icons.dashboard_outlined));
       await tester.pumpAndSettle();
 
-      // One "Dashboard" is the sidebar nav label (always shown), the other
-      // is the screen's own headline.
-      expect(find.text('Dashboard'), findsNWidgets(2));
+      // The sidebar nav label is uppercase (Industrial Skeuomorphism's
+      // tactile-key styling); the screen's own headline keeps normal case.
+      expect(find.text('DASHBOARD'), findsOneWidget);
+      expect(find.text('Dashboard'), findsOneWidget);
       // Once in the Projects table, again in Recent Activity (its own
       // "created this project" entry is the newest one at this point).
       expect(find.text('Rocket'), findsNWidgets(2));
@@ -539,10 +540,11 @@ void main() {
 
     // Scoped to the sidebar: the Settings screen's own "default landing
     // screen" control also has a "Projects" option label on-screen here.
+    // The sidebar's own label is uppercase (tactile-key styling).
     await tester.tap(
       find.descendant(
         of: find.byType(AppSidebar),
-        matching: find.text('Projects'),
+        matching: find.text('PROJECTS'),
       ),
     );
     await tester.pumpAndSettle();
