@@ -134,6 +134,10 @@ create policy "tasks_select"
 
 -- Whoever creates a task is always its owner — assigning it to someone else
 -- afterwards is a separate update, not a different insert path.
+--
+-- NOTE: tasks_insert_own and tasks_update below are replaced by
+-- 0003_member_task_restrictions.sql (members can't file tasks into a
+-- project) — kept here, as originally written, for migration history.
 create policy "tasks_insert_own"
   on tasks for insert
   to authenticated

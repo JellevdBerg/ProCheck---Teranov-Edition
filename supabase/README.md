@@ -7,8 +7,9 @@ write-up.
 ## Applying the setup (dashboard SQL editor — simplest)
 
 1. Open your Supabase project → **SQL Editor** → **New query**.
-2. Open **[`combined_setup.sql`](https://raw.githubusercontent.com/JellevdBerg/ProCheck---Teranov-Edition/feature/supabase-foundation/supabase/combined_setup.sql)**
-   in your browser (or in this repo). Select all its text and copy it.
+2. Open **[`combined_setup.sql`](https://github.com/JellevdBerg/ProCheck---Teranov-Edition/blob/feature/supabase-foundation/supabase/combined_setup.sql)**
+   on GitHub (the repo's private, so use this page, not a raw link) and hit
+   **Copy raw file** (or **Raw** then select-all) to copy its contents.
 3. **Paste the copied SQL text itself into the SQL editor** — not the file's
    name or path. The editor needs the actual `create table ...` statements;
    pasting just `combined_setup.sql` or a path like
@@ -23,6 +24,16 @@ are split across `migrations/0001_initial_schema.sql` (schema) and
 `migrations/0002_rls_policies.sql` (RLS) — same instructions: open each
 file, copy its contents, paste *that* into the SQL editor, run, then move to
 the next one.
+
+### Adding a later migration to an already-set-up project
+
+Once you've run `combined_setup.sql` (or the individual files) once, re-running
+it will error on `create table`/`create policy` statements that already
+exist. From then on, only run the *new* migration file that was added since
+— e.g. after this note was added, just `migrations/0003_member_task_restrictions.sql`
+— the same copy-the-contents-and-paste approach, just for that one file.
+`combined_setup.sql` itself is still kept up to date for anyone setting up a
+fresh project from scratch.
 
 ### Once the CLI is linked
 
