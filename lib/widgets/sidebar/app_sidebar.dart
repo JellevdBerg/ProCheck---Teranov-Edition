@@ -12,6 +12,7 @@ import '../../providers/task_templates_provider.dart';
 import '../../providers/tasks_provider.dart';
 import '../../screens/app_screen.dart';
 import '../../screens/dashboard_screen.dart';
+import '../../screens/login_screen.dart';
 import '../../theme/nocturne_theme.dart';
 import '../app_logo.dart';
 import '../blurred_dialog.dart';
@@ -324,6 +325,11 @@ class AppSidebar extends ConsumerWidget {
     );
     if (confirmed ?? false) {
       await ref.read(authControllerProvider).signOut();
+      if (!context.mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
     }
   }
 
