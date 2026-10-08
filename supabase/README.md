@@ -71,6 +71,13 @@ creation going forward — it only mattered back when sign-up went through
 Supabase's own public email/password flow, which this edition no longer
 uses at all.
 
+Removing the sign-up screen only stops the *app* from calling the public
+sign-up API — the publishable key can still call it directly. So also
+turn off **"Allow new users to sign up"** (Authentication → Providers →
+Email) in the dashboard, to close that off too. `admin_create_profile`
+isn't affected either way — it inserts into `auth.users` directly rather
+than going through that API.
+
 ### The permanent "Dev" / Operator test account
 
 `20261008101500_username_auth_and_dev_seed.sql` seeds a permanent account
