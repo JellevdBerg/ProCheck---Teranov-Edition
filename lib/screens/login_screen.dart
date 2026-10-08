@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/auth_provider.dart';
+import '../theme/nocturne_theme.dart';
 import '../widgets/app_logo.dart';
 import 'app_shell.dart';
 
@@ -67,71 +68,138 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tokens = context.nocturne;
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Center(child: AppLogo(size: 64)),
-                  const SizedBox(height: 16),
-                  Text(
-                    'ProCheck — Teranov Edition',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  TextFormField(
-                    controller: _usernameController,
-                    decoration: const InputDecoration(labelText: 'Username'),
-                    autocorrect: false,
-                    validator: (value) =>
-                        (value == null || value.trim().isEmpty)
-                        ? 'Enter a username'
-                        : null,
-                    onFieldSubmitted: (_) => _submit(),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordController,
-                    decoration: const InputDecoration(labelText: 'Password'),
-                    obscureText: true,
-                    validator: (value) => (value == null || value.length < 6)
-                        ? 'At least 6 characters'
-                        : null,
-                    onFieldSubmitted: (_) => _submit(),
-                  ),
-                  if (_errorText != null) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      _errorText!,
-                      style: TextStyle(color: theme.colorScheme.error),
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _isSubmitting ? null : _submit,
-                    child: _isSubmitting
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Sign in'),
-                  ),
-                ],
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: const Alignment(0, -0.3),
+                radius: 1.3,
+                colors: [tokens.surface, tokens.bg],
               ),
             ),
           ),
-        ),
+          Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(32),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 380),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const AppLogo(size: 56),
+                    const SizedBox(height: 12),
+                    Text(
+                      'ProCheck',
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Teranov Edition',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: tokens.neutral400,
+                        letterSpacing: 0.06,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    Card(
+                      margin: EdgeInsets.zero,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                'Sign in',
+                                style: theme.textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 20),
+                              TextFormField(
+                                controller: _usernameController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Username',
+                                  prefixIcon: Icon(Icons.person_outline, size: 20),
+                                ),
+                                autocorrect: false,
+                                validator: (value) =>
+                                    (value == null || value.trim().isEmpty)
+                                    ? 'Enter a username'
+                                    : null,
+                                onFieldSubmitted: (_) => _submit(),
+                              ),
+                              const SizedBox(height: 14),
+                              TextFormField(
+                                controller: _passwordController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Password',
+                                  prefixIcon: Icon(Icons.lock_outline, size: 20),
+                                ),
+                                obscureText: true,
+                                validator: (value) =>
+                                    (value == null || value.length < 6)
+                                    ? 'At least 6 characters'
+                                    : null,
+                                onFieldSubmitted: (_) => _submit(),
+                              ),
+                              if (_errorText != null) ...[
+                                const SizedBox(height: 14),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.error.withValues(
+                                      alpha: 0.12,
+                                    ),
+                                    borderRadius: BorderRadius.circular(
+                                      NocturneRadius.sm,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    _errorText!,
+                                    style: TextStyle(
+                                      color: theme.colorScheme.error,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 22),
+                              SizedBox(
+                                height: 44,
+                                child: FilledButton(
+                                  onPressed: _isSubmitting ? null : _submit,
+                                  child: _isSubmitting
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Text('Sign in'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

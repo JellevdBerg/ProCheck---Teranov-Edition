@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../data/supabase_config.dart';
+import '../theme/nocturne_theme.dart';
 import '../widgets/app_logo.dart';
 import 'app_shell.dart';
 import 'login_screen.dart';
@@ -19,7 +20,13 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 700),
+  )..forward();
+
   @override
   void initState() {
     super.initState();
@@ -37,22 +44,66 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const AppLogo(size: 96),
-            const SizedBox(height: 20),
-            Text(
-              'ProCheck',
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.bold,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          const _BrandBackdrop(),
+          Center(
+            child: FadeTransition(
+              opacity: _controller,
+              child: ScaleTransition(
+                scale: Tween(
+                  begin: 0.94,
+                  end: 1.0,
+                ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic)),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const AppLogo(size: 96),
+                    const SizedBox(height: 20),
+                    Text(
+                      'ProCheck',
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A quiet radial vignette behind the brand mark — built from the theme's
+/// own neutral ramp (never the accent, which is reserved for interactive
+/// elements) so it reads as a deliberate backdrop rather than a flat
+/// `Scaffold` background, and stays correct whatever accent the user picks.
+class _BrandBackdrop extends StatelessWidget {
+  const _BrandBackdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.nocturne;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: RadialGradient(
+          center: const Alignment(0, -0.2),
+          radius: 1.2,
+          colors: [tokens.surface, tokens.bg],
         ),
       ),
     );

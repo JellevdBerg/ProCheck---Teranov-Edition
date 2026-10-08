@@ -192,8 +192,13 @@ ThemeData buildNocturneTheme({
     ),
     cardTheme: CardThemeData(
       color: tokens.surface,
-      elevation: 0,
+      elevation: 3,
       clipBehavior: Clip.antiAlias,
+      // A soft neutral drop shadow (never accent-tinted — see
+      // NocturneColors doc comment) gives cards a hint of lift over the flat
+      // elevation:0 + border look, without reading as a generic Material
+      // card shadow.
+      shadowColor: Colors.black.withValues(alpha: 0.35),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(NocturneRadius.md),
         side: BorderSide(color: tokens.neutral800, width: 1),
@@ -257,6 +262,15 @@ ThemeData buildNocturneTheme({
     iconTheme: IconThemeData(color: tokens.neutral300),
     listTileTheme: ListTileThemeData(iconColor: tokens.neutral300),
     dividerTheme: DividerThemeData(color: tokens.divider, thickness: 1),
+    // Flutter's default scrollbar is a flat mid-grey bar that ignores the
+    // rest of the palette — swapped for one built from the theme's own
+    // neutral ramp so it doesn't stick out as an unstyled platform control.
+    scrollbarTheme: ScrollbarThemeData(
+      thumbColor: WidgetStatePropertyAll(tokens.neutral600.withValues(alpha: 0.6)),
+      trackColor: const WidgetStatePropertyAll(Colors.transparent),
+      radius: const Radius.circular(NocturneRadius.sm),
+      thickness: const WidgetStatePropertyAll(6),
+    ),
     extensions: [NocturneThemeExtension(tokens: tokens, accent: accent)],
   );
 }
