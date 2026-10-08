@@ -2,12 +2,16 @@ import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/latest_migration.dart';
+import '../data/supabase_config.dart';
 import '../models/department.dart';
 import '../models/profile.dart';
 import '../providers/admin_provider.dart';
+import '../providers/app_info_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/department_members_provider.dart';
 import '../providers/departments_provider.dart';
+import '../providers/sync_log_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/blurred_dialog.dart';
 
@@ -92,6 +96,10 @@ class AdminScreen extends ConsumerWidget {
                       departments: departmentsAsync.valueOrNull ?? const [],
                     ),
                   ),
+                  if (isOperator) ...[
+                    const SizedBox(height: 32),
+                    const _DevPanel(),
+                  ],
                 ],
               ),
             ),
@@ -451,5 +459,109 @@ class _PeopleList extends StatelessWidget {
     final department = departments.where((d) => d.id == person.departmentId);
     if (department.isEmpty) return roleLabel;
     return '$roleLabel · ${department.first.name}';
+  }
+}
+
+/// Operator-only (not shown to IT) — developer-facing state that's cheap
+/// to read and useful for checking "is this build actually talking to the
+/// right project, as the right user, and is anything failing to sync":
+/// app version, which Supabase project this build points at and whether
+/// its realtime socket is actually connected, the signed-in user's own
+/// id/role/department, the newest migration this code shipped with, and
+/// recent sync errors (see [syncLogProvider] — mirror writes and pulls
+/// have always failed silently by design; this just surfaces that log
+/// rather than changing the behavior).
+class _DevPanel extends ConsumerWidget {
+  const _DevPanel();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = context.nocturne;
+    final packageInfo = ref.watch(packageInfoProvider);
+    final profile = ref.watch(currentProfileProvider).valueOrNull;
+    final departments = ref.watch(departmentsProvider).valueOrNull ?? const [];
+    final syncLog = ref.watch(syncLogProvider);
+    final userId = supabase.auth.currentUser?.id;
+
+    final departmentName = departments
+        .where((d) => d.id == profile?.departmentId)
+        .firstOrNull
+        ?.name;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Developer', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        _DevRow(
+          label: 'App version',
+          value: packageInfo.when(
+            data: (info) => '${info.version}+${info.buildNumber}',
+            loading: () => '…',
+            error: (_, _) => 'unknown',
+          ),
+        ),
+        _DevRow(label: 'Supabase project', value: supabaseUrl),
+        _DevRow(
+          label: 'Realtime',
+          value: supabase.realtime.isConnected ? 'connected' : 'disconnected',
+        ),
+        _DevRow(label: 'User id', value: userId ?? '—'),
+        _DevRow(
+          label: 'Role / department',
+          value: profile == null
+              ? '—'
+              : '${profile.isManager ? 'manager' : 'member'} / '
+                    '${departmentName ?? 'none'}',
+        ),
+        _DevRow(
+          label: 'Last sync',
+          value: syncLog.lastSyncAt?.toLocal().toString() ?? 'never',
+        ),
+        _DevRow(label: 'Latest migration', value: latestMigration),
+        const SizedBox(height: 12),
+        Text(
+          'Recent sync errors',
+          style: Theme.of(context).textTheme.labelLarge,
+        ),
+        const SizedBox(height: 4),
+        if (syncLog.entries.isEmpty)
+          Text('None.', style: TextStyle(color: tokens.neutral500))
+        else
+          for (final entry in syncLog.entries)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '${entry.at.toLocal()} · ${entry.source}/${entry.action} · '
+                '${entry.message}',
+                style: TextStyle(fontSize: 12, color: tokens.neutral500),
+              ),
+            ),
+      ],
+    );
+  }
+}
+
+class _DevRow extends StatelessWidget {
+  const _DevRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.nocturne;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 160,
+            child: Text(label, style: TextStyle(color: tokens.neutral500)),
+          ),
+          Expanded(child: SelectableText(value)),
+        ],
+      ),
+    );
   }
 }

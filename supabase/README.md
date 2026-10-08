@@ -139,6 +139,22 @@ This splits the old `is_operator()` check into two functions:
 
 Same cap as Operator: a unique index allows at most one IT department.
 
+## Operator developer panel
+
+A section at the bottom of the Admin screen, visible only to Operator
+(not IT) — app version, which Supabase project this build points at and
+whether its realtime socket is connected, the signed-in user's own
+id/role/department, the newest migration this build shipped with (a
+compile-time constant in `lib/data/latest_migration.dart`, kept manually
+in sync — there's no client-readable table saying what's actually been
+applied, since migrations here are often pasted into the SQL editor
+rather than run through the CLI), and recent sync errors. That last one
+is new instrumentation, not new behavior: `tasks_provider.dart`/
+`projects_provider.dart`'s pull/mirror-write failures have always been
+caught and silently ignored by design (so a flaky connection or an RLS
+rejection never blocks the UI) — `sync_log_provider.dart` just gives
+those catch blocks somewhere to report to, capped at the last 20.
+
 ## Credentials
 
 - **Project URL** and **anon/publishable key**: safe to pass to the app via

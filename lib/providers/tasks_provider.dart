@@ -16,6 +16,7 @@ import '../models/task.dart';
 import '../models/task_priority.dart';
 import '../models/task_template.dart';
 import 'projects_provider.dart';
+import 'sync_log_provider.dart';
 import 'undo_provider.dart';
 
 final tasksProvider = StateNotifierProvider<TasksNotifier, List<Task>>((ref) {
@@ -139,8 +140,12 @@ class TasksNotifier extends StateNotifier<List<Task>> {
       }
       state = _box.values.toList();
       _sortState();
-    } catch (_) {
+      _ref.read(syncLogProvider.notifier).recordSuccessfulPull();
+    } catch (e) {
       // Best-effort — local cache stays as it was.
+      _ref
+          .read(syncLogProvider.notifier)
+          .recordError(source: 'tasks', action: 'pull', error: e);
     }
   }
 
@@ -149,10 +154,13 @@ class TasksNotifier extends StateNotifier<List<Task>> {
     if (supabase.auth.currentUser == null) return;
     try {
       await supabase.from('tasks').upsert(task.toSupabase());
-    } catch (_) {
+    } catch (e) {
       // Best-effort — the local Hive copy is still correct; it just hasn't
       // reached the backend (offline, or an RLS policy refused it, e.g. a
       // member trying to file a task into a project).
+      _ref
+          .read(syncLogProvider.notifier)
+          .recordError(source: 'tasks', action: 'upsert', error: e);
     }
   }
 
@@ -161,8 +169,11 @@ class TasksNotifier extends StateNotifier<List<Task>> {
     if (supabase.auth.currentUser == null) return;
     try {
       await supabase.from('tasks').delete().eq('id', taskId);
-    } catch (_) {
+    } catch (e) {
       // Best-effort.
+      _ref
+          .read(syncLogProvider.notifier)
+          .recordError(source: 'tasks', action: 'delete', error: e);
     }
   }
 
