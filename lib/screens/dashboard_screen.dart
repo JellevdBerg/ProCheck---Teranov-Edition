@@ -524,7 +524,7 @@ class _AttentionCard extends StatefulWidget {
   /// (callers already sort [tasks] that way), with the rest folded into a
   /// trailing "+N more" note. Keeps the card's height sane and avoids
   /// building hundreds of rows inline in the Dashboard's scroll view if a
-  /// workspace ever accumulates that many overdue/due-today tasks at once.
+  /// user ever accumulates that many overdue/due-today tasks at once.
   static const _maxVisibleRows = 20;
 
   @override
