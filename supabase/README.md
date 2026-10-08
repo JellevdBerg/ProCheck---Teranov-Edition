@@ -115,6 +115,30 @@ it, an Operator could only see profiles in their own department (the same
 limit a manager has), not the whole company, which the Admin screen needs
 to list everyone.
 
+## IT department — Operator's near-equal
+
+`20261008140000_it_department.sql` adds a second admin tier: an IT
+department with "nearly identical privileges" to Operator (full
+company-wide visibility, same Admin screen) except for one asymmetry —
+only Operator can create the IT department or place an account into
+Operator or IT itself; IT can create ordinary departments and accounts,
+but not more admin-tier ones.
+
+This splits the old `is_operator()` check into two functions:
+- `is_admin()` — true for Operator **or** IT. Now what the
+  tasks/projects/`profiles_select_as_operator` (renamed
+  `profiles_select_as_admin`) RLS policies check, and what
+  `admin_create_department`/`admin_create_profile` require just to act
+  at all.
+- `is_operator()` — unchanged, true for Operator only. Now the extra gate
+  on the IT-only actions: `admin_create_department`'s new `p_is_it`
+  parameter, and placing an account's `p_department_id` into whichever
+  department is Operator or IT. An account created into either is forced
+  to the `manager` role regardless of the requested role, same as the Dev
+  seed.
+
+Same cap as Operator: a unique index allows at most one IT department.
+
 ## Credentials
 
 - **Project URL** and **anon/publishable key**: safe to pass to the app via
@@ -132,4 +156,4 @@ eyes before any pilot starts — a wrong policy fails open silently. They
 currently encode: a member sees/edits their own tasks, tasks assigned to
 them, and tasks shared with their department; a manager additionally
 sees/edits everyone's tasks within their own department(s); the Operator
-department sees/edits everything.
+and IT departments see/edit everything.

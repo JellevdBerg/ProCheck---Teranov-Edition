@@ -58,8 +58,8 @@ class AppSidebar extends ConsumerWidget {
     final profile = signedIn
         ? ref.watch(currentProfileProvider).valueOrNull
         : null;
-    final isOperator = signedIn
-        ? ref.watch(isOperatorProvider).valueOrNull ?? false
+    final isAdmin = signedIn
+        ? ref.watch(isAdminProvider).valueOrNull ?? false
         : false;
 
     final now = DateTime.now();
@@ -156,7 +156,7 @@ class AppSidebar extends ConsumerWidget {
                             onTap: () => onScreenSelected(AppScreen.team),
                           ),
                         ],
-                        if (isOperator) ...[
+                        if (isAdmin) ...[
                           const SizedBox(height: 2),
                           _NavRow(
                             icon: Icons.admin_panel_settings_outlined,

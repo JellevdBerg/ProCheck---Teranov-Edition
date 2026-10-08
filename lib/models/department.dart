@@ -7,6 +7,7 @@ class Department {
     required this.id,
     required this.name,
     required this.isOperator,
+    required this.isIt,
   });
 
   final String id;
@@ -16,9 +17,20 @@ class Department {
   /// bypass every other department's visibility boundary.
   final bool isOperator;
 
+  /// The one other department (same cap) with nearly the same bypass —
+  /// everything Operator has except creating/assigning into Operator or
+  /// IT itself (see `is_admin()` vs. `is_operator()` in
+  /// `20261008140000_it_department.sql`).
+  final bool isIt;
+
+  /// Either admin tier — company-wide visibility, reaches the Admin
+  /// screen.
+  bool get isAdminTier => isOperator || isIt;
+
   factory Department.fromJson(Map<String, dynamic> json) => Department(
     id: json['id'] as String,
     name: json['name'] as String,
     isOperator: json['is_operator'] as bool? ?? false,
+    isIt: json['is_it'] as bool? ?? false,
   );
 }

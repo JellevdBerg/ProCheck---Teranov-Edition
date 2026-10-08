@@ -20,15 +20,28 @@ final departmentsProvider = FutureProvider<List<Department>>((ref) async {
       .toList();
 });
 
-/// Whether the signed-in user sits in the Operator department — gates the
-/// admin screen's nav entry. Calls the same `is_operator()` SQL function
-/// the RLS policies use, so this can never show the nav item to someone
-/// the backend would then refuse (see `admin_create_department`/
-/// `admin_create_profile`'s own `is_operator()` checks).
+/// Whether the signed-in user sits in the Operator department specifically
+/// (not IT) — gates the narrower admin actions only Operator can do:
+/// creating the IT department, and creating/assigning accounts into
+/// Operator or IT itself. Calls the same `is_operator()` SQL function the
+/// RLS policies use, so the UI can never offer something the backend
+/// would then refuse.
 final isOperatorProvider = FutureProvider<bool>((ref) async {
   if (!isSupabaseConfigured) return false;
   if (supabase.auth.currentUser == null) return false;
   ref.watch(currentProfileProvider);
 
   return await supabase.rpc('is_operator') as bool;
+});
+
+/// Whether the signed-in user is in either admin-tier department
+/// (Operator or IT) — gates the Admin screen's nav entry itself. Calls
+/// `is_admin()`, the same broad check the tasks/projects/profiles RLS
+/// policies use (see `20261008140000_it_department.sql`).
+final isAdminProvider = FutureProvider<bool>((ref) async {
+  if (!isSupabaseConfigured) return false;
+  if (supabase.auth.currentUser == null) return false;
+  ref.watch(currentProfileProvider);
+
+  return await supabase.rpc('is_admin') as bool;
 });

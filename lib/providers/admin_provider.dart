@@ -10,9 +10,12 @@ import 'auth_provider.dart';
 /// re-checks `is_operator()` itself — this class doesn't grant anything,
 /// it just calls what the backend already gates.
 class AdminController {
-  Future<void> createDepartment(String name) async {
+  Future<void> createDepartment(String name, {bool isIt = false}) async {
     try {
-      await supabase.rpc('admin_create_department', params: {'p_name': name});
+      await supabase.rpc(
+        'admin_create_department',
+        params: {'p_name': name, 'p_is_it': isIt},
+      );
     } on PostgrestException catch (e) {
       throw AuthException(e.message);
     }
