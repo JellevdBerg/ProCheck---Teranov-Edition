@@ -14,6 +14,7 @@ import '../../screens/app_screen.dart';
 import '../../screens/dashboard_screen.dart';
 import '../../theme/nocturne_theme.dart';
 import '../app_logo.dart';
+import '../blurred_dialog.dart';
 import '../project_name_lookup.dart';
 import 'mini_calendar.dart';
 
@@ -112,8 +113,11 @@ class AppSidebar extends ConsumerWidget {
                 label: profile?.displayName ?? 'Sign out',
                 expanded: expanded,
                 background: tokens.neutral800,
-                onTap: () =>
-                    ref.read(authControllerProvider).signOut(),
+                // Showing the user's own name next to a logout icon reads
+                // to some people as a profile/account button rather than
+                // a sign-out one — confirm first so a curious tap doesn't
+                // silently sign them out.
+                onTap: () => _confirmSignOut(context, ref),
               ),
             ),
           ],
@@ -300,6 +304,28 @@ class AppSidebar extends ConsumerWidget {
 
   static bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
+
+  static Future<void> _confirmSignOut(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showBlurredDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sign out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Sign out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed ?? false) {
+      await ref.read(authControllerProvider).signOut();
+    }
+  }
 
   static Future<void> _showFavoriteContextMenu(
     BuildContext context,
