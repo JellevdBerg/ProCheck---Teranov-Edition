@@ -1,11 +1,11 @@
--- Combined Phase 0 setup: the contents of 0001_initial_schema.sql followed
--- by 0002_rls_policies.sql, concatenated so the whole backend can be set up
+-- Combined Phase 0 setup: the contents of 20261001090000_initial_schema.sql followed
+-- by 20261001091500_rls_policies.sql, concatenated so the whole backend can be set up
 -- with a single paste into the Supabase SQL editor. Generated for
 -- convenience — the two files under migrations/ are still the source of
 -- truth and the ones a future `supabase db push` will apply; keep them in
 -- sync with this file if either changes.
 
--- ===== 0001_initial_schema.sql =====
+-- ===== 20261001090000_initial_schema.sql =====
 
 -- Phase 0: initial multi-user schema for the Teranov (team) edition of
 -- ProCheck. This defines the shared backend tables; it does NOT touch the
@@ -106,7 +106,7 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
--- ===== 0002_rls_policies.sql =====
+-- ===== 20261001091500_rls_policies.sql =====
 
 -- Row Level Security for the Phase 0 schema. Flagged in the write-up as the
 -- one thing most worth a second pair of eyes before any real department
@@ -284,7 +284,7 @@ create policy "tasks_delete"
     )
   );
 
--- ===== 0003_member_task_restrictions.sql =====
+-- ===== 20261003120000_member_task_restrictions.sql =====
 
 -- Clarification from Thomas (2026-10-08): managers do the planning and
 -- task assignment, and that happens at the project level — members cannot
@@ -334,7 +334,7 @@ create policy "tasks_update"
     or (select role from public.current_profile()) = 'manager'
   );
 
--- ===== 0004_department_scoping.sql =====
+-- ===== 20261004120000_department_scoping.sql =====
 
 -- Clarification from Thomas (2026-10-08): the local "workspace" switcher
 -- (a per-device data silo, unrelated to the backend) is replaced entirely
@@ -530,7 +530,7 @@ create policy "projects_delete"
     )
   );
 
--- ===== 0005_embedded_fields.sql =====
+-- ===== 20261008090000_embedded_fields.sql =====
 
 alter table tasks add column subtasks jsonb not null default '[]'::jsonb;
 alter table tasks add column attachments jsonb not null default '[]'::jsonb;
