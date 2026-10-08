@@ -333,3 +333,199 @@ create policy "tasks_update"
     project_id is null
     or (select role from public.current_profile()) = 'manager'
   );
+
+-- ===== 0004_department_scoping.sql =====
+
+-- Clarification from Thomas (2026-10-08): the local "workspace" switcher
+-- (a per-device data silo, unrelated to the backend) is replaced entirely
+-- by department. Department is now the hard visibility boundary — people
+-- in different departments can't see each other's work — except for one
+-- special "Operator" department, whose members see across every
+-- department. Every task/project now carries a department indicator
+-- (auto-filled from its creator's own department, not freely chosen), and
+-- a manager's department-wide visibility is now a direct check against
+-- that column instead of joining through other people's profiles.
+
+alter table departments add column is_operator boolean not null default false;
+
+create unique index departments_single_operator_idx
+  on departments (is_operator)
+  where is_operator;
+
+insert into departments (name, is_operator)
+select 'Operator', true
+where not exists (select 1 from departments where is_operator);
+
+create function public.is_operator()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select coalesce(
+    (
+      select d.is_operator
+      from public.profiles p
+      join public.departments d on d.id = p.department_id
+      where p.id = auth.uid()
+    ),
+    false
+  );
+$$;
+
+update tasks t
+  set department_id = p.department_id
+  from public.profiles p
+  where t.department_id is null and p.id = t.owner_id;
+
+update projects pr
+  set department_id = p.department_id
+  from public.profiles p
+  where pr.department_id is null and p.id = pr.owner_id;
+
+alter table tasks alter column department_id set not null;
+alter table projects alter column department_id set not null;
+
+create function public.set_department_from_owner()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.department_id is null then
+    new.department_id := (select department_id from public.profiles where id = new.owner_id);
+  end if;
+  return new;
+end;
+$$;
+
+create trigger set_task_department before insert on tasks
+  for each row execute function public.set_department_from_owner();
+
+create trigger set_project_department before insert on projects
+  for each row execute function public.set_department_from_owner();
+
+drop policy "tasks_select" on tasks;
+drop policy "tasks_insert_own" on tasks;
+drop policy "tasks_update" on tasks;
+drop policy "tasks_delete" on tasks;
+
+create policy "tasks_select"
+  on tasks for select
+  to authenticated
+  using (
+    owner_id = auth.uid()
+    or assignee_id = auth.uid()
+    or public.is_operator()
+    or (
+      (select role from public.current_profile()) = 'manager'
+      and department_id = (select department_id from public.current_profile())
+    )
+  );
+
+create policy "tasks_insert_own"
+  on tasks for insert
+  to authenticated
+  with check (
+    owner_id = auth.uid()
+    and (
+      department_id = (select department_id from public.current_profile())
+      or public.is_operator()
+    )
+    and (
+      project_id is null
+      or (select role from public.current_profile()) = 'manager'
+      or public.is_operator()
+    )
+  );
+
+create policy "tasks_update"
+  on tasks for update
+  to authenticated
+  using (
+    owner_id = auth.uid()
+    or assignee_id = auth.uid()
+    or public.is_operator()
+    or (
+      (select role from public.current_profile()) = 'manager'
+      and department_id = (select department_id from public.current_profile())
+    )
+  )
+  with check (
+    (
+      department_id = (select department_id from public.current_profile())
+      or public.is_operator()
+    )
+    and (
+      project_id is null
+      or (select role from public.current_profile()) = 'manager'
+      or public.is_operator()
+    )
+  );
+
+create policy "tasks_delete"
+  on tasks for delete
+  to authenticated
+  using (
+    owner_id = auth.uid()
+    or public.is_operator()
+    or (
+      (select role from public.current_profile()) = 'manager'
+      and department_id = (select department_id from public.current_profile())
+    )
+  );
+
+drop policy "projects_select" on projects;
+drop policy "projects_insert_own" on projects;
+drop policy "projects_update" on projects;
+drop policy "projects_delete" on projects;
+
+create policy "projects_select"
+  on projects for select
+  to authenticated
+  using (
+    owner_id = auth.uid()
+    or public.is_operator()
+    or department_id = (select department_id from public.current_profile())
+  );
+
+create policy "projects_insert_own"
+  on projects for insert
+  to authenticated
+  with check (
+    owner_id = auth.uid()
+    and (
+      department_id = (select department_id from public.current_profile())
+      or public.is_operator()
+    )
+  );
+
+create policy "projects_update"
+  on projects for update
+  to authenticated
+  using (
+    owner_id = auth.uid()
+    or public.is_operator()
+    or (
+      (select role from public.current_profile()) = 'manager'
+      and department_id = (select department_id from public.current_profile())
+    )
+  )
+  with check (
+    department_id = (select department_id from public.current_profile())
+    or public.is_operator()
+  );
+
+create policy "projects_delete"
+  on projects for delete
+  to authenticated
+  using (
+    owner_id = auth.uid()
+    or public.is_operator()
+    or (
+      (select role from public.current_profile()) = 'manager'
+      and department_id = (select department_id from public.current_profile())
+    )
+  );
