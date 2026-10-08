@@ -139,6 +139,23 @@ This splits the old `is_operator()` check into two functions:
 
 Same cap as Operator: a unique index allows at most one IT department.
 
+## Removing departments and accounts
+
+`20261008195500_admin_delete_department_and_profile.sql` adds the
+delete-side counterparts the Admin screen calls via `supabase.rpc(...)`:
+
+- `admin_delete_department(p_department_id)` — removes a department.
+  Members keep their account, just lose that department (the existing
+  `profiles.department_id` foreign key is `ON DELETE SET NULL`).
+- `admin_delete_profile(p_user_id)` — deletes the `auth.users` row, which
+  cascades to the `profiles` row.
+
+Same gating as creation: both are `SECURITY DEFINER` and require
+`is_admin()` (Operator or IT) to call at all, and `is_operator()`
+specifically to remove the Operator/IT department itself or an account
+inside it. Also blocked: deleting your own account, and deleting the
+permanent Dev test account.
+
 ## Operator developer panel
 
 A section at the bottom of the Admin screen, visible only to Operator
