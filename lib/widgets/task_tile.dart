@@ -632,6 +632,11 @@ class _AssigneeAndEstimateRow extends ConsumerWidget {
     final canAssign = profile?.isManager ?? false;
     final members =
         ref.watch(departmentMembersProvider).valueOrNull ?? const <Profile>[];
+    // A member can't read other profiles directly, so name an assignee who
+    // isn't in [members] through the directory.
+    final directory =
+        ref.watch(profileDirectoryProvider).valueOrNull ??
+        const <String, DirectoryEntry>{};
 
     return Row(
       children: [
@@ -659,7 +664,7 @@ class _AssigneeAndEstimateRow extends ConsumerWidget {
           )
         else
           Text(
-            _assigneeLabel(task.assigneeId, members),
+            _assigneeLabel(task.assigneeId, members, directory),
             style: TextStyle(color: theme.hintColor),
           ),
         const SizedBox(width: 20),
@@ -688,12 +693,16 @@ class _AssigneeAndEstimateRow extends ConsumerWidget {
     );
   }
 
-  String _assigneeLabel(String? assigneeId, List<Profile> members) {
+  String _assigneeLabel(
+    String? assigneeId,
+    List<Profile> members,
+    Map<String, DirectoryEntry> directory,
+  ) {
     if (assigneeId == null) return 'Unassigned';
     for (final member in members) {
       if (member.id == assigneeId) return member.displayName;
     }
-    return 'Unassigned';
+    return directory[assigneeId]?.displayName ?? 'Unassigned';
   }
 }
 

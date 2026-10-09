@@ -206,15 +206,23 @@ class Project extends HiveObject {
 
   /// Maps this [Project] to a `projects` table row for insert/update. Omits
   /// `created_at`, which the database owns.
-  Map<String, dynamic> toSupabase() => {
+  ///
+  /// [activityLog] and [comments] are omitted by default: they are
+  /// append-only on the server (see `append_project_comment` /
+  /// `append_project_activity`), and re-sending this device's copy with every
+  /// edit used to overwrite entries a teammate had just added. Pass
+  /// [includeAppendOnly] only for the whole-row fallback.
+  Map<String, dynamic> toSupabase({bool includeAppendOnly = false}) => {
     'id': id,
     'name': name,
     'last_opened_at': lastOpenedAt?.toIso8601String(),
     'color_index': colorIndex,
     'archived': archived,
     'favorite': favorite,
-    'activity_log': activityLog.map((a) => a.toJson()).toList(),
-    'comments': comments.map((c) => c.toJson()).toList(),
+    if (includeAppendOnly) ...{
+      'activity_log': activityLog.map((a) => a.toJson()).toList(),
+      'comments': comments.map((c) => c.toJson()).toList(),
+    },
     'owner_id': ownerId,
     'department_id': departmentId,
   };
