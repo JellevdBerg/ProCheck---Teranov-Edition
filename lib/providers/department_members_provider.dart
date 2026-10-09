@@ -4,6 +4,53 @@ import '../data/supabase_config.dart';
 import '../models/profile.dart';
 import 'auth_provider.dart';
 
+/// A person as `profile_directory()` exposes them: just enough to show a
+/// name, with no email/username. Unlike [Profile], a plain member can fetch
+/// these for their own department (see
+/// `20261009100000_atomic_appends_and_profile_directory.sql`).
+class DirectoryEntry {
+  const DirectoryEntry({
+    required this.id,
+    required this.displayName,
+    required this.role,
+    this.departmentId,
+  });
+
+  final String id;
+  final String displayName;
+  final UserRole role;
+  final String? departmentId;
+
+  factory DirectoryEntry.fromJson(Map<String, dynamic> json) => DirectoryEntry(
+    id: json['id'] as String,
+    displayName: json['display_name'] as String,
+    role: json['role'] == 'manager' ? UserRole.manager : UserRole.member,
+    departmentId: json['department_id'] as String?,
+  );
+}
+
+/// Names for everyone the signed-in user may see, keyed by id. Empty when
+/// signed out, or when the server function isn't deployed yet — callers fall
+/// back to what they did before, so this can ship ahead of the migration.
+final profileDirectoryProvider = FutureProvider<Map<String, DirectoryEntry>>((
+  ref,
+) async {
+  if (!isSupabaseConfigured) return const {};
+  if (supabase.auth.currentUser == null) return const {};
+  ref.watch(currentProfileProvider);
+  try {
+    final rows = await supabase.rpc('profile_directory');
+    return {
+      for (final row in rows as List)
+        (row as Map<String, dynamic>)['id'] as String: DirectoryEntry.fromJson(
+          row,
+        ),
+    };
+  } catch (_) {
+    return const {};
+  }
+});
+
 /// Every profile a manager can assign tasks to or see on the team
 /// dashboard: their own department's members, or — for the Operator
 /// department — everyone. Mirrors the `profiles_select` RLS policy, so
