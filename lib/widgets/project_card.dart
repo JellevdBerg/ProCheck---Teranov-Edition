@@ -145,11 +145,7 @@ class _ProjectCardState extends State<ProjectCard> {
               type: MaterialType.transparency,
               child: Text(
                 widget.project.name,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontFamily: kPanelFont,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 20,
-                ),
+                style: theme.textTheme.titleMedium,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -177,8 +173,9 @@ class _ProjectCardState extends State<ProjectCard> {
       maintainAnimation: true,
       maintainState: true,
       child: IconButton(
-        icon: Icon(Icons.more_vert, size: 20),
+        icon: const Icon(Icons.more_vert, size: 18),
         tooltip: 'Project actions',
+        visualDensity: VisualDensity.compact,
         onPressed: () => _openActionsMenu(context),
       ),
     );
@@ -272,20 +269,19 @@ class _ProjectCardState extends State<ProjectCard> {
             ),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(NocturneSpace.s3),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _header(context, showActions: _hovering),
                 if (totalCount > 0) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: NocturneSpace.s2),
                   GaugeBar(
                     value: progress,
                     color: accentPalette[widget.project.colorIndex],
-                    segments: 16,
-                    height: 8,
+                    height: 4,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: NocturneSpace.s1),
                   Text(
                     '$doneCount/$totalCount done',
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -293,9 +289,9 @@ class _ProjectCardState extends State<ProjectCard> {
                     ),
                   ),
                 ],
-                const SizedBox(height: 4),
+                const SizedBox(height: NocturneSpace.s1),
                 const Divider(height: 1),
-                const SizedBox(height: 8),
+                const SizedBox(height: NocturneSpace.s2),
                 Expanded(
                   child: preview.isEmpty
                       ? Center(
@@ -340,7 +336,7 @@ class _ProjectCardState extends State<ProjectCard> {
           onTap: widget.onTap,
           borderRadius: BorderRadius.circular(NocturneRadius.md),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+            padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -371,7 +367,7 @@ class _ProjectCardState extends State<ProjectCard> {
                     ),
                   ],
                 ),
-                const SizedBox(width: 2),
+                const SizedBox(width: NocturneSpace.s1),
                 _actionsMenu(context, visible: _hovering || _menuOpen),
               ],
             ),
@@ -402,11 +398,11 @@ class _TaskPreviewRow extends StatelessWidget {
     final theme = Theme.of(context);
     final priorityTag = NocturneTag.forPriority(task.priority);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(vertical: NocturneSpace.s1),
       child: Row(
         children: [
-          IndicatorLamp(on: task.isChecked, size: 9),
-          const SizedBox(width: 6),
+          IndicatorLamp(on: task.isChecked, size: 8),
+          const SizedBox(width: NocturneSpace.s2),
           Expanded(
             child: Text(
               task.title,
@@ -418,10 +414,13 @@ class _TaskPreviewRow extends StatelessWidget {
             ),
           ),
           // ignore: use_null_aware_elements (hive_generator pins analyzer <7, which can't parse `?element`)
-          if (priorityTag != null) priorityTag,
+          if (priorityTag != null) ...[
+            const SizedBox(width: NocturneSpace.s1),
+            priorityTag,
+          ],
           if (task.hasSubtasks)
             Padding(
-              padding: const EdgeInsets.only(left: 4),
+              padding: const EdgeInsets.only(left: NocturneSpace.s2),
               child: Text(
                 '${task.completedSubtaskCount}/${task.subtasks.length}',
                 style: theme.textTheme.bodySmall?.copyWith(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/supabase_config.dart';
+import '../../models/department.dart';
 import '../../models/project.dart';
 import '../../models/task.dart';
 import '../../providers/auth_provider.dart';
@@ -17,6 +18,7 @@ import '../../theme/nocturne_theme.dart';
 import '../app_logo.dart';
 import '../blurred_dialog.dart';
 import '../panel/panel.dart';
+import '../people_plates.dart';
 import '../project_name_lookup.dart';
 import 'mini_calendar.dart';
 
@@ -34,7 +36,19 @@ class AppSidebar extends ConsumerWidget {
     required this.onOpenTask,
     required this.calendarMonth,
     required this.selectedDay,
+    this.forcedExpanded,
+    this.onToggle,
   });
+
+  /// When set, overrides [AppSettings.sidebarExpanded] for this build — the
+  /// shell forces the icon rail at compact widths and a full-width drawer
+  /// when the user opens it there, without touching the saved preference.
+  final bool? forcedExpanded;
+
+  /// Replaces the default "toggle the saved preference" action of the
+  /// collapse button and the rail's search key (the shell opens/closes its
+  /// drawer instead at compact widths).
+  final VoidCallback? onToggle;
 
   final AppScreen currentScreen;
   final ValueChanged<AppScreen> onScreenSelected;
@@ -56,7 +70,10 @@ class AppSidebar extends ConsumerWidget {
     final templates = ref.watch(taskTemplatesProvider);
     final tokens = context.nocturne;
     final accent = context.nocturneAccent;
-    final expanded = settings.sidebarExpanded;
+    final expanded = forcedExpanded ?? settings.sidebarExpanded;
+    void toggle() => onToggle != null
+        ? onToggle!()
+        : ref.read(settingsProvider.notifier).setSidebarExpanded(!expanded);
     final signedIn = isSupabaseConfigured && supabase.auth.currentUser != null;
     final profile = signedIn
         ? ref.watch(currentProfileProvider).valueOrNull
@@ -95,49 +112,59 @@ class AppSidebar extends ConsumerWidget {
         )
         .length;
 
+    final departments = signedIn && profile?.departmentId != null
+        ? ref.watch(departmentsProvider).valueOrNull
+        : null;
+    final department = departments
+        ?.where((d) => d.id == profile?.departmentId)
+        .firstOrNull;
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
-      width: expanded ? 232 : 68,
-      // Brushed-metal rail: a faint left-to-right sheen over the chassis.
+      width: expanded ? 232 : 56,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Color.lerp(tokens.bg, tokens.hi, tokens.isDark ? 0.18 : 0.5)!,
-            tokens.bg,
-          ],
-        ),
+        color: tokens.raised,
         border: Border(right: BorderSide(color: tokens.edge)),
       ),
-      child: Column(
+      child: LayoutBuilder(
+        builder: (context, box) {
+          // On a short window the mini calendar would squeeze the nav
+          // list to nothing, so it moves to the end of the scrolling area
+          // (still reachable) instead of being pinned below it.
+          final calendarInScroll = box.maxHeight < 720;
+          final calendar = MiniCalendar(
+            month: calendarMonth,
+            selectedDay: selectedDay,
+            onDayTap: onDaySelected,
+          );
+          return Column(
         children: [
-          const SizedBox(height: 16),
-          _Header(
-            expanded: expanded,
-            onToggle: () => ref
-                .read(settingsProvider.notifier)
-                .setSidebarExpanded(!expanded),
-          ),
+          const SizedBox(height: 12),
+          _Header(expanded: expanded, onToggle: toggle),
           if (signedIn) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: _NavRow(
-                icon: Icons.logout,
-                label: profile?.displayName ?? 'Sign out',
-                expanded: expanded,
-                keycap: true,
-                trailing: expanded && profile != null
-                    ? _RolePlate(manager: profile.isManager)
-                    : null,
-                // Showing the user's own name next to a logout icon reads
-                // to some people as a profile/account button rather than
-                // a sign-out one — confirm first so a curious tap doesn't
-                // silently sign them out.
-                onTap: () => _confirmSignOut(context, ref),
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              // Showing the user's own name next to a logout icon reads
+              // to some people as a profile/account button rather than
+              // a sign-out one — confirm first so a curious tap doesn't
+              // silently sign them out.
+              child: expanded && profile != null
+                  ? _UserCard(
+                      name: profile.displayName,
+                      isManager: profile.isManager,
+                      department: department,
+                      onTap: () => _confirmSignOut(context, ref),
+                    )
+                  : _NavRow(
+                      icon: Icons.logout,
+                      label: profile?.displayName ?? 'Sign out',
+                      expanded: expanded,
+                      onTap: () => _confirmSignOut(context, ref),
+                    ),
             ),
           ],
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           // The nav sections scroll independently of the calendar/Settings
           // pinned below: enough favorited/archived/templated content would
           // otherwise overflow a short window, since this is the one
@@ -147,15 +174,16 @@ class AppSidebar extends ConsumerWidget {
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: Column(
                       children: [
                         _SidebarSearch(
                           expanded: expanded,
                           onOpenTask: onOpenTask,
                           onOpenProject: onFavoriteProjectTap,
+                          onExpand: onToggle,
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 4),
                         _NavRow(
                           icon: Icons.dashboard_outlined,
                           label: 'Dashboard',
@@ -166,7 +194,7 @@ class AppSidebar extends ConsumerWidget {
                           onTap: () => onScreenSelected(AppScreen.dashboard),
                         ),
                         if (profile?.isManager ?? false) ...[
-                          const SizedBox(height: 2),
+                          const SizedBox(height: 1),
                           _NavRow(
                             icon: Icons.groups_outlined,
                             label: 'Team',
@@ -177,7 +205,7 @@ class AppSidebar extends ConsumerWidget {
                           ),
                         ],
                         if (isAdmin) ...[
-                          const SizedBox(height: 2),
+                          const SizedBox(height: 1),
                           _NavRow(
                             icon: Icons.admin_panel_settings_outlined,
                             label: 'Admin',
@@ -187,7 +215,7 @@ class AppSidebar extends ConsumerWidget {
                             onTap: () => onScreenSelected(AppScreen.admin),
                           ),
                         ],
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 1),
                         _NavRow(
                           icon: Icons.calendar_month_outlined,
                           label: 'Calendar',
@@ -196,7 +224,7 @@ class AppSidebar extends ConsumerWidget {
                           accent: accent,
                           onTap: () => onScreenSelected(AppScreen.calendar),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 1),
                         _NavRow(
                           icon: Icons.wb_sunny_outlined,
                           label: 'Today',
@@ -206,7 +234,7 @@ class AppSidebar extends ConsumerWidget {
                           accent: accent,
                           onTap: () => onScreenSelected(AppScreen.today),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 1),
                         _NavRow(
                           icon: Icons.calendar_today_outlined,
                           label: 'Upcoming',
@@ -221,11 +249,11 @@ class AppSidebar extends ConsumerWidget {
                   ),
                   if (expanded && favorites.isNotEmpty) ...[
                     const Padding(
-                      padding: EdgeInsets.fromLTRB(14, 16, 14, 8),
+                      padding: EdgeInsets.fromLTRB(16, 16, 16, 6),
                       child: _SmallSectionLabel('Favorites'),
                     ),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
                       child: Column(
                         children: [
                           for (final project in favorites)
@@ -248,13 +276,13 @@ class AppSidebar extends ConsumerWidget {
                     ),
                   ],
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 16, 14, 8),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
                     child: expanded
                         ? const _SmallSectionLabel('Library')
                         : null,
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: Column(
                       children: [
                         _NavRow(
@@ -266,7 +294,7 @@ class AppSidebar extends ConsumerWidget {
                           accent: accent,
                           onTap: () => onScreenSelected(AppScreen.projects),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 1),
                         _NavRow(
                           icon: Icons.copy_all_outlined,
                           label: 'Templates',
@@ -276,7 +304,7 @@ class AppSidebar extends ConsumerWidget {
                           accent: accent,
                           onTap: () => onScreenSelected(AppScreen.templates),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 1),
                         _NavRow(
                           icon: Icons.archive_outlined,
                           label: 'Archived',
@@ -289,31 +317,54 @@ class AppSidebar extends ConsumerWidget {
                       ],
                     ),
                   ),
+                  if (expanded && calendarInScroll) ...[
+                    const SizedBox(height: 8),
+                    calendar,
+                  ],
                 ],
               ),
             ),
           ),
-          if (expanded) ...[
-            MiniCalendar(
-              month: calendarMonth,
-              selectedDay: selectedDay,
-              onDayTap: onDaySelected,
-            ),
-            const SizedBox(height: 16),
+          if (expanded && !calendarInScroll) ...[
+            calendar,
+            const SizedBox(height: 8),
           ],
+          const Divider(height: 1),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: _NavRow(
-              icon: Icons.settings_outlined,
-              label: 'Settings',
-              expanded: expanded,
-              active: currentScreen == AppScreen.settings,
-              accent: accent,
-              onTap: () => onScreenSelected(AppScreen.settings),
-            ),
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+            child: expanded
+                ? Row(
+                    children: [
+                      Expanded(
+                        child: _NavRow(
+                          icon: Icons.settings_outlined,
+                          label: 'Settings',
+                          expanded: expanded,
+                          active: currentScreen == AppScreen.settings,
+                          accent: accent,
+                          onTap: () => onScreenSelected(AppScreen.settings),
+                        ),
+                      ),
+                      const _ThemeToggle(),
+                    ],
+                  )
+                : Column(
+                    children: [
+                      _NavRow(
+                        icon: Icons.settings_outlined,
+                        label: 'Settings',
+                        expanded: expanded,
+                        active: currentScreen == AppScreen.settings,
+                        accent: accent,
+                        onTap: () => onScreenSelected(AppScreen.settings),
+                      ),
+                      const _ThemeToggle(),
+                    ],
+                  ),
           ),
-          const SizedBox(height: 8),
         ],
+          );
+        },
       ),
     );
   }
@@ -394,25 +445,23 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.nocturne;
+    final toggle = IconButton(
+      tooltip: expanded ? 'Collapse sidebar' : 'Expand sidebar',
+      icon: Icon(Icons.view_sidebar_outlined, size: 18, color: tokens.neutral400),
+      onPressed: onToggle,
+      visualDensity: VisualDensity.compact,
+    );
     if (!expanded) {
       return Column(
         children: [
           const AppLogo(size: 24),
-          const SizedBox(height: 12),
-          IconButton(
-            icon: Icon(
-              Icons.view_sidebar_outlined,
-              size: 17,
-              color: tokens.neutral400,
-            ),
-            onPressed: onToggle,
-            visualDensity: VisualDensity.compact,
-          ),
+          const SizedBox(height: 8),
+          toggle,
         ],
       );
     }
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.only(left: 16, right: 8),
       child: Row(
         children: [
           const AppLogo(size: 24),
@@ -420,26 +469,116 @@ class _Header extends StatelessWidget {
           Expanded(
             child: Text(
               'ProCheck',
-              style: TextStyle(
-                fontFamily: kPanelFont,
-                fontWeight: FontWeight.w600,
-                fontSize: 19,
-                letterSpacing: 1.2,
-                color: tokens.text,
-              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium,
             ),
           ),
-          IconButton(
-            icon: Icon(
-              Icons.view_sidebar_outlined,
-              size: 17,
-              color: tokens.neutral400,
-            ),
-            onPressed: onToggle,
-            visualDensity: VisualDensity.compact,
-          ),
+          toggle,
         ],
       ),
+    );
+  }
+}
+
+/// Signed-in identity at the top of the sidebar: initials, name, department
+/// and role cues. Tapping it signs out (after the existing confirmation).
+class _UserCard extends StatelessWidget {
+  const _UserCard({
+    required this.name,
+    required this.isManager,
+    required this.department,
+    required this.onTap,
+  });
+
+  final String name;
+  final bool isManager;
+  final Department? department;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.nocturne;
+    final radius = BorderRadius.circular(NocturneRadius.md);
+    final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
+    return Tooltip(
+      message: 'Sign out',
+      child: Material(
+        color: tokens.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: radius,
+          side: BorderSide(color: tokens.edge),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: radius,
+          hoverColor: tokens.neutral900,
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Row(
+              children: [
+                AvatarWell(initial: initial, size: 28),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          height: 16 / 13,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 3,
+                        children: [
+                          RolePlate(isManager: isManager),
+                          if (department != null)
+                            DepartmentPlate(
+                              name: department!.name,
+                              isOperator: department!.isOperator,
+                              isIt: department!.isIt,
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.logout, size: 16, color: tokens.neutral500),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Quick light/dark switch (the full System / Light / Dark choice stays in
+/// Settings → Appearance). Flips from whatever is showing now to the other.
+class _ThemeToggle extends ConsumerWidget {
+  const _ThemeToggle();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return IconButton(
+      tooltip: dark ? 'Switch to light theme' : 'Switch to dark theme',
+      icon: Icon(
+        dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+        size: 18,
+        color: context.nocturne.neutral400,
+      ),
+      onPressed: () => ref
+          .read(settingsProvider.notifier)
+          .setThemeMode(dark ? ThemeMode.light : ThemeMode.dark),
+      visualDensity: VisualDensity.compact,
     );
   }
 }
@@ -454,9 +593,14 @@ class _SidebarSearch extends ConsumerWidget {
     required this.expanded,
     required this.onOpenTask,
     required this.onOpenProject,
+    this.onExpand,
   });
 
   final bool expanded;
+
+  /// What the collapsed rail's search key does; defaults to expanding the
+  /// saved sidebar preference.
+  final VoidCallback? onExpand;
   final void Function(String? projectId, String taskId) onOpenTask;
 
   /// Opens a project picked from the inline search field — same "jump to
@@ -472,8 +616,8 @@ class _SidebarSearch extends ConsumerWidget {
         icon: Icons.search,
         label: 'Search',
         expanded: expanded,
-        onTap: () =>
-            ref.read(settingsProvider.notifier).setSidebarExpanded(true),
+        onTap: onExpand ??
+            () => ref.read(settingsProvider.notifier).setSidebarExpanded(true),
       );
     }
 
@@ -513,13 +657,13 @@ class _SidebarSearch extends ConsumerWidget {
         return TextField(
           controller: controller,
           focusNode: focusNode,
-          style: TextStyle(fontSize: 14, color: tokens.text),
+          style: TextStyle(fontSize: 13, color: tokens.text),
           decoration: InputDecoration(
             isDense: true,
             hintText: 'Search',
-            hintStyle: TextStyle(fontSize: 14, color: tokens.neutral500),
+            hintStyle: TextStyle(fontSize: 13, color: tokens.neutral500),
             prefixIcon: Icon(Icons.search, size: 17, color: tokens.neutral400),
-            contentPadding: const EdgeInsets.symmetric(vertical: 8),
+            contentPadding: const EdgeInsets.symmetric(vertical: 6),
           ),
         );
       },
@@ -609,39 +753,7 @@ class _SmallSectionLabel extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) => StampLabel(text, size: 12);
-}
-
-/// Engraved MEMBER / MANAGER plate. A manager's carries a double rule so the
-/// distinction doesn't rest on text alone.
-class _RolePlate extends StatelessWidget {
-  const _RolePlate({required this.manager});
-  final bool manager;
-
-  @override
-  Widget build(BuildContext context) {
-    final edge = context.nocturne.edge;
-    Widget plate = DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border.all(color: edge),
-        borderRadius: BorderRadius.circular(NocturneRadius.sm),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-        child: StampLabel(manager ? 'Manager' : 'Member', size: 10.5),
-      ),
-    );
-    if (manager) {
-      plate = DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border.all(color: edge),
-          borderRadius: BorderRadius.circular(NocturneRadius.sm + 1),
-        ),
-        child: Padding(padding: const EdgeInsets.all(1.5), child: plate),
-      );
-    }
-    return plate;
-  }
+  Widget build(BuildContext context) => StampLabel(text);
 }
 
 class _NavRow extends StatelessWidget {
@@ -653,8 +765,6 @@ class _NavRow extends StatelessWidget {
     this.active = false,
     this.accent,
     this.iconColor,
-    this.keycap = false,
-    this.trailing,
     required this.onTap,
     this.onSecondaryTapDown,
   });
@@ -666,10 +776,6 @@ class _NavRow extends StatelessWidget {
   final bool active;
   final Color? accent;
   final Color? iconColor;
-
-  /// Draws the row as a raised keycap (the sign-out row).
-  final bool keycap;
-  final Widget? trailing;
   final VoidCallback onTap;
   final void Function(TapDownDetails details)? onSecondaryTapDown;
 
@@ -678,92 +784,66 @@ class _NavRow extends StatelessWidget {
     final tokens = context.nocturne;
     final lit = active && accent != null;
     final radius = BorderRadius.circular(NocturneRadius.md);
-    // Active = a key pressed into the rail and lit with the accent.
-    final decoration = lit
-        ? panelDecoration(
-            context,
-            depth: PanelDepth.recessed,
-            fill: Color.lerp(tokens.well, accent, tokens.isDark ? 0.22 : 0.3),
-          ).copyWith(border: Border.all(color: accent!.withValues(alpha: 0.7)))
-        : keycap
-        ? panelDecoration(context)
-        : null;
+
+    final row = Row(
+      mainAxisAlignment: expanded
+          ? MainAxisAlignment.start
+          : MainAxisAlignment.center,
+      children: [
+        Icon(
+          icon,
+          size: 18,
+          color: iconColor ?? (lit ? accent : tokens.neutral400),
+        ),
+        if (expanded) ...[
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                height: 20 / 13,
+                fontWeight: lit ? FontWeight.w600 : FontWeight.w400,
+                color: lit ? accent : tokens.neutral200,
+              ),
+            ),
+          ),
+          if (count != null && count! > 0)
+            Padding(
+              padding: const EdgeInsets.only(left: 6),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: lit ? accent : tokens.neutral500,
+                ),
+              ),
+            ),
+        ],
+      ],
+    );
 
     return GestureDetector(
       onSecondaryTapDown: onSecondaryTapDown,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 1.5),
-        child: DecoratedBox(
-          decoration: decoration ?? const BoxDecoration(),
-          child: Material(
-            type: MaterialType.transparency,
-            child: InkWell(
-              onTap: onTap,
-              borderRadius: radius,
-              hoverColor: context.nocturneHoverColor,
-              splashColor: context.nocturneSplashColor,
+      child: Tooltip(
+        message: expanded ? '' : label,
+        child: Material(
+          color: lit
+              ? accent!.withValues(alpha: tokens.isDark ? 0.16 : 0.10)
+              : Colors.transparent,
+          borderRadius: radius,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: radius,
+            hoverColor: tokens.neutral800.withValues(alpha: 0.6),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 32),
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 8,
-                  horizontal: 12,
-                ),
-                child: Row(
-                  mainAxisAlignment: expanded
-                      ? MainAxisAlignment.start
-                      : MainAxisAlignment.center,
-                  children: [
-                    if (lit && expanded) ...[
-                      IndicatorLamp(on: true, color: accent!, size: 7),
-                      const SizedBox(width: 7),
-                    ],
-                    Icon(
-                      icon,
-                      size: 18,
-                      color: iconColor ?? (lit ? accent : tokens.neutral300),
-                    ),
-                    if (expanded) ...[
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          label,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: lit ? FontWeight.w500 : null,
-                            color: lit ? tokens.text : tokens.neutral200,
-                          ),
-                        ),
-                      ),
-                      // build_runner's analyzer cannot parse `?trailing`, and CI runs it.
-                      // ignore: use_null_aware_elements
-                      if (trailing != null) trailing!,
-                      if (count != null && count! > 0)
-                        DecoratedBox(
-                          decoration: panelDecoration(
-                            context,
-                            depth: PanelDepth.recessed,
-                            radius: NocturneRadius.sm,
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 1,
-                            ),
-                            child: Text(
-                              '$count',
-                              style: TextStyle(
-                                fontFamily: kPanelFont,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                                letterSpacing: 0.6,
-                                color: tokens.text,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ],
-                ),
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+                child: row,
               ),
             ),
           ),

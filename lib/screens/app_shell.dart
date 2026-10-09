@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/project.dart';
@@ -9,9 +10,9 @@ import '../providers/projects_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/undo_provider.dart';
 import '../theme/nocturne_theme.dart';
+import '../widgets/command_palette.dart';
 import '../widgets/create_task_sheet.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
-import '../widgets/panel/panel.dart';
 import '../widgets/sidebar/app_sidebar.dart';
 import '../widgets/text_prompt_dialog.dart';
 import 'admin_screen.dart';
@@ -59,6 +60,10 @@ class _AppShellState extends ConsumerState<AppShell>
   late AppScreen _screen;
   DateTime? _selectedDay;
   DateTime _calendarMonth = DateTime.now();
+
+  /// Compact widths only: the full sidebar open over the content. Never
+  /// persisted; the saved expanded/collapsed preference is untouched.
+  bool _drawerOpen = false;
 
   String? _toastMessage;
   Timer? _toastTimer;
@@ -256,6 +261,15 @@ class _AppShellState extends ConsumerState<AppShell>
     await showCreateTaskSheet(context);
   }
 
+  void _openCommandPalette() => showCommandPalette(
+    context,
+    onScreenSelected: _switchScreen,
+    onOpenProject: _openFavoriteProject,
+    onOpenTask: _openTask,
+    onNewTask: _newTaskShortcut,
+    onNewProject: _newProjectShortcut,
+  );
+
   /// Pops the most recent deletion off the undo stack (project or task —
   /// see undo_provider.dart), restoring it fully. Repeated Ctrl+Z walks
   /// back through consecutive deletions, unlike the floating "Undo" button
@@ -285,6 +299,14 @@ class _AppShellState extends ConsumerState<AppShell>
       bindings[activator] = _undoShortcut;
     }
 
+    // Command palette: plain hard-coded Ctrl/Cmd+K, not a customizable action.
+    for (final activator in const [
+      SingleActivator(LogicalKeyboardKey.keyK, control: true),
+      SingleActivator(LogicalKeyboardKey.keyK, meta: true),
+    ]) {
+      bindings[activator] = _openCommandPalette;
+    }
+
     // CallbackShortcuts' own internal Focus node has canRequestFocus: false
     // (see the framework source) — it's a pass-through that only sees key
     // events bubbling up from a descendant that actually holds focus. An
@@ -299,19 +321,46 @@ class _AppShellState extends ConsumerState<AppShell>
         autofocus: true,
         child: Scaffold(
           backgroundColor: tokens.bg,
-          body: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              AppSidebar(
-                currentScreen: _screen,
-                onScreenSelected: _switchScreen,
-                onFavoriteProjectTap: _openFavoriteProject,
-                onDaySelected: _onDaySelected,
-                onOpenTask: (projectId, taskId) => _openTask(projectId, taskId),
-                calendarMonth: _calendarMonth,
-                selectedDay: _selectedDay,
-              ),
-              Expanded(
+          body: LayoutBuilder(
+            builder: (context, box) {
+              final compact = box.maxWidth < NocturneBreakpoints.compact;
+              final drawer = compact && _drawerOpen;
+
+              Widget sidebar({
+                bool? forced,
+                VoidCallback? onToggle,
+                bool closeAfter = false,
+              }) {
+                void close() {
+                  if (closeAfter) setState(() => _drawerOpen = false);
+                }
+
+                return AppSidebar(
+                  currentScreen: _screen,
+                  onScreenSelected: (screen) {
+                    _switchScreen(screen);
+                    close();
+                  },
+                  onFavoriteProjectTap: (project) {
+                    _openFavoriteProject(project);
+                    close();
+                  },
+                  onDaySelected: (day) {
+                    _onDaySelected(day);
+                    close();
+                  },
+                  onOpenTask: (projectId, taskId) {
+                    _openTask(projectId, taskId);
+                    close();
+                  },
+                  calendarMonth: _calendarMonth,
+                  selectedDay: _selectedDay,
+                  forcedExpanded: forced,
+                  onToggle: onToggle,
+                );
+              }
+
+              final main = Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     return Stack(
@@ -342,8 +391,52 @@ class _AppShellState extends ConsumerState<AppShell>
                     );
                   },
                 ),
-              ),
-            ],
+              );
+
+              if (!compact) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [sidebar(), main],
+                );
+              }
+              return Stack(
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      sidebar(
+                        forced: false,
+                        onToggle: () => setState(() => _drawerOpen = true),
+                      ),
+                      main,
+                    ],
+                  ),
+                  if (drawer) ...[
+                    Positioned.fill(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _drawerOpen = false),
+                        child: ColoredBox(
+                          color: Colors.black.withValues(alpha: 0.4),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      child: Material(
+                        elevation: 12,
+                        child: sidebar(
+                          forced: true,
+                          closeAfter: true,
+                          onToggle: () => setState(() => _drawerOpen = false),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -351,7 +444,7 @@ class _AppShellState extends ConsumerState<AppShell>
   }
 
   Widget _buildDetailOverlay(BoxConstraints constraints) {
-    const margin = 16.8;
+    final margin = constraints.maxWidth < NocturneBreakpoints.compact ? 8.0 : 16.0;
     final expanded = Rect.fromLTWH(
       margin,
       margin,
@@ -375,7 +468,10 @@ class _AppShellState extends ConsumerState<AppShell>
             color: context.nocturne.bg,
             elevation: 8,
             clipBehavior: Clip.antiAlias,
-            borderRadius: BorderRadius.circular(NocturneRadius.md),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(NocturneRadius.lg),
+              side: BorderSide(color: context.nocturne.edge),
+            ),
             child: Opacity(opacity: contentOpacity, child: child),
           ),
         );
@@ -459,13 +555,18 @@ class _Toast extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.nocturne;
-    return DecoratedBox(
-      decoration: panelDecoration(context),
+    return Material(
+      color: tokens.isDark ? tokens.neutral800 : tokens.neutral100,
+      elevation: 6,
+      borderRadius: BorderRadius.circular(NocturneRadius.md),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         child: Text(
           '$message (shortcut)',
-          style: TextStyle(fontSize: 13, color: tokens.text),
+          style: TextStyle(
+            fontSize: 13,
+            color: tokens.isDark ? tokens.text : tokens.surface,
+          ),
         ),
       ),
     );

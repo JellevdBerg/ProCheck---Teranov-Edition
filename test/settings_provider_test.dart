@@ -62,4 +62,20 @@ void main() {
     expect(a.sameCombo(b), isTrue);
     expect(a.sameCombo(c), isFalse);
   });
-}
+
+  test('compactRows defaults to false, persists, and round-trips through JSON', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    expect(container.read(settingsProvider).compactRows, isFalse);
+
+    container.read(settingsProvider.notifier).setCompactRows(true);
+    expect(container.read(settingsProvider).compactRows, isTrue);
+    final reloaded = SettingsNotifier();
+    addTearDown(reloaded.dispose);
+    expect(reloaded.state.compactRows, isTrue);
+
+    final json = container.read(settingsProvider).toJson();
+    expect(AppSettings.fromJson(json).compactRows, isTrue);
+    json.remove('compactRows'); // an old backup
+    expect(AppSettings.fromJson(json).compactRows, isFalse);
+  });}

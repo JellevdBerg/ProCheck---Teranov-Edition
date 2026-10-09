@@ -55,3 +55,6 @@ app.*.map.json
 
 # graphify
 graphify-out/
+
+# Self-review screenshots
+.screenshots/

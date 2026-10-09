@@ -27,66 +27,164 @@ class SettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Padding(
-      padding: const EdgeInsets.all(16.8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Settings', style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 22.4),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final columns = (constraints.maxWidth / 300).floor().clamp(
-                  1,
-                  3,
-                );
-                return SingleChildScrollView(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final gutter = constraints.maxWidth < NocturneBreakpoints.compact
+            ? NocturneSpace.s4
+            : NocturneSpace.s6;
+        return Padding(
+          padding: EdgeInsets.all(gutter),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Settings',
+                style: Theme.of(context).textTheme.displaySmall,
+              ),
+              const SizedBox(height: NocturneSpace.s4),
+              Expanded(
+                child: SingleChildScrollView(
                   key: const Key('settings-scroll'),
-                  child: Wrap(
-                    spacing: 22.4,
-                    runSpacing: 22.4,
-                    children: [
-                      SizedBox(
-                        width:
-                            (constraints.maxWidth - 22.4 * (columns - 1)) /
-                            columns,
-                        child: const _AppearanceCard(),
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    // Settings read best as one capped column of cards.
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 960),
+                      child: const Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _AppearanceCard(),
+                          SizedBox(height: NocturneSpace.s4),
+                          _TaskDefaultsCard(),
+                          SizedBox(height: NocturneSpace.s4),
+                          _ShortcutsCard(),
+                          SizedBox(height: NocturneSpace.s4),
+                          _BackupCard(),
+                        ],
                       ),
-                      SizedBox(
-                        width:
-                            (constraints.maxWidth - 22.4 * (columns - 1)) /
-                            columns,
-                        child: const _TaskDefaultsCard(),
-                      ),
-                      SizedBox(
-                        width:
-                            (constraints.maxWidth - 22.4 * (columns - 1)) /
-                            columns,
-                        child: const _BackupCard(),
-                      ),
-                      SizedBox(
-                        width:
-                            (constraints.maxWidth - 22.4 * (columns - 1)) /
-                            columns,
-                        child: const _ShortcutsCard(),
-                      ),
-                    ],
+                    ),
                   ),
-                );
-              },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// A titled card of setting rows separated by hairlines.
+class _SettingsSection extends StatelessWidget {
+  const _SettingsSection({
+    required this.title,
+    required this.children,
+    this.danger = false,
+  });
+
+  final String title;
+  final List<Widget> children;
+
+  /// Outlines the card in the danger colour (the wipe-everything section).
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.nocturne;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: NocturneSpace.s2),
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: danger ? t.danger : null,
             ),
           ),
-        ],
+        ),
+        DecoratedBox(
+          decoration: panelDecoration(context).copyWith(
+            border: Border.all(
+              color: danger ? t.danger.withValues(alpha: 0.5) : t.edge,
+            ),
+          ),
+          child: Column(
+            children: [
+              for (var i = 0; i < children.length; i++) ...[
+                if (i > 0) const Divider(),
+                children[i],
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One setting: label + help text, control beside it when there is room and
+/// under it when there is not (or when [stacked], for tall controls).
+class _SettingRow extends StatelessWidget {
+  const _SettingRow({
+    required this.label,
+    required this.control,
+    this.help,
+    this.stacked = false,
+  });
+
+  final String label;
+  final String? help;
+  final Widget control;
+  final bool stacked;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.bodyLarge),
+        if (help != null) _Hint(help!),
+      ],
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: NocturneSpace.s4,
+        vertical: NocturneSpace.s3,
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (stacked || constraints.maxWidth < 520) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                text,
+                const SizedBox(height: NocturneSpace.s2),
+                Align(alignment: Alignment.centerLeft, child: control),
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(child: text),
+              const SizedBox(width: NocturneSpace.s4),
+              Flexible(
+                child: Align(alignment: Alignment.centerRight, child: control),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
-/// One mutually-exclusive option rendered as a key: raised when idle, pressed
-/// in (recessed) with a lit lamp when selected. Still a real [RadioListTile]
-/// underneath, so the surrounding [RadioGroup] drives selection, keyboard and
-/// semantics exactly as before.
+/// One mutually-exclusive option as a bordered row; the selected one gets an
+/// accent outline and tint. Still a real [RadioListTile] underneath, so the
+/// surrounding [RadioGroup] drives selection, keyboard and semantics exactly
+/// as before. Wrapped in a [Material] (not a filled DecoratedBox) so the
+/// tile's ink and background stay valid.
 class _RadioKey<T> extends StatelessWidget {
   const _RadioKey({
     required this.value,
@@ -100,15 +198,23 @@ class _RadioKey<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.nocturne;
+    final accent = context.nocturneAccent;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: DecoratedBox(
-        decoration: panelDecoration(
-          context,
-          depth: selected ? PanelDepth.recessed : PanelDepth.raised,
+      padding: const EdgeInsets.only(bottom: NocturneSpace.s1),
+      child: Material(
+        color: selected
+            ? accent.withValues(alpha: t.isDark ? 0.14 : 0.08)
+            : t.surface,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(NocturneRadius.md),
+          side: BorderSide(color: selected ? accent : t.edge),
         ),
         child: RadioListTile<T>(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: NocturneSpace.s3,
+          ),
           dense: true,
           visualDensity: VisualDensity.compact,
           title: Text(label),
@@ -128,46 +234,46 @@ class _AppearanceCard extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
 
-    return PanelCard(
+    return _SettingsSection(
       title: 'Appearance',
-      padding: const EdgeInsets.all(16.8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const NocturneSectionLabel(
-            'THEME',
-            padding: EdgeInsets.only(bottom: 8),
-          ),
-          RadioGroup<ThemeMode>(
-            groupValue: settings.themeMode,
-            onChanged: (mode) => notifier.setThemeMode(mode!),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _RadioKey<ThemeMode>(
-                  label: 'Match system',
-                  value: ThemeMode.system,
-                  selected: settings.themeMode == ThemeMode.system,
-                ),
-                _RadioKey<ThemeMode>(
-                  label: 'Light',
-                  value: ThemeMode.light,
-                  selected: settings.themeMode == ThemeMode.light,
-                ),
-                _RadioKey<ThemeMode>(
-                  label: 'Dark',
-                  value: ThemeMode.dark,
-                  selected: settings.themeMode == ThemeMode.dark,
-                ),
-              ],
+      children: [
+        _SettingRow(
+          label: 'Theme',
+          stacked: true,
+          control: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: RadioGroup<ThemeMode>(
+              groupValue: settings.themeMode,
+              onChanged: (mode) => notifier.setThemeMode(mode!),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _RadioKey<ThemeMode>(
+                    label: 'Match system',
+                    value: ThemeMode.system,
+                    selected: settings.themeMode == ThemeMode.system,
+                  ),
+                  _RadioKey<ThemeMode>(
+                    label: 'Light',
+                    value: ThemeMode.light,
+                    selected: settings.themeMode == ThemeMode.light,
+                  ),
+                  _RadioKey<ThemeMode>(
+                    label: 'Dark',
+                    value: ThemeMode.dark,
+                    selected: settings.themeMode == ThemeMode.dark,
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 16.8),
-          Text('Accent color', style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 8.4),
-          Wrap(
-            spacing: 10,
-            runSpacing: 12,
+        ),
+        _SettingRow(
+          label: 'Accent color',
+          stacked: true,
+          control: Wrap(
+            spacing: NocturneSpace.s2,
+            runSpacing: NocturneSpace.s2,
             children: [
               for (var i = 0; i < accentPalette.length; i++)
                 _AccentSwatch(
@@ -186,33 +292,25 @@ class _AppearanceCard extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16.8),
-          const NocturneSectionLabel(
-            'MOTION',
-            padding: EdgeInsets.only(bottom: 8),
+        ),
+        _SettingRow(
+          label: 'Reduce motion',
+          help: 'Quick fades instead of sliding/scaling animations',
+          control: WobbleCheckbox(
+            value: settings.reduceMotion,
+            reduceMotion: settings.reduceMotion,
+            onChanged: (v) => notifier.setReduceMotion(v ?? false),
           ),
-          Row(
-            children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Reduce motion'),
-                    SizedBox(height: 2),
-                    _Hint('Quick fades instead of sliding/scaling animations'),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              WobbleCheckbox(
-                value: settings.reduceMotion,
-                reduceMotion: settings.reduceMotion,
-                onChanged: (v) => notifier.setReduceMotion(v ?? false),
-              ),
-            ],
+        ),
+        _SettingRow(
+          label: 'Compact rows',
+          help: 'Fit more tasks on screen',
+          control: Switch(
+            value: settings.compactRows,
+            onChanged: notifier.setCompactRows,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -234,13 +332,7 @@ class _AccentSwatch extends StatelessWidget {
       selected: selected,
       onTap: onTap,
       child: Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            center: const Alignment(-0.35, -0.4),
-            colors: [Color.lerp(color, Colors.white, 0.35)!, color],
-          ),
-        ),
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         child: selected
             ? Icon(Icons.check, color: _onSwatch(color), size: 14)
             : null,
@@ -249,8 +341,8 @@ class _AccentSwatch extends StatelessWidget {
   }
 }
 
-/// A swatch socketed in a recessed ring; the selected one gets an accent-lit
-/// ring (plus its check mark, so it never depends on colour alone).
+/// A swatch inside a ring; the selected one gets a strong ring (plus its
+/// check mark, so it never depends on colour alone).
 class _SwatchWell extends StatelessWidget {
   const _SwatchWell({
     required this.selected,
@@ -264,26 +356,21 @@ class _SwatchWell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.nocturne;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
+      customBorder: const CircleBorder(),
       child: Container(
-        width: 36,
-        height: 36,
-        padding: const EdgeInsets.all(4),
-        decoration:
-            panelDecoration(
-              context,
-              depth: PanelDepth.recessed,
-              radius: 18,
-            ).copyWith(
-              border: Border.all(
-                color: selected
-                    ? Theme.of(context).colorScheme.onSurface
-                    : context.nocturne.edge,
-                width: selected ? 2 : 1,
-              ),
-            ),
+        width: 32,
+        height: 32,
+        padding: const EdgeInsets.all(NocturneSpace.s1),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: selected ? t.text : t.edge,
+            width: selected ? 2 : 1,
+          ),
+        ),
         child: child,
       ),
     );
@@ -322,15 +409,16 @@ class _CustomAccentSwatch extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
+          // An unset custom swatch shows the hue wheel it opens.
           gradient: color == null
               ? const SweepGradient(
                   colors: [
-                    Color(0xFFFF5C5C),
-                    Color(0xFFFFC93C),
-                    Color(0xFF3DDC84),
-                    Color(0xFF6A95D6),
-                    Color(0xFFB07FD6),
-                    Color(0xFFFF5C5C),
+                    Color(0xFFE5484D),
+                    Color(0xFFF0B04A),
+                    Color(0xFF4CC38A),
+                    Color(0xFF2D8CF0),
+                    Color(0xFF8B5CF6),
+                    Color(0xFFE5484D),
                   ],
                 )
               : null,
@@ -352,55 +440,50 @@ class _TaskDefaultsCard extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
 
-    return PanelCard(
+    return _SettingsSection(
       title: 'Task defaults',
-      padding: const EdgeInsets.all(16.8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Default priority',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 8.4),
-          NocturneSegmented<TaskPriority>(
+      children: [
+        _SettingRow(
+          label: 'Default priority',
+          control: NocturneSegmented<TaskPriority>(
             options: TaskPriority.values,
             value: settings.defaultPriority,
             labelBuilder: (p) => p.label,
             onChanged: notifier.setDefaultPriority,
           ),
-          const SizedBox(height: 16.8),
-          Text('Date format', style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 8),
-          RadioGroup<DateFormatOption>(
-            groupValue: settings.dateFormat,
-            onChanged: (v) => notifier.setDateFormat(v!),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final option in DateFormatOption.values)
-                  _RadioKey<DateFormatOption>(
-                    label: option.label,
-                    value: option,
-                    selected: settings.dateFormat == option,
-                  ),
-              ],
+        ),
+        _SettingRow(
+          label: 'Date format',
+          stacked: true,
+          control: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: RadioGroup<DateFormatOption>(
+              groupValue: settings.dateFormat,
+              onChanged: (v) => notifier.setDateFormat(v!),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final option in DateFormatOption.values)
+                    _RadioKey<DateFormatOption>(
+                      label: option.label,
+                      value: option,
+                      selected: settings.dateFormat == option,
+                    ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 16.8),
-          Text(
-            'Default landing screen',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 8.4),
-          NocturneSegmented<LandingScreenOption>(
+        ),
+        _SettingRow(
+          label: 'Default landing screen',
+          control: NocturneSegmented<LandingScreenOption>(
             options: LandingScreenOption.values,
             value: settings.defaultLanding,
             labelBuilder: (o) => o.label,
             onChanged: notifier.setDefaultLanding,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -410,52 +493,61 @@ class _BackupCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return PanelCard(
-      title: 'Backup & danger zone',
-      padding: const EdgeInsets.all(16.8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const NocturneSectionLabel(
-            'BACKUP & RESTORE',
-            padding: EdgeInsets.only(bottom: 8),
-          ),
-          NocturneButton(
-            label: 'Export backup',
-            icon: Icons.upload_file_outlined,
-            onPressed: () => _exportBackup(context, ref),
-          ),
-          const SizedBox(height: 8),
-          NocturneButton(
-            label: 'Import backup',
-            icon: Icons.download_outlined,
-            onPressed: () => _importBackup(context, ref),
-          ),
-          if (kDebugMode) ...[
-            const SizedBox(height: 16.8),
-            const NocturneSectionLabel(
-              'TESTING',
-              padding: EdgeInsets.only(bottom: 8),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SettingsSection(
+          title: 'Backup & restore',
+          children: [
+            _SettingRow(
+              label: 'Back up your data',
+              help: 'Save all projects, tasks, templates and settings to a file',
+              control: NocturneButton(
+                label: 'Export backup',
+                icon: Icons.upload_file_outlined,
+                onPressed: () => _exportBackup(context, ref),
+              ),
             ),
-            NocturneButton(
-              label: 'Load test data',
-              icon: Icons.science_outlined,
-              onPressed: () => _confirmLoadTestData(context, ref),
+            _SettingRow(
+              label: 'Restore from a backup',
+              help: 'Replace everything with the contents of a backup file',
+              control: NocturneButton(
+                label: 'Import backup',
+                icon: Icons.download_outlined,
+                onPressed: () => _importBackup(context, ref),
+              ),
+            ),
+            if (kDebugMode)
+              _SettingRow(
+                label: 'Test data',
+                help: 'Replace projects and tasks with a small test dataset',
+                control: NocturneButton(
+                  label: 'Load test data',
+                  icon: Icons.science_outlined,
+                  onPressed: () => _confirmLoadTestData(context, ref),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: NocturneSpace.s4),
+        _SettingsSection(
+          title: 'Danger zone',
+          danger: true,
+          children: [
+            _SettingRow(
+              label: 'Erase everything',
+              help: 'Permanently delete everything and reset settings',
+              control: NocturneButton(
+                label: 'Wipe all data',
+                icon: Icons.delete_outline,
+                variant: NocturneButtonVariant.primary,
+                color: context.nocturne.danger,
+                onPressed: () => _confirmWipe(context, ref),
+              ),
             ),
           ],
-          const SizedBox(height: 16.8),
-          const NocturneSectionLabel(
-            'DANGER ZONE',
-            padding: EdgeInsets.only(bottom: 8),
-          ),
-          NocturneButton(
-            label: 'Wipe all data',
-            icon: Icons.delete_outline,
-            color: NocturneStatus.dangerBorder,
-            onPressed: () => _confirmWipe(context, ref),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -615,62 +707,53 @@ class _ShortcutsCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
+    final t = context.nocturne;
 
-    return PanelCard(
+    return _SettingsSection(
       title: 'Keyboard shortcuts',
-      padding: const EdgeInsets.all(16.8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final action in ShortcutAction.values)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Expanded(
+      children: [
+        for (final action in ShortcutAction.values)
+          _SettingRow(
+            label: action.label,
+            control: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DecoratedBox(
+                  decoration: panelDecoration(
+                    context,
+                    depth: PanelDepth.recessed,
+                    radius: NocturneRadius.sm,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: NocturneSpace.s2,
+                      vertical: NocturneSpace.s1,
+                    ),
                     child: Text(
-                      action.label,
-                      style: Theme.of(context).textTheme.bodyMedium,
+                      settings.shortcutFor(action).displayLabel,
+                      style: TextStyle(fontSize: 12, color: t.neutral200),
                     ),
                   ),
-                  DecoratedBox(
-                    decoration: panelDecoration(
-                      context,
-                      depth: PanelDepth.recessed,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      child: Text(
-                        settings.shortcutFor(action).displayLabel,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (settings.shortcutOverrides.containsKey(action))
-                    IconButton(
-                      tooltip: 'Reset to default',
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(Icons.restore, size: 16),
-                      onPressed: () => notifier.resetShortcutBinding(action),
-                    )
-                  else
-                    const SizedBox(width: 8),
-                  NocturneButton(
-                    label: 'Change',
-                    dense: true,
-                    variant: NocturneButtonVariant.ghost,
-                    onPressed: () => _rebind(context, ref, action),
-                  ),
-                ],
-              ),
+                ),
+                if (settings.shortcutOverrides.containsKey(action))
+                  IconButton(
+                    tooltip: 'Reset to default',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.restore, size: 16),
+                    onPressed: () => notifier.resetShortcutBinding(action),
+                  )
+                else
+                  const SizedBox(width: NocturneSpace.s2),
+                NocturneButton(
+                  label: 'Change',
+                  dense: true,
+                  variant: NocturneButtonVariant.ghost,
+                  onPressed: () => _rebind(context, ref, action),
+                ),
+              ],
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 
@@ -811,7 +894,7 @@ class _ShortcutRecorderDialogState extends State<_ShortcutRecorderDialog> {
                   depth: PanelDepth.recessed,
                 ),
                 child: const Padding(
-                  padding: EdgeInsets.all(10),
+                  padding: EdgeInsets.all(NocturneSpace.s3),
                   child: Text(
                     'Hold a modifier (Ctrl/Cmd or Alt) and press a key.',
                   ),
@@ -848,7 +931,7 @@ class _Hint extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: TextStyle(fontSize: 13, color: context.nocturne.neutral400),
+      style: TextStyle(fontSize: 12, color: context.nocturne.neutral500),
     );
   }
 }

@@ -13,6 +13,7 @@ import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
 import '../widgets/panel/panel.dart';
+import '../widgets/task_filter_bar.dart';
 
 /// True for an unchecked task with no due date, or one overdue — it needs
 /// attention now rather than being scheduled for later. Also used by the
@@ -117,9 +118,11 @@ ProjectSummary _summaryFor(
   );
 }
 
+const _kDashboardMaxWidth = 2000.0;
+
 /// The Dashboard: a header, then the shared [ProjectsOverview] scoped to
 /// every active (non-archived) project and unfiled tasks.
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({
     super.key,
     required this.onOpenProject,
@@ -135,9 +138,19 @@ class DashboardScreen extends ConsumerWidget {
   onOpenTask;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  TaskFilter _filter = const TaskFilter();
+
+  @override
+  Widget build(BuildContext context) {
+    final onOpenProject = widget.onOpenProject;
+    final onOpenTask = widget.onOpenTask;
     final projects = ref.watch(projectsProvider);
-    final tasks = ref.watch(tasksProvider);
+    final userId = ref.watch(taskFilterOptionsProvider).userId;
+    final tasks = _filter.apply(ref.watch(tasksProvider), userId);
     final now = DateTime.now();
 
     final activeProjects = projects.where((p) => !p.archived).toList()
@@ -149,27 +162,47 @@ class DashboardScreen extends ConsumerWidget {
         )
         .toList();
 
-    return Padding(
-      padding: const EdgeInsets.all(16.8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _DashboardHeader(title: 'Dashboard'),
-          const SizedBox(height: 16.8),
-          Expanded(
-            child: SingleChildScrollView(
-              child: ProjectsOverview(
-                projects: activeProjects,
-                tasks: relevantTasks,
-                now: now,
-                emptyProjectsMessage: 'No active projects yet.',
-                onOpenProject: onOpenProject,
-                onOpenTask: onOpenTask,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final gutter = constraints.maxWidth < NocturneBreakpoints.compact
+            ? NocturneSpace.s4
+            : NocturneSpace.s6;
+        // Wide windows get more panes (see [ProjectsOverview]), but the
+        // content is capped rather than stretched edge to edge.
+        return Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _kDashboardMaxWidth),
+            child: Padding(
+              padding: EdgeInsets.all(gutter),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _DashboardHeader(title: 'Dashboard'),
+                  TaskFilterBar(
+                    filter: _filter,
+                    onChanged: (f) => setState(() => _filter = f),
+                    padding: const EdgeInsets.only(top: NocturneSpace.s3),
+                  ),
+                  const SizedBox(height: NocturneSpace.s4),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: ProjectsOverview(
+                        projects: activeProjects,
+                        tasks: relevantTasks,
+                        now: now,
+                        emptyProjectsMessage: 'No active projects yet.',
+                        onOpenProject: onOpenProject,
+                        onOpenTask: onOpenTask,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -205,7 +238,6 @@ class _DashboardHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = context.nocturne;
     final now = DateTime.now();
     final dateLabel =
         '${_weekdays[now.weekday - 1]}, ${_months[now.month - 1]} ${now.day}';
@@ -213,25 +245,14 @@ class _DashboardHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(title, style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 2),
-        Text(
-          dateLabel,
-          style: TextStyle(fontSize: 13, color: tokens.neutral400),
-        ),
+        const SizedBox(height: NocturneSpace.s1),
+        Text(dateLabel, style: Theme.of(context).textTheme.bodySmall),
       ],
     );
   }
 }
 
-/// Text-weight version of a lamp/status hue: on the light finish the pale
-/// hues are pulled toward the text colour so they stay readable.
-Color _legible(BuildContext context, Color color) {
-  final t = context.nocturne;
-  return t.isDark ? color : Color.lerp(color, t.text, 0.5)!;
-}
-
-/// A small in-card header — icon plus a short label — used instead of a
-/// separate section title sitting above the card, so each pane says what
+/// A small in-card header: icon plus a short label, so each pane says what
 /// it is on its own.
 class _CardHeader extends StatelessWidget {
   const _CardHeader({required this.icon, required this.label});
@@ -244,27 +265,14 @@ class _CardHeader extends StatelessWidget {
     final tokens = context.nocturne;
     return Row(
       children: [
-        Icon(icon, size: 14, color: tokens.neutral500),
-        const SizedBox(width: 6),
+        Icon(icon, size: 16, color: tokens.neutral600),
+        const SizedBox(width: NocturneSpace.s2),
         Flexible(
-          // Engraved like StampLabel but keeps the label's own casing.
           child: Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: kPanelFont,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.2,
-              color: tokens.neutral500,
-              shadows: [
-                Shadow(
-                  color: tokens.hi.withValues(alpha: 0.6),
-                  offset: const Offset(0, 1),
-                ),
-              ],
-            ),
+            style: Theme.of(context).textTheme.titleSmall,
           ),
         ),
       ],
@@ -348,43 +356,92 @@ class ProjectsOverview extends StatelessWidget {
     final activityFeed = _buildActivityFeed(projects);
     final attentionKey = GlobalKey<_AttentionCardState>();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _StatRow(
-          overdueCount: overdueBucket,
-          dueThisWeekCount: dueThisWeekTasks.length,
-          highPriorityDueThisWeek: highPriorityDueThisWeek,
-          overallProgress: overallProgress,
-          completedToday: completedToday,
-          onOverdueTap: overdueBucket == 0
-              ? null
-              : () {
-                  attentionKey.currentState?.flash();
-                  Scrollable.ensureVisible(
-                    attentionKey.currentContext!,
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeOut,
-                  );
-                },
-        ),
-        const SizedBox(height: 22.4),
-        _AttentionCard(
-          key: attentionKey,
-          tasks: attentionTasks,
-          projectById: projectById,
-          now: now,
-          onOpenTask: onOpenTask,
-        ),
-        const SizedBox(height: 22.4),
-        ProjectsTableCard(
-          summaries: summaries,
-          emptyMessage: emptyProjectsMessage,
-          onOpenProject: onOpenProject,
-        ),
-        const SizedBox(height: 22.4),
-        _RecentActivityCard(items: activityFeed),
-      ],
+    final stats = _StatRow(
+      overdueCount: overdueBucket,
+      dueThisWeekCount: dueThisWeekTasks.length,
+      highPriorityDueThisWeek: highPriorityDueThisWeek,
+      overallProgress: overallProgress,
+      completedToday: completedToday,
+      onOverdueTap: overdueBucket == 0
+          ? null
+          : () {
+              attentionKey.currentState?.flash();
+              Scrollable.ensureVisible(
+                attentionKey.currentContext!,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut,
+              );
+            },
+    );
+    final attention = _AttentionCard(
+      key: attentionKey,
+      tasks: attentionTasks,
+      projectById: projectById,
+      now: now,
+      onOpenTask: onOpenTask,
+    );
+    final table = ProjectsTableCard(
+      summaries: summaries,
+      emptyMessage: emptyProjectsMessage,
+      onOpenProject: onOpenProject,
+    );
+    final activity = _RecentActivityCard(items: activityFeed);
+    const gap = SizedBox(height: NocturneSpace.s3);
+
+    // A card grid that reflows with the width it is given: one column when
+    // compact, two under medium (attention | activity, projects full width),
+    // two panes at standard (work on the left, activity on the right) and
+    // three at wide.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final Widget panes;
+        if (w < NocturneBreakpoints.compact) {
+          panes = Column(children: [attention, gap, table, gap, activity]);
+        } else if (w < NocturneBreakpoints.medium) {
+          panes = Column(
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 3, child: attention),
+                  const SizedBox(width: NocturneSpace.s3),
+                  Expanded(flex: 2, child: activity),
+                ],
+              ),
+              gap,
+              table,
+            ],
+          );
+        } else if (w < NocturneBreakpoints.wide) {
+          panes = Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 2,
+                child: Column(children: [attention, gap, table]),
+              ),
+              const SizedBox(width: NocturneSpace.s3),
+              Expanded(child: activity),
+            ],
+          );
+        } else {
+          panes = Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 4, child: attention),
+              const SizedBox(width: NocturneSpace.s3),
+              Expanded(flex: 5, child: table),
+              const SizedBox(width: NocturneSpace.s3),
+              Expanded(flex: 3, child: activity),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [stats, gap, panes],
+        );
+      },
     );
   }
 }
@@ -405,7 +462,7 @@ class _ActivityFeedItem {
   final Project project;
 }
 
-/// The top-line stat cards: how many were completed today, overdue (tap to
+/// The top-line stat tiles: how many were completed today, overdue (tap to
 /// jump to Today & Needs Attention), due this week (+ how many of those are
 /// high priority), and overall completion.
 class _StatRow extends StatelessWidget {
@@ -427,44 +484,59 @@ class _StatRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = context.nocturne;
     final cards = [
       _StatCard(
         value: '$completedToday',
         label: 'Completed today',
-        valueColor: NocturneStatus.done,
+        valueColor: tokens.done,
       ),
       _StatCard(
         value: '$overdueCount',
         label: 'Overdue',
-        valueColor: NocturnePriority.high,
-        labelColor: NocturnePriority.high,
+        valueColor: tokens.danger,
+        labelColor: tokens.danger,
+        glyph: Icons.error_outline,
         onTap: onOverdueTap,
       ),
       _StatCard(
         value: '$dueThisWeekCount',
         label: 'Due this week · $highPriorityDueThisWeek high priority',
-        valueColor: NocturnePriority.med,
-        labelColor: NocturnePriority.med,
+        valueColor: tokens.warn,
+        labelColor: tokens.warn,
       ),
       _StatCard(
         value: '${overallProgress.round()}%',
         label: 'Overall progress',
-        valueColor: context.nocturneAccent,
-        gauge: GaugeBar(value: overallProgress / 100, height: 8),
+        gauge: GaugeBar(value: overallProgress / 100),
       ),
     ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        const spacing = 11.2;
-        final columns = (constraints.maxWidth / 180).floor().clamp(1, 4);
-        final cardWidth =
-            (constraints.maxWidth - spacing * (columns - 1)) / columns;
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
+        const spacing = NocturneSpace.s3;
+        // 2x2 when compact, one row of four from there up.
+        final columns = constraints.maxWidth < NocturneBreakpoints.compact
+            ? 2
+            : 4;
+        return Column(
           children: [
-            for (final card in cards) SizedBox(width: cardWidth, child: card),
+            for (var i = 0; i < cards.length; i += columns) ...[
+              if (i > 0) const SizedBox(height: spacing),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var j = i; j < i + columns; j++) ...[
+                      if (j > i) const SizedBox(width: spacing),
+                      Expanded(
+                        child: j < cards.length ? cards[j] : const SizedBox(),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ],
         );
       },
@@ -480,16 +552,20 @@ class _StatCard extends StatelessWidget {
     this.labelColor,
     this.onTap,
     this.gauge,
+    this.glyph,
   });
 
   final String value;
   final String label;
   final Color? valueColor;
 
-  /// Optional segmented gauge shown under the readout.
+  /// Optional progress bar shown under the number.
   final Widget? gauge;
 
-  /// Tints the label itself, not just the number above it — left null for
+  /// A glyph shown beside the number, so state never rests on colour alone.
+  final IconData? glyph;
+
+  /// Tints the label itself, not just the number above it; left null for
   /// the neutral default.
   final Color? labelColor;
 
@@ -500,69 +576,54 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.nocturne;
-    // Only a card with a semantic label color (Overdue, Due this week) gets
-    // a matching background wash — a plain neutral stat stays plain.
-    final tint = labelColor == null
-        ? null
-        : Color.alphaBlend(labelColor!.withValues(alpha: 0.10), tokens.surface);
     final content = Padding(
-      padding: const EdgeInsets.all(16.8),
+      padding: const EdgeInsets.all(NocturneSpace.s3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // The big readout, set into a recessed window.
-          DecoratedBox(
-            decoration: panelDecoration(
-              context,
-              depth: PanelDepth.recessed,
-              radius: NocturneRadius.sm,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              child: SizedBox(
-                width: double.infinity,
+          Row(
+            children: [
+              if (glyph != null) ...[
+                Icon(glyph, size: 20, color: valueColor),
+                const SizedBox(width: NocturneSpace.s1),
+              ],
+              Flexible(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
                     value,
                     style: TextStyle(
-                      fontFamily: kPanelFont,
                       fontWeight: FontWeight.w600,
-                      fontSize: 34,
-                      height: 1.1,
-                      letterSpacing: 1,
-                      color: valueColor == null
-                          ? null
-                          : _legible(context, valueColor!),
+                      fontSize: 28,
+                      height: 36 / 28,
+                      color: valueColor,
                     ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-          // Cards without a gauge reserve its height so the row stays even.
-          const SizedBox(height: 8),
-          gauge ?? const SizedBox(height: 12),
-          const SizedBox(height: 8),
+          const SizedBox(height: NocturneSpace.s1),
           Text(
             label,
-            maxLines: 2,
+            maxLines: 3,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 12,
-              color: labelColor == null
-                  ? tokens.neutral400
-                  : _legible(context, labelColor!),
+              height: 16 / 12,
+              color: labelColor ?? tokens.neutral400,
             ),
           ),
+          const SizedBox(height: NocturneSpace.s2),
+          // Tiles without a bar keep its height so a row stays even.
+          gauge ?? const SizedBox(height: 6),
         ],
       ),
     );
     return Card(
       margin: EdgeInsets.zero,
-      color: tint,
       child: onTap == null ? content : InkWell(onTap: onTap, child: content),
     );
   }
@@ -640,11 +701,8 @@ class _AttentionCardState extends State<_AttentionCard> {
     return Card(
       margin: EdgeInsets.zero,
       color: tint,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(NocturneRadius.md),
-      ),
       child: Padding(
-        padding: const EdgeInsets.all(16.8),
+        padding: const EdgeInsets.all(NocturneSpace.s3),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -654,7 +712,7 @@ class _AttentionCardState extends State<_AttentionCard> {
             ),
             if (tasks.isEmpty)
               Padding(
-                padding: const EdgeInsets.only(top: 12),
+                padding: const EdgeInsets.only(top: NocturneSpace.s3),
                 child: Text(
                   'Nothing needs your attention right now.',
                   style: Theme.of(context).textTheme.bodyMedium,
@@ -662,7 +720,7 @@ class _AttentionCardState extends State<_AttentionCard> {
               )
             else
               Padding(
-                padding: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.only(top: NocturneSpace.s2),
                 child: Column(
                   children: [
                     for (var i = 0; i < visibleTasks.length; i++) ...[
@@ -730,56 +788,94 @@ class _AttentionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nocturne;
     final project = this.project;
-    final statusColor = _isOverdue
-        ? NocturnePriority.high
-        : NocturnePriority.med;
-    final content = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
-      child: Row(
-        children: [
-          IndicatorLamp(on: true, color: statusColor, size: 9),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              task.title,
-              style: const TextStyle(fontSize: 14),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 8),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 120),
-            child: Text(
-              project?.name ?? 'Unfiled',
-              style: TextStyle(fontSize: 12, color: tokens.neutral400),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            _statusLabel,
-            style: TextStyle(
-              fontSize: 12,
-              color: _legible(context, statusColor),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
+    final statusColor = _isOverdue ? tokens.danger : tokens.warn;
+    final glyph = Icon(
+      _isOverdue ? Icons.error_outline : Icons.schedule,
+      size: 16,
+      color: statusColor,
+    );
+    final title = Text(
+      task.title,
+      style: const TextStyle(fontSize: 13, height: 20 / 13),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+    final projectText = Text(
+      project?.name ?? 'Unfiled',
+      style: TextStyle(fontSize: 12, color: tokens.neutral400),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+    final status = Text(
+      _statusLabel,
+      style: TextStyle(
+        fontSize: 12,
+        color: statusColor,
+        fontWeight: FontWeight.w500,
       ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+    final content = LayoutBuilder(
+      builder: (context, constraints) {
+        // Narrow pane: title on its own line, project and status beneath.
+        final stacked = constraints.maxWidth < 420;
+        return Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: NocturneSpace.s2,
+            vertical: NocturneSpace.s2,
+          ),
+          child: stacked
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: glyph,
+                    ),
+                    const SizedBox(width: NocturneSpace.s2),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          title,
+                          Row(
+                            children: [
+                              Flexible(child: projectText),
+                              const SizedBox(width: NocturneSpace.s2),
+                              Flexible(flex: 2, child: status),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    glyph,
+                    const SizedBox(width: NocturneSpace.s2),
+                    Expanded(child: title),
+                    const SizedBox(width: NocturneSpace.s2),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 140),
+                      child: projectText,
+                    ),
+                    const SizedBox(width: NocturneSpace.s3),
+                    Flexible(child: status),
+                  ],
+                ),
+        );
+      },
     );
 
     return Builder(
       builder: (rowContext) => Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(NocturneRadius.md),
+          borderRadius: BorderRadius.circular(NocturneRadius.sm),
           mouseCursor: SystemMouseCursors.click,
           hoverColor: context.nocturneHoverColor,
-          splashColor: context.nocturneSplashColor,
-          highlightColor: context.nocturneSplashColor,
           onTap: () => onOpenTask(project?.id, task.id, rowContext),
           child: content,
         ),
@@ -867,81 +963,112 @@ class _ProjectsTableCardState extends State<ProjectsTableCard> {
   @override
   Widget build(BuildContext context) {
     final summaries = _sortedSummaries;
+    final tokens = context.nocturne;
+    _SortableHeaderCell header(
+      String label,
+      _ProjectSortColumn column, {
+      bool alignEnd = false,
+    }) => _SortableHeaderCell(
+      label: label,
+      active: _sortColumn == column,
+      ascending: _ascending,
+      onTap: () => _tapColumn(column),
+      alignEnd: alignEnd,
+    );
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16.8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const _CardHeader(icon: Icons.folder_outlined, label: 'Projects'),
-            const SizedBox(height: 14),
-            if (summaries.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  widget.emptyMessage,
-                  style: Theme.of(context).textTheme.bodyMedium,
+        padding: const EdgeInsets.all(NocturneSpace.s3),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Below this width the columns can't all fit: rows stack
+            // (name + status, then tasks + progress) and the sortable
+            // headers wrap above them. Every column stays reachable.
+            final stacked = constraints.maxWidth < 560;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _CardHeader(
+                  icon: Icons.folder_outlined,
+                  label: 'Projects',
                 ),
-              )
-            else ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: _SortableHeaderCell(
-                        label: 'PROJECT',
-                        active: _sortColumn == _ProjectSortColumn.name,
-                        ascending: _ascending,
-                        onTap: () => _tapColumn(_ProjectSortColumn.name),
-                      ),
+                const SizedBox(height: NocturneSpace.s3),
+                if (summaries.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      widget.emptyMessage,
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
-                    Expanded(
-                      child: _SortableHeaderCell(
-                        label: 'TASKS',
-                        active: _sortColumn == _ProjectSortColumn.tasks,
-                        ascending: _ascending,
-                        onTap: () => _tapColumn(_ProjectSortColumn.tasks),
-                      ),
+                  )
+                else ...[
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: tokens.raised,
+                      borderRadius: BorderRadius.circular(NocturneRadius.sm),
                     ),
-                    Expanded(
-                      flex: 3,
-                      child: _SortableHeaderCell(
-                        label: 'PROGRESS',
-                        active: _sortColumn == _ProjectSortColumn.progress,
-                        ascending: _ascending,
-                        onTap: () => _tapColumn(_ProjectSortColumn.progress),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: NocturneSpace.s2,
+                        vertical: NocturneSpace.s1,
                       ),
+                      child: stacked
+                          ? Wrap(
+                              spacing: NocturneSpace.s2,
+                              children: [
+                                header('PROJECT', _ProjectSortColumn.name),
+                                header('TASKS', _ProjectSortColumn.tasks),
+                                header('PROGRESS', _ProjectSortColumn.progress),
+                                header('STATUS', _ProjectSortColumn.status),
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: header(
+                                    'PROJECT',
+                                    _ProjectSortColumn.name,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: header(
+                                    'TASKS',
+                                    _ProjectSortColumn.tasks,
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 3,
+                                  child: header(
+                                    'PROGRESS',
+                                    _ProjectSortColumn.progress,
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 2,
+                                  child: header(
+                                    'STATUS',
+                                    _ProjectSortColumn.status,
+                                    alignEnd: true,
+                                  ),
+                                ),
+                              ],
+                            ),
                     ),
-                    Expanded(
-                      flex: 2,
-                      child: _SortableHeaderCell(
-                        label: 'STATUS',
-                        active: _sortColumn == _ProjectSortColumn.status,
-                        ascending: _ascending,
-                        onTap: () => _tapColumn(_ProjectSortColumn.status),
-                        alignEnd: true,
-                      ),
+                  ),
+                  for (var i = 0; i < summaries.length; i++) ...[
+                    if (i > 0) const Divider(height: 1),
+                    _ProjectsTableRow(
+                      summary: summaries[i],
+                      onOpenProject: widget.onOpenProject,
+                      trailing: widget.trailing,
+                      stacked: stacked,
                     ),
                   ],
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Divider(height: 1),
-              ),
-              for (var i = 0; i < summaries.length; i++) ...[
-                if (i > 0) const Divider(height: 1),
-                _ProjectsTableRow(
-                  summary: summaries[i],
-                  onOpenProject: widget.onOpenProject,
-                  trailing: widget.trailing,
-                ),
+                ],
               ],
-            ],
-          ],
+            );
+          },
         ),
       ),
     );
@@ -980,10 +1107,10 @@ class _SortableHeaderCell extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          fontFamily: kPanelFont,
-          fontSize: 12,
+          fontSize: 11,
+          height: 16 / 11,
           color: color,
-          letterSpacing: 1.2,
+          letterSpacing: 0.7,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -998,11 +1125,9 @@ class _SortableHeaderCell extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(NocturneRadius.md),
+        borderRadius: BorderRadius.circular(NocturneRadius.sm),
         mouseCursor: SystemMouseCursors.click,
         hoverColor: context.nocturneHoverColor,
-        splashColor: context.nocturneSplashColor,
-        highlightColor: context.nocturneSplashColor,
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -1022,12 +1147,14 @@ class _ProjectsTableRow extends StatelessWidget {
   const _ProjectsTableRow({
     required this.summary,
     required this.onOpenProject,
+    required this.stacked,
     this.trailing,
   });
 
   final ProjectSummary summary;
   final void Function(String projectId, BuildContext rowContext) onOpenProject;
   final Widget Function(ProjectSummary summary)? trailing;
+  final bool stacked;
 
   @override
   Widget build(BuildContext context) {
@@ -1036,90 +1163,107 @@ class _ProjectsTableRow extends StatelessWidget {
     final color = accentPalette[project.colorIndex];
     final progress = summary.progress;
 
-    final content = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 3,
-            child: Row(
-              children: [
-                Icon(Icons.folder, size: 14, color: color),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    project.name,
-                    style: const TextStyle(fontSize: 13),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+    final name = Row(
+      children: [
+        Icon(Icons.folder, size: 16, color: color),
+        const SizedBox(width: NocturneSpace.s2),
+        Expanded(
+          child: Text(
+            project.name,
+            style: const TextStyle(fontSize: 13, height: 20 / 13),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+    final tasks = Text(
+      '${summary.open}/${summary.total}',
+      style: TextStyle(fontSize: 12, color: tokens.neutral400),
+    );
+    final bar = progress == null
+        ? Text('–', style: TextStyle(fontSize: 12, color: tokens.neutral500))
+        : Row(
+            children: [
+              Expanded(
+                child: GaugeBar(value: progress, color: color),
+              ),
+              const SizedBox(width: NocturneSpace.s2),
+              SizedBox(
+                width: 36,
+                child: Text(
+                  '${(progress * 100).round()}%',
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 12,
                   ),
                 ),
+              ),
+            ],
+          );
+
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: NocturneSpace.s2,
+        vertical: NocturneSpace.s2,
+      ),
+      child: stacked
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: name),
+                    const SizedBox(width: NocturneSpace.s2),
+                    _statusTag(tokens),
+                    if (trailing != null) ...[
+                      const SizedBox(width: NocturneSpace.s2),
+                      trailing!(summary),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: NocturneSpace.s1),
+                Row(
+                  children: [
+                    Text(
+                      'Open ',
+                      style: TextStyle(fontSize: 12, color: tokens.neutral500),
+                    ),
+                    tasks,
+                    const SizedBox(width: NocturneSpace.s3),
+                    Expanded(child: bar),
+                  ],
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(flex: 3, child: name),
+                Expanded(child: tasks),
+                Expanded(flex: 3, child: bar),
+                Expanded(
+                  flex: 2,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: _statusTag(tokens),
+                  ),
+                ),
+                if (trailing != null) ...[
+                  const SizedBox(width: NocturneSpace.s2),
+                  trailing!(summary),
+                ],
               ],
             ),
-          ),
-          Expanded(
-            child: Text(
-              '${summary.open}/${summary.total}',
-              style: TextStyle(fontSize: 12, color: tokens.neutral400),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: progress == null
-                ? Text(
-                    '–',
-                    style: TextStyle(fontSize: 12, color: tokens.neutral500),
-                  )
-                : Row(
-                    children: [
-                      Expanded(
-                        child: GaugeBar(
-                          value: progress,
-                          color: color,
-                          segments: 12,
-                          height: 6,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width: 38,
-                        child: Text(
-                          '${(progress * 100).round()}%',
-                          style: const TextStyle(
-                            fontFamily: kPanelFont,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: _statusTag(tokens),
-            ),
-          ),
-          if (trailing != null) ...[
-            const SizedBox(width: 8),
-            trailing!(summary),
-          ],
-        ],
-      ),
     );
 
     return Builder(
       builder: (rowContext) => Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(NocturneRadius.md),
+          borderRadius: BorderRadius.circular(NocturneRadius.sm),
           mouseCursor: SystemMouseCursors.click,
           hoverColor: context.nocturneHoverColor,
-          splashColor: context.nocturneSplashColor,
-          highlightColor: context.nocturneSplashColor,
           onTap: () => onOpenProject(project.id, rowContext),
           child: content,
         ),
@@ -1135,7 +1279,11 @@ class _ProjectsTableRow extends StatelessWidget {
       );
     }
     if (summary.hasOverdue) {
-      return const NocturneTag(label: 'OVERDUE', color: NocturnePriority.high);
+      return NocturneTag(
+        label: 'Overdue',
+        color: NocturnePriority.high,
+        icon: Icons.error_outline,
+      );
     }
     if (summary.open > 0) {
       return NocturneTag(label: '${summary.open} open');
@@ -1164,12 +1312,12 @@ class _RecentActivityCard extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16.8),
+        padding: const EdgeInsets.all(NocturneSpace.s3),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _CardHeader(icon: Icons.history, label: 'Recent Activity'),
-            const SizedBox(height: 12),
+            const _CardHeader(icon: Icons.history, label: 'Recent activity'),
+            const SizedBox(height: NocturneSpace.s2),
             if (items.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1179,25 +1327,21 @@ class _RecentActivityCard extends StatelessWidget {
                 ),
               )
             else
-              DecoratedBox(
-                decoration: panelDecoration(
-                  context,
-                  depth: PanelDepth.recessed,
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: NocturneSpace.s2,
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: SizedBox(
-                    height: (_visibleRows * _ActivityFeedRow.height).clamp(
-                      0,
-                      items.length * _ActivityFeedRow.height,
-                    ),
-                    child: Scrollbar(
-                      child: ListView.builder(
-                        itemCount: items.length,
-                        itemExtent: _ActivityFeedRow.height,
-                        itemBuilder: (context, index) =>
-                            _ActivityFeedRow(item: items[index]),
-                      ),
+                child: SizedBox(
+                  height: (_visibleRows * _ActivityFeedRow.height).clamp(
+                    0,
+                    items.length * _ActivityFeedRow.height,
+                  ),
+                  child: Scrollbar(
+                    child: ListView.builder(
+                      itemCount: items.length,
+                      itemExtent: _ActivityFeedRow.height,
+                      itemBuilder: (context, index) =>
+                          _ActivityFeedRow(item: items[index]),
                     ),
                   ),
                 ),
@@ -1216,7 +1360,7 @@ class _ActivityFeedRow extends StatelessWidget {
 
   /// Fixed so [_RecentActivityCard] can size its scroll viewport to an
   /// exact number of rows via `ListView.builder`'s `itemExtent`.
-  static const double height = 32;
+  static const double height = 36;
 
   @override
   Widget build(BuildContext context) {
@@ -1226,20 +1370,16 @@ class _ActivityFeedRow extends StatelessWidget {
     final (icon, color) = switch (entry.kind) {
       ActivityKind.projectCreated => (Icons.create_new_folder_outlined, accent),
       ActivityKind.taskAdded => (Icons.add_circle_outline, accent),
-      ActivityKind.taskCompleted => (Icons.check_circle, NocturneStatus.done),
+      ActivityKind.taskCompleted => (Icons.check_circle, tokens.done),
       ActivityKind.taskEdited => (Icons.edit_outlined, accent),
     };
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: NocturneSpace.s2),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Icon(icon, size: 14, color: color),
-          ),
-          const SizedBox(width: 9),
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: NocturneSpace.s2),
           Expanded(
             child: Text(
               entry.description,
@@ -1248,16 +1388,19 @@ class _ActivityFeedRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(width: 8),
-          Text(
-            item.project.name,
-            style: TextStyle(fontSize: 11, color: tokens.neutral500),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          const SizedBox(width: NocturneSpace.s2),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 120),
+            child: Text(
+              item.project.name,
+              style: TextStyle(fontSize: 11, color: tokens.neutral500),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: NocturneSpace.s1),
           Text('·', style: TextStyle(fontSize: 11, color: tokens.neutral500)),
-          const SizedBox(width: 6),
+          const SizedBox(width: NocturneSpace.s1),
           Text(
             _relativeTime(entry.timestamp),
             style: TextStyle(fontSize: 11, color: tokens.neutral500),

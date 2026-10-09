@@ -15,8 +15,8 @@ Future<T?> showBlurredDialog<T>({
     context: context,
     barrierDismissible: barrierDismissible,
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-    barrierColor: Colors.black.withValues(alpha: 0.35),
-    transitionDuration: const Duration(milliseconds: 220),
+    barrierColor: Colors.black.withValues(alpha: 0.4),
+    transitionDuration: const Duration(milliseconds: 160),
     pageBuilder: (context, animation, secondaryAnimation) {
       return SafeArea(
         child: Center(child: Builder(builder: builder)),
@@ -29,10 +29,10 @@ Future<T?> showBlurredDialog<T>({
         builder: (context, child) {
           final value = Curves.easeOut.transform(animation.value);
           return BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8 * value, sigmaY: 8 * value),
+            filter: ImageFilter.blur(sigmaX: 3 * value, sigmaY: 3 * value),
             child: Opacity(
               opacity: value,
-              child: Transform.scale(scale: 0.94 + 0.06 * value, child: child),
+              child: Transform.scale(scale: 0.97 + 0.03 * value, child: child),
             ),
           );
         },

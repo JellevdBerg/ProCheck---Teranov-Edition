@@ -4,16 +4,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/projects_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
+import '../theme/nocturne_theme.dart';
 import '../widgets/panel/panel.dart';
 import '../widgets/project_name_lookup.dart';
 import '../widgets/smart_view_task_row.dart';
-import 'empty_state.dart';
+import '../widgets/task_filter_bar.dart';
+
+/// Page gutter: 16 compact, 24 wider, and the content is centred in a column
+/// of at most [maxWidth] on large windows (lists are not stretched).
+double screenGutter(double width, {double maxWidth = 960}) {
+  final g = width < NocturneBreakpoints.compact
+      ? NocturneSpace.s4
+      : NocturneSpace.s6;
+  return width - 2 * g > maxWidth ? (width - maxWidth) / 2 : g;
+}
 
 bool _isSameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
 
 /// Every unchecked task due today, across every project (and unfiled).
-class TodayScreen extends ConsumerWidget {
+class TodayScreen extends ConsumerStatefulWidget {
   const TodayScreen({super.key, required this.onOpenTask});
 
   /// Opens a tapped task's home — its project, scrolled to and
@@ -23,8 +33,17 @@ class TodayScreen extends ConsumerWidget {
   onOpenTask;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final tasks = ref.watch(tasksProvider);
+  ConsumerState<TodayScreen> createState() => _TodayScreenState();
+}
+
+class _TodayScreenState extends ConsumerState<TodayScreen> {
+  TaskFilter _filter = const TaskFilter();
+
+  @override
+  Widget build(BuildContext context) {
+    final onOpenTask = widget.onOpenTask;
+    final userId = ref.watch(taskFilterOptionsProvider).userId;
+    final tasks = _filter.apply(ref.watch(tasksProvider), userId);
     final projects = ref.watch(projectsProvider);
     final reduceMotion = ref.watch(settingsProvider).reduceMotion;
     final now = DateTime.now();
@@ -36,9 +55,14 @@ class TodayScreen extends ConsumerWidget {
           ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
 
     if (todayTasks.isEmpty) {
-      return const EmptyState(
-        icon: Icons.wb_sunny_outlined,
-        message: 'Nothing due today.',
+      return LayoutBuilder(
+        builder: (context, c) => FilteredEmptyState(
+          icon: Icons.wb_sunny_outlined,
+          message: 'Nothing due today.',
+          filter: _filter,
+          onChanged: (f) => setState(() => _filter = f),
+          gutter: screenGutter(c.maxWidth),
+        ),
       );
     }
 
@@ -49,39 +73,69 @@ class TodayScreen extends ConsumerWidget {
     // the rows actually on screen get built — the DecoratedSliver
     // replicates the app's flat (elevation: 0) CardThemeData so this looks
     // identical to a real Card.
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16.8, 16.8, 16.8, 0),
-          sliver: SliverToBoxAdapter(
-            child: Text(
-              'Today',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-          ),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16.8, 16.8, 16.8, 16.8),
-          sliver: DecoratedSliver(
-            decoration: panelDecoration(context, depth: PanelDepth.flat),
-            sliver: SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 11.2),
-              sliver: SliverList.builder(
-                itemCount: todayTasks.length,
-                itemBuilder: (context, index) {
-                  final task = todayTasks[index];
-                  return SmartViewTaskRow(
-                    task: task,
-                    reduceMotion: reduceMotion,
-                    projectName: projectNameFor(projectNames, task.projectId),
-                    onOpenTask: onOpenTask,
-                  );
-                },
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final gutter = screenGutter(constraints.maxWidth);
+        return CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                gutter,
+                NocturneSpace.s4,
+                gutter,
+                0,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: Text(
+                  'Today',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
               ),
             ),
-          ),
-        ),
-      ],
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(gutter, 0, gutter, 0),
+              sliver: SliverToBoxAdapter(
+                child: TaskFilterBar(
+                  padding: const EdgeInsets.only(top: NocturneSpace.s3),
+                  filter: _filter,
+                  onChanged: (f) => setState(() => _filter = f),
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                gutter,
+                NocturneSpace.s3,
+                gutter,
+                NocturneSpace.s4,
+              ),
+              sliver: DecoratedSliver(
+                decoration: panelDecoration(context),
+                sliver: SliverPadding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: NocturneSpace.s2,
+                  ),
+                  sliver: SliverList.builder(
+                    itemCount: todayTasks.length,
+                    itemBuilder: (context, index) {
+                      final task = todayTasks[index];
+                      return SmartViewTaskRow(
+                        task: task,
+                        reduceMotion: reduceMotion,
+                        projectName: projectNameFor(
+                          projectNames,
+                          task.projectId,
+                        ),
+                        onOpenTask: onOpenTask,
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

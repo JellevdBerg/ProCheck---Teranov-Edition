@@ -6,6 +6,7 @@ import '../models/attachment.dart';
 import '../models/task_template.dart';
 import '../models/template_subtask.dart';
 import '../providers/task_templates_provider.dart';
+import '../theme/nocturne_theme.dart';
 import '../widgets/attachments_editor.dart';
 import '../widgets/notes_field.dart';
 import '../widgets/panel/panel.dart';
@@ -96,116 +97,152 @@ class _TaskTemplateEditorScreenState
           ),
         ],
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Main task name'),
-            ),
-          ),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 260),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  NotesField(controller: _notesController),
-                  const SizedBox(height: 12),
-                  AttachmentsEditor(
-                    attachments: _attachments,
-                    onAdd: (picked) =>
-                        setState(() => _attachments.addAll(picked)),
-                    onRemoveAt: (index) =>
-                        setState(() => _attachments.removeAt(index)),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _newSubtaskController,
-                    decoration: const InputDecoration(
-                      hintText: 'Add a subtask',
-                      isDense: true,
-                    ),
-                    onSubmitted: (_) => _addSubtask(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  icon: const Icon(Icons.add),
-                  onPressed: _addSubtask,
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: const StampLabel('Subtasks'),
-          ),
-          const SizedBox(height: 6),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: DecoratedBox(
-                decoration: panelDecoration(
-                  context,
-                  depth: PanelDepth.recessed,
-                ),
-                child: _subtasks.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No subtasks yet. Add one above.',
-                          style: Theme.of(context).textTheme.bodyLarge,
-                        ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final gutter = width < NocturneBreakpoints.compact
+              ? NocturneSpace.s4
+              : NocturneSpace.s6;
+          final twoColumns = width >= 900;
+
+          final details = _detailsColumn();
+          final subtasks = _subtasksColumn(context);
+
+          return Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1080),
+              child: SingleChildScrollView(
+                padding: EdgeInsets.all(gutter),
+                child: twoColumns
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: details),
+                          const SizedBox(width: NocturneSpace.s6),
+                          Expanded(child: subtasks),
+                        ],
                       )
-                    : ReorderableListView.builder(
-                        // Without this, Flutter also auto-appends its own
-                        // drag handle after the trailing delete button —
-                        // leaving two handle-looking icons per row where only
-                        // the second one actually did anything. Wiring the
-                        // existing leading icon as the real (only) handle
-                        // instead matches where a drag handle sits everywhere
-                        // else in the app (TaskTile's reorderIndex).
-                        buildDefaultDragHandles: false,
-                        itemCount: _subtasks.length,
-                        onReorderItem: (oldIndex, newIndex) {
-                          setState(() {
-                            final subtask = _subtasks.removeAt(oldIndex);
-                            _subtasks.insert(newIndex, subtask);
-                          });
-                        },
-                        itemBuilder: (context, index) {
-                          final subtask = _subtasks[index];
-                          return ListTile(
-                            key: ValueKey(subtask.id),
-                            leading: ReorderableDragStartListener(
-                              index: index,
-                              child: const Icon(Icons.drag_handle),
-                            ),
-                            title: Text(subtask.title),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete_outline),
-                              onPressed: () =>
-                                  setState(() => _subtasks.removeAt(index)),
-                            ),
-                          );
-                        },
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          details,
+                          const SizedBox(height: NocturneSpace.s6),
+                          subtasks,
+                        ],
                       ),
               ),
             ),
-          ),
-        ],
+          );
+        },
       ),
+    );
+  }
+
+  Widget _detailsColumn() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _nameController,
+          decoration: const InputDecoration(labelText: 'Main task name'),
+        ),
+        const SizedBox(height: NocturneSpace.s3),
+        NotesField(controller: _notesController),
+        const SizedBox(height: NocturneSpace.s3),
+        AttachmentsEditor(
+          attachments: _attachments,
+          onAdd: (picked) => setState(() => _attachments.addAll(picked)),
+          onRemoveAt: (index) =>
+              setState(() => _attachments.removeAt(index)),
+        ),
+      ],
+    );
+  }
+
+  Widget _subtasksColumn(BuildContext context) {
+    final tokens = context.nocturne;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const StampLabel('Subtasks'),
+        const SizedBox(height: NocturneSpace.s2),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _newSubtaskController,
+                decoration: const InputDecoration(
+                  hintText: 'Add a subtask',
+                  isDense: true,
+                ),
+                onSubmitted: (_) => _addSubtask(),
+              ),
+            ),
+            const SizedBox(width: NocturneSpace.s2),
+            IconButton.filled(
+              icon: const Icon(Icons.add),
+              onPressed: _addSubtask,
+            ),
+          ],
+        ),
+        const SizedBox(height: NocturneSpace.s3),
+        // Material (not a DecoratedBox) so the ListTiles' ink stays visible.
+        Material(
+          color: tokens.surface,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(NocturneRadius.lg),
+            side: BorderSide(color: tokens.edge),
+          ),
+          child: _subtasks.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.all(NocturneSpace.s4),
+                  child: Text(
+                    'No subtasks yet. Add one above.',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: tokens.neutral500,
+                    ),
+                  ),
+                )
+              : ReorderableListView.builder(
+                  // Without this, Flutter also auto-appends its own
+                  // drag handle after the trailing delete button —
+                  // leaving two handle-looking icons per row where only
+                  // the second one actually did anything. Wiring the
+                  // existing leading icon as the real (only) handle
+                  // instead matches where a drag handle sits everywhere
+                  // else in the app (TaskTile's reorderIndex).
+                  buildDefaultDragHandles: false,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _subtasks.length,
+                  onReorderItem: (oldIndex, newIndex) {
+                    setState(() {
+                      final subtask = _subtasks.removeAt(oldIndex);
+                      _subtasks.insert(newIndex, subtask);
+                    });
+                  },
+                  itemBuilder: (context, index) {
+                    final subtask = _subtasks[index];
+                    return ListTile(
+                      key: ValueKey(subtask.id),
+                      dense: true,
+                      leading: ReorderableDragStartListener(
+                        index: index,
+                        child: const Icon(Icons.drag_handle),
+                      ),
+                      title: Text(subtask.title),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () =>
+                            setState(() => _subtasks.removeAt(index)),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 

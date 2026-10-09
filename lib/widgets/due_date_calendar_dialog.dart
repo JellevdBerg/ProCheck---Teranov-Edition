@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../theme/nocturne_theme.dart';
 import 'nocturne/nocturne_widgets.dart';
-import 'panel/panel.dart';
 
 const _monthNames = [
   'January',
@@ -120,15 +119,11 @@ class _DueDateCalendarDialogState extends State<_DueDateCalendarDialog> {
     };
 
     return Dialog(
-      backgroundColor: tokens.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(NocturneRadius.lg),
-        side: BorderSide(color: tokens.edge),
-      ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: SizedBox(
-          width: 320,
+        padding: const EdgeInsets.all(NocturneSpace.s4),
+        // Capped, not fixed: a narrow window just gives the dialog less.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 320),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -136,10 +131,11 @@ class _DueDateCalendarDialogState extends State<_DueDateCalendarDialog> {
               Row(
                 children: [
                   Expanded(
-                    child: StampLabel(
+                    child: Text(
                       '${_monthNames[_visibleMonth.month - 1]} ${_visibleMonth.year}',
-                      size: 16,
-                      color: tokens.text,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
                   IconButton(
@@ -154,12 +150,9 @@ class _DueDateCalendarDialogState extends State<_DueDateCalendarDialog> {
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                helperText,
-                style: TextStyle(fontSize: 13, color: tokens.neutral500),
-              ),
-              const SizedBox(height: 12),
+              const SizedBox(height: NocturneSpace.s1),
+              Text(helperText, style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: NocturneSpace.s3),
               Row(
                 children: [
                   for (final label in _weekdayLabels)
@@ -169,6 +162,7 @@ class _DueDateCalendarDialogState extends State<_DueDateCalendarDialog> {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 11,
+                          fontWeight: FontWeight.w600,
                           color: tokens.neutral500,
                         ),
                       ),
@@ -220,18 +214,12 @@ class _DueDateCalendarDialogState extends State<_DueDateCalendarDialog> {
                             Container(
                               decoration: BoxDecoration(
                                 color: accent.withValues(alpha: 0.16),
-                                borderRadius: BorderRadius.only(
-                                  topLeft: isRangeStart
-                                      ? const Radius.circular(16)
+                                borderRadius: BorderRadius.horizontal(
+                                  left: isRangeStart
+                                      ? const Radius.circular(NocturneRadius.lg)
                                       : Radius.zero,
-                                  bottomLeft: isRangeStart
-                                      ? const Radius.circular(16)
-                                      : Radius.zero,
-                                  topRight: isRangeEnd
-                                      ? const Radius.circular(16)
-                                      : Radius.zero,
-                                  bottomRight: isRangeEnd
-                                      ? const Radius.circular(16)
+                                  right: isRangeEnd
+                                      ? const Radius.circular(NocturneRadius.lg)
                                       : Radius.zero,
                                 ),
                               ),
@@ -263,21 +251,21 @@ class _DueDateCalendarDialogState extends State<_DueDateCalendarDialog> {
                   );
                 },
               ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              const SizedBox(height: NocturneSpace.s4),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: NocturneSpace.s2,
+                runSpacing: NocturneSpace.s2,
                 children: [
                   NocturneButton(
                     label: 'Cancel',
                     onPressed: () => Navigator.pop(context),
                   ),
-                  const SizedBox(width: 6),
                   if (_taps.isNotEmpty)
                     NocturneButton(
                       label: 'Clear',
                       onPressed: () => setState(_taps.clear),
                     ),
-                  const SizedBox(width: 6),
                   NocturneButton(
                     label: 'Save',
                     variant: NocturneButtonVariant.primary,

@@ -47,16 +47,13 @@ class MiniCalendar extends StatelessWidget {
         a.year == b.year && a.month == b.month && a.day == b.day;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: StampLabel(
-              '${_monthNames[month.month - 1]} ${month.year}',
-              size: 12,
-            ),
+            child: StampLabel('${_monthNames[month.month - 1]} ${month.year}'),
           ),
           Row(
             children: [
@@ -66,8 +63,7 @@ class MiniCalendar extends StatelessWidget {
                     label,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontFamily: kPanelFont,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                       fontSize: 11,
                       color: tokens.neutral500,
                     ),
@@ -77,17 +73,17 @@ class MiniCalendar extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           DecoratedBox(
-            decoration: panelDecoration(context, depth: PanelDepth.recessed),
+            decoration: const BoxDecoration(),
             child: Padding(
-              padding: const EdgeInsets.all(4),
+              padding: EdgeInsets.zero,
               child: GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 7,
-                  mainAxisSpacing: 3,
-                  crossAxisSpacing: 3,
-                  childAspectRatio: 1.6,
+                  mainAxisSpacing: 2,
+                  crossAxisSpacing: 2,
+                  childAspectRatio: 1.35,
                 ),
                 itemCount: startOffset + daysInMonth,
                 itemBuilder: (context, index) {

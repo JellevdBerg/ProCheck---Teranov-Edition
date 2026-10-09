@@ -40,35 +40,54 @@ class TeamScreen extends ConsumerWidget {
           (m, r) => r.openTaskCount > m ? r.openTaskCount : m,
         );
 
-        return Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Team', style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 4),
-              Text(
-                'Open tasks and estimated remaining time per teammate.',
-                style: TextStyle(color: tokens.neutral500),
-              ),
-              const SizedBox(height: 20),
-              Expanded(
-                child: DecoratedBox(
-                  decoration: panelDecoration(context),
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 4,
-                    ),
-                    itemCount: rows.length,
-                    separatorBuilder: (_, _) => const Divider(height: 1),
-                    itemBuilder: (context, index) =>
-                        _TeamMemberRow(row: rows[index], maxOpen: maxOpen),
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final gutter = constraints.maxWidth < NocturneBreakpoints.compact
+                ? NocturneSpace.s4
+                : NocturneSpace.s6;
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1080),
+                child: Padding(
+                  padding: EdgeInsets.all(gutter),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Team',
+                        style: Theme.of(context).textTheme.displaySmall,
+                      ),
+                      const SizedBox(height: NocturneSpace.s1),
+                      Text(
+                        'Open tasks and estimated remaining time per teammate.',
+                        style: TextStyle(color: tokens.neutral500),
+                      ),
+                      const SizedBox(height: NocturneSpace.s4),
+                      Expanded(
+                        child: DecoratedBox(
+                          decoration: panelDecoration(context),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              NocturneRadius.lg,
+                            ),
+                            child: ListView.separated(
+                              itemCount: rows.length,
+                              separatorBuilder: (_, _) => const Divider(),
+                              itemBuilder: (context, index) => _TeamMemberRow(
+                                row: rows[index],
+                                maxOpen: maxOpen,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -112,6 +131,7 @@ class _TeamMemberRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = context.nocturne;
     final hours = row.totalMinutes ~/ 60;
     final minutes = row.totalMinutes % 60;
     final estimateLabel = row.totalMinutes == 0
@@ -120,61 +140,85 @@ class _TeamMemberRow extends StatelessWidget {
         ? '${hours}h ${minutes}m'
         : '${minutes}m';
 
-    const figures = [FontFeature.tabularFigures()];
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        children: [
-          AvatarWell(
-            initial: row.member.displayName.isEmpty
-                ? '?'
-                : row.member.displayName[0].toUpperCase(),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(row.member.displayName),
-                const SizedBox(height: 3),
-                RolePlate(isManager: row.member.isManager),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+    final who = Row(
+      children: [
+        AvatarWell(
+          initial: row.member.displayName.isEmpty
+              ? '?'
+              : row.member.displayName[0].toUpperCase(),
+        ),
+        const SizedBox(width: NocturneSpace.s3),
+        Expanded(
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: NocturneSpace.s2,
+            runSpacing: NocturneSpace.s1,
             children: [
-              Text(
-                '${row.openTaskCount} open',
-                style: const TextStyle(fontFeatures: figures),
-              ),
-              const SizedBox(height: 4),
-              SizedBox(
-                width: 80,
-                child: GaugeBar(
-                  value: row.openTaskCount / maxOpen,
-                  segments: 10,
-                  height: 6,
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 260),
+                child: Text(
+                  row.member.displayName,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyLarge,
                 ),
               ),
+              RolePlate(isManager: row.member.isManager),
             ],
           ),
-          const SizedBox(width: 20),
-          SizedBox(
-            width: 112,
-            child: DecoratedBox(
-              decoration: panelDecoration(context, depth: PanelDepth.recessed),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Text(
-                  estimateLabel,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(fontFeatures: figures),
+        ),
+      ],
+    );
+    final open = Text(
+      '${row.openTaskCount} open',
+      style: TextStyle(fontSize: 13, color: tokens.neutral300),
+    );
+    final estimate = Text(
+      estimateLabel,
+      textAlign: TextAlign.right,
+      style: TextStyle(fontSize: 13, color: tokens.neutral300),
+    );
+    final gauge = GaugeBar(value: row.openTaskCount / maxOpen);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: NocturneSpace.s3,
+        vertical: NocturneSpace.s2,
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Stack the occupancy line under the person when narrow.
+          if (constraints.maxWidth < 560) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                who,
+                const SizedBox(height: NocturneSpace.s2),
+                Row(
+                  children: [
+                    open,
+                    const SizedBox(width: NocturneSpace.s3),
+                    Expanded(child: gauge),
+                    const SizedBox(width: NocturneSpace.s3),
+                    estimate,
+                  ],
                 ),
-              ),
+              ],
+            );
+          }
+          return ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 40),
+            child: Row(
+              children: [
+                Expanded(child: who),
+                const SizedBox(width: NocturneSpace.s4),
+                SizedBox(width: 64, child: open),
+                SizedBox(width: 140, child: gauge),
+                const SizedBox(width: NocturneSpace.s4),
+                SizedBox(width: 88, child: estimate),
+              ],
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }

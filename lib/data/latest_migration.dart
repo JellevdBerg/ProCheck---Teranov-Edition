@@ -6,4 +6,4 @@
 /// into the SQL editor rather than via the CLI at all) — this is what the
 /// *code* shipped with, not a live read of the database. Update this
 /// alongside adding a new migration file.
-const latestMigration = '20261008140000_it_department.sql';
+const latestMigration = '20261009120000_protect_operator_department.sql';
