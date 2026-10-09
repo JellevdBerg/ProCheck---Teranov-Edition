@@ -50,3 +50,6 @@ light + dark; signed-out (single user) and signed-in as member, manager, IT, Ope
 
 ## Fonts and sound
 IBM Plex Sans Regular/Medium/SemiBold, self-hosted, SIL OFL (`assets/fonts/IBMPlexSans-OFL.txt`). Check-off sound: `assets/sounds/checkoff_soft.wav` (a soft ~130ms pluck); `checkoff_click.wav` and `checkoff_chime.wav` remain, and `SoundService` documents how to switch back.
+
+## Added with the redesign (approved)
+Quick theme toggle (sidebar footer) · soft check-off sound · "Assigned to me" / department filter chips (Today, Upcoming, Dashboard) · Ctrl/Cmd+K command palette · keyboard check-off (↑/↓ + Space on a focused row) · Compact rows setting · owner line and "You" label in task detail (via the existing `profile_directory()`).
