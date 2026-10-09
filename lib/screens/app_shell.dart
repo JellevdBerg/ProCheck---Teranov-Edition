@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/project.dart';
@@ -9,6 +10,7 @@ import '../providers/projects_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/undo_provider.dart';
 import '../theme/nocturne_theme.dart';
+import '../widgets/command_palette.dart';
 import '../widgets/create_task_sheet.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
 import '../widgets/sidebar/app_sidebar.dart';
@@ -259,6 +261,15 @@ class _AppShellState extends ConsumerState<AppShell>
     await showCreateTaskSheet(context);
   }
 
+  void _openCommandPalette() => showCommandPalette(
+    context,
+    onScreenSelected: _switchScreen,
+    onOpenProject: _openFavoriteProject,
+    onOpenTask: _openTask,
+    onNewTask: _newTaskShortcut,
+    onNewProject: _newProjectShortcut,
+  );
+
   /// Pops the most recent deletion off the undo stack (project or task —
   /// see undo_provider.dart), restoring it fully. Repeated Ctrl+Z walks
   /// back through consecutive deletions, unlike the floating "Undo" button
@@ -286,6 +297,14 @@ class _AppShellState extends ConsumerState<AppShell>
     for (final activator
         in settings.shortcutFor(ShortcutAction.undo).toActivators()) {
       bindings[activator] = _undoShortcut;
+    }
+
+    // Command palette: plain hard-coded Ctrl/Cmd+K, not a customizable action.
+    for (final activator in const [
+      SingleActivator(LogicalKeyboardKey.keyK, control: true),
+      SingleActivator(LogicalKeyboardKey.keyK, meta: true),
+    ]) {
+      bindings[activator] = _openCommandPalette;
     }
 
     // CallbackShortcuts' own internal Focus node has canRequestFocus: false
