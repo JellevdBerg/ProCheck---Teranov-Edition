@@ -3,11 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/supabase_config.dart';
 import '../models/activity_entry.dart';
 import '../models/project.dart';
 import '../models/task.dart';
 import '../models/task_priority.dart';
 import '../providers/projects_provider.dart';
+import '../providers/roles_provider.dart';
+import 'org_chart_screen.dart';
 import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
@@ -206,7 +209,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 }
 
-class _DashboardHeader extends StatelessWidget {
+class _DashboardHeader extends ConsumerWidget {
   const _DashboardHeader({required this.title});
 
   final String title;
@@ -236,16 +239,34 @@ class _DashboardHeader extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final now = DateTime.now();
     final dateLabel =
         '${_weekdays[now.weekday - 1]}, ${_months[now.month - 1]} ${now.day}';
-    return Column(
+    final heading = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(title, style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: NocturneSpace.s1),
         Text(dateLabel, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
+    // IT and the Operator get the organization chart (departments, managers
+    // and members at a glance).
+    final admin = isSupabaseConfigured &&
+        supabase.auth.currentUser != null &&
+        ref.watch(permissionsProvider).isAdmin;
+    if (!admin) return heading;
+    return Row(
+      children: [
+        Expanded(child: heading),
+        NocturneButton(
+          label: 'Organization',
+          icon: Icons.account_tree_outlined,
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const OrgChartScreen()),
+          ),
+        ),
       ],
     );
   }

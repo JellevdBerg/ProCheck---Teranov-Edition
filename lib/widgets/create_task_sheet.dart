@@ -5,6 +5,7 @@ import '../models/project.dart';
 import '../models/task.dart';
 import '../models/task_template.dart';
 import '../providers/projects_provider.dart';
+import '../providers/roles_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/task_templates_provider.dart';
 import '../providers/tasks_provider.dart';
@@ -137,6 +138,9 @@ class _CreateTaskSheetState extends ConsumerState<_CreateTaskSheet> {
               });
             },
           ),
+          // Only managers (and roles that can add tasks to projects) may put a
+          // task into a project; everyone else's tasks are personal.
+          if (ref.watch(permissionsProvider).manageTasks) ...[
           const SizedBox(height: 16),
           DropdownButtonFormField<String?>(
             initialValue: _selectedProjectId,
@@ -156,6 +160,7 @@ class _CreateTaskSheetState extends ConsumerState<_CreateTaskSheet> {
             onChanged: (projectId) =>
                 setState(() => _selectedProjectId = projectId),
           ),
+          ],
           const SizedBox(height: 24),
           Align(
             alignment: Alignment.centerRight,

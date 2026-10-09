@@ -327,6 +327,14 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
     _persist(project.copyWith(archived: true));
   }
 
+  /// Hands the project to another department (IT / Operator only — the
+  /// database rejects anyone else). Its tasks follow it.
+  void setProjectDepartment(String id, String departmentId) {
+    final project = _box.get(id);
+    if (project == null) return;
+    _persist(project.copyWith(departmentId: departmentId));
+  }
+
   void toggleFavorite(String id) {
     final project = _box.get(id);
     if (project == null) return;

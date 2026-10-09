@@ -5,13 +5,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/activity_entry.dart';
 import '../models/project.dart';
+import '../providers/departments_provider.dart';
 import '../providers/projects_provider.dart';
+import '../providers/roles_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/create_task_sheet.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
 import '../widgets/panel/panel.dart';
+import '../widgets/people_plates.dart';
 import '../widgets/pop_out_removal.dart';
 import '../widgets/task_tile.dart';
 import '../widgets/text_prompt_dialog.dart';
@@ -313,6 +316,9 @@ class _Header extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = context.nocturne;
+    final perms = ref.watch(permissionsProvider);
+    final departments = ref.watch(departmentsProvider).valueOrNull ?? const [];
+    final owner = departments.where((d) => d.id == project.departmentId).firstOrNull;
 
     final identity = Row(
       children: [
@@ -343,6 +349,42 @@ class _Header extends ConsumerWidget {
                 constraints: const BoxConstraints(maxWidth: 240),
                 child: GaugeBar(value: progress, color: accentColor, height: 4),
               ),
+              if (owner != null) ...[
+                const SizedBox(height: NocturneSpace.s1),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Owned by ', style: TextStyle(fontSize: 12, color: tokens.neutral400)),
+                    Flexible(
+                      child: DepartmentPlate(
+                        name: owner.name,
+                        isOperator: owner.isOperator,
+                        isIt: owner.isIt,
+                      ),
+                    ),
+                    // Only IT / Operator can hand a project to another department.
+                    if (perms.isAdmin)
+                      PopupMenuButton<String>(
+                        tooltip: 'Change owning department',
+                        icon: const Icon(Icons.swap_horiz, size: 18),
+                        onSelected: (id) => ref
+                            .read(projectsProvider.notifier)
+                            .setProjectDepartment(project.id, id),
+                        itemBuilder: (_) => [
+                          for (final d in departments.where((d) => !d.isOperator))
+                            PopupMenuItem(
+                              value: d.id,
+                              child: Row(children: [
+                                Icon(d.id == project.departmentId ? Icons.check : null, size: 16),
+                                const SizedBox(width: 8),
+                                Text(d.name),
+                              ]),
+                            ),
+                        ],
+                      ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -354,7 +396,7 @@ class _Header extends ConsumerWidget {
       runSpacing: NocturneSpace.s1,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        IconButton(
+        if (perms.editProjects) IconButton(
           icon: const Icon(Icons.edit_outlined),
           tooltip: 'Edit project',
           onPressed: () async {
@@ -372,7 +414,7 @@ class _Header extends ConsumerWidget {
             }
           },
         ),
-        IconButton(
+        if (perms.editProjects) IconButton(
           icon: Icon(project.archived ? Icons.restore : Icons.archive_outlined),
           tooltip: project.archived ? 'Unarchive project' : 'Archive project',
           onPressed: () {
@@ -385,7 +427,7 @@ class _Header extends ConsumerWidget {
             }
           },
         ),
-        IconButton(
+        if (perms.isManager || perms.isAdmin) IconButton(
           icon: const Icon(Icons.delete_outline),
           tooltip: 'Delete project',
           onPressed: () async {
@@ -402,7 +444,7 @@ class _Header extends ConsumerWidget {
           },
         ),
         const SizedBox(width: NocturneSpace.s1),
-        NocturneButton(
+        if (perms.manageTasks) NocturneButton(
           label: 'New task',
           icon: Icons.add,
           variant: NocturneButtonVariant.primary,

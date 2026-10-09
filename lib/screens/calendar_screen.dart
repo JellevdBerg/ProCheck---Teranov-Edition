@@ -351,13 +351,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   ],
                 ),
                 const SizedBox(height: NocturneSpace.s2),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    taskmaster,
-                    const SizedBox(width: NocturneSpace.s2),
-                    viewToggle,
-                  ],
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: NocturneSpace.s2,
+                  runSpacing: NocturneSpace.s2,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [taskmaster, viewToggle],
                 ),
               ] else
                 Row(
