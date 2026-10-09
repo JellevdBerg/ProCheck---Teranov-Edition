@@ -4,10 +4,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/projects_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
+import '../theme/nocturne_theme.dart';
 import '../widgets/panel/panel.dart';
 import '../widgets/project_name_lookup.dart';
 import '../widgets/smart_view_task_row.dart';
 import 'empty_state.dart';
+
+/// Page gutter: 16 compact, 24 wider, and the content is centred in a column
+/// of at most [maxWidth] on large windows (lists are not stretched).
+double screenGutter(double width, {double maxWidth = 960}) {
+  final g = width < NocturneBreakpoints.compact
+      ? NocturneSpace.s4
+      : NocturneSpace.s6;
+  return width - 2 * g > maxWidth ? (width - maxWidth) / 2 : g;
+}
 
 bool _isSameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
@@ -49,39 +59,59 @@ class TodayScreen extends ConsumerWidget {
     // the rows actually on screen get built — the DecoratedSliver
     // replicates the app's flat (elevation: 0) CardThemeData so this looks
     // identical to a real Card.
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16.8, 16.8, 16.8, 0),
-          sliver: SliverToBoxAdapter(
-            child: Text(
-              'Today',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-          ),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16.8, 16.8, 16.8, 16.8),
-          sliver: DecoratedSliver(
-            decoration: panelDecoration(context, depth: PanelDepth.flat),
-            sliver: SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 11.2),
-              sliver: SliverList.builder(
-                itemCount: todayTasks.length,
-                itemBuilder: (context, index) {
-                  final task = todayTasks[index];
-                  return SmartViewTaskRow(
-                    task: task,
-                    reduceMotion: reduceMotion,
-                    projectName: projectNameFor(projectNames, task.projectId),
-                    onOpenTask: onOpenTask,
-                  );
-                },
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final gutter = screenGutter(constraints.maxWidth);
+        return CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                gutter,
+                NocturneSpace.s4,
+                gutter,
+                0,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: Text(
+                  'Today',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
               ),
             ),
-          ),
-        ),
-      ],
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                gutter,
+                NocturneSpace.s3,
+                gutter,
+                NocturneSpace.s4,
+              ),
+              sliver: DecoratedSliver(
+                decoration: panelDecoration(context),
+                sliver: SliverPadding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: NocturneSpace.s2,
+                  ),
+                  sliver: SliverList.builder(
+                    itemCount: todayTasks.length,
+                    itemBuilder: (context, index) {
+                      final task = todayTasks[index];
+                      return SmartViewTaskRow(
+                        task: task,
+                        reduceMotion: reduceMotion,
+                        projectName: projectNameFor(
+                          projectNames,
+                          task.projectId,
+                        ),
+                        onOpenTask: onOpenTask,
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

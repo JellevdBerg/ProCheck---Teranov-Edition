@@ -28,6 +28,14 @@ const _dragGhostAnimationDuration = Duration(milliseconds: 150);
 const _rowTopInset = 35.0; // 6px top padding + the day-number row + 3px gap
 const _laneHeight = 30.0; // 27px bar + 3px gap below it
 const _overflowChipHeight = 20.0;
+
+/// Corner radius of a task bar (and of its weekend connector's cap).
+const _barRadius = 6.0;
+
+/// Below this column width a day cell can't hold readable bars, so the grid
+/// switches to compact cells: day number, a few dots and a "+N" count. Tapping
+/// a compact cell does what tapping its day number does.
+const _compactCellWidth = 84.0;
 const _rowBottomPadding = 6.0;
 
 const _monthNames = [
@@ -269,155 +277,206 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     void onTaskDelete(Task task) =>
         ref.read(tasksProvider.notifier).deleteTask(task.id);
 
-    return Padding(
-      padding: const EdgeInsets.all(16.8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+    return LayoutBuilder(
+      builder: (context, outer) {
+        final compact = outer.maxWidth < NocturneBreakpoints.compact;
+        final pad = compact ? NocturneSpace.s4 : NocturneSpace.s6;
+        // Roughly one grid column (the grid is inset by the page padding).
+        final colWidth = (outer.maxWidth - 2 * pad) / 7;
+
+        final todayButton = NocturneButton(
+          label: 'Today',
+          icon: Icons.today_outlined,
+          variant: NocturneButtonVariant.primary,
+          dense: true,
+          onPressed: _goToToday,
+        );
+        final chevrons = [
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            visualDensity: VisualDensity.compact,
+            onPressed: () => _step(-1),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            visualDensity: VisualDensity.compact,
+            onPressed: () => _step(1),
+          ),
+        ];
+        final headerText = Text(
+          _headerLabel,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: compact
+              ? Theme.of(context).textTheme.titleMedium
+              : Theme.of(context).textTheme.headlineSmall,
+        );
+        final taskmaster = Tooltip(
+          message: _taskmasterOn
+              ? 'Click or drag a day to add a task there'
+              : 'Turn on to click or drag on the calendar to add tasks',
+          child: NocturneButton(
+            label: 'Taskmaster',
+            icon: Icons.touch_app_outlined,
+            dense: true,
+            variant: _taskmasterOn
+                ? NocturneButtonVariant.primary
+                : NocturneButtonVariant.secondary,
+            onPressed: () {
+              _cancelDrag();
+              setState(() => _taskmasterOn = !_taskmasterOn);
+            },
+          ),
+        );
+        final viewToggle = NocturneSegmented<_CalendarView>(
+          options: _CalendarView.values,
+          value: _view,
+          labelBuilder: (v) => v == _CalendarView.week ? 'Week' : 'Month',
+          onChanged: (v) => setState(() => _view = v),
+        );
+
+        return Padding(
+          padding: EdgeInsets.all(pad),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              NocturneButton(
-                label: 'Today',
-                icon: Icons.today_outlined,
-                variant: NocturneButtonVariant.primary,
-                dense: true,
-                onPressed: _goToToday,
+              if (compact) ...[
+                // Two short rows instead of one that can't fit.
+                Row(
+                  children: [
+                    todayButton,
+                    const SizedBox(width: NocturneSpace.s2),
+                    ...chevrons,
+                    const SizedBox(width: NocturneSpace.s1),
+                    Flexible(child: headerText),
+                  ],
+                ),
+                const SizedBox(height: NocturneSpace.s2),
+                Row(
+                  children: [
+                    taskmaster,
+                    const SizedBox(width: NocturneSpace.s2),
+                    Flexible(child: viewToggle),
+                  ],
+                ),
+              ] else
+                Row(
+                  children: [
+                    todayButton,
+                    const SizedBox(width: NocturneSpace.s2),
+                    ...chevrons,
+                    const SizedBox(width: NocturneSpace.s1),
+                    Flexible(child: headerText),
+                    const Spacer(),
+                    taskmaster,
+                    const SizedBox(width: NocturneSpace.s2),
+                    viewToggle,
+                  ],
+                ),
+              const SizedBox(height: NocturneSpace.s3),
+              Row(
+                children: [
+                  for (final label in _weekdayLabels)
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          colWidth >= 110 ? label : label.substring(0, 3),
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 11,
+                            height: 16 / 11,
+                            fontWeight: FontWeight.w600,
+                            color: context.nocturne.neutral500,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.chevron_left),
-                visualDensity: VisualDensity.compact,
-                onPressed: () => _step(-1),
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right),
-                visualDensity: VisualDensity.compact,
-                onPressed: () => _step(1),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                _headerLabel,
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const Spacer(),
-              Tooltip(
-                message: _taskmasterOn
-                    ? 'Click or drag a day to add a task there'
-                    : 'Turn on to click or drag on the calendar to add tasks',
-                child: NocturneButton(
-                  label: 'Taskmaster',
-                  icon: Icons.touch_app_outlined,
-                  dense: true,
-                  variant: _taskmasterOn
-                      ? NocturneButtonVariant.primary
-                      : NocturneButtonVariant.secondary,
-                  onPressed: () {
-                    _cancelDrag();
-                    setState(() => _taskmasterOn = !_taskmasterOn);
+              const SizedBox(height: NocturneSpace.s1),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final gridSize = constraints.biggest;
+                    final rowsCount = _view == _CalendarView.month ? 6 : 1;
+                    final weekStart = _view == _CalendarView.month
+                        ? gridStart
+                        : _weekStartOf(_anchor);
+
+                    DateTime dateAt(Offset local) {
+                      final col = (local.dx / gridSize.width * 7).floor().clamp(
+                        0,
+                        6,
+                      );
+                      final row = (local.dy / gridSize.height * rowsCount)
+                          .floor()
+                          .clamp(0, rowsCount - 1);
+                      return _addDays(weekStart, row * 7 + col);
+                    }
+
+                    return GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onPanStart: _taskmasterOn
+                          ? (d) => _handleDragStart(dateAt(d.localPosition))
+                          : null,
+                      onPanUpdate: _taskmasterOn
+                          ? (d) => _handleDragUpdate(dateAt(d.localPosition))
+                          : null,
+                      onPanEnd: _taskmasterOn ? (_) => _handleDragEnd() : null,
+                      onPanCancel: _taskmasterOn ? _cancelDrag : null,
+                      child: Container(
+                        decoration: panelDecoration(context),
+                        clipBehavior: Clip.antiAlias,
+                        child: _view == _CalendarView.month
+                            ? Column(
+                                children: [
+                                  for (var week = 0; week < 6; week++)
+                                    Expanded(
+                                      child: _WeekRow(
+                                        rowStart: _addDays(gridStart, week * 7),
+                                        month: _anchor,
+                                        today: today,
+                                        tasks: visibleTasks,
+                                        projectsById: projectsById,
+                                        onDayTap: _taskmasterOn
+                                            ? (day) =>
+                                                  _createTaskForRange(day, day)
+                                            : widget.onDaySelected,
+                                        onTaskTap: _handleTaskTap,
+                                        showTopBorder: week != 0,
+                                        capLanesToFit: true,
+                                        taskmasterOn: _taskmasterOn,
+                                        onTaskDelete: onTaskDelete,
+                                        dragRange: dragRange,
+                                      ),
+                                    ),
+                                ],
+                              )
+                            : _WeekRow(
+                                rowStart: _weekStartOf(_anchor),
+                                month: _anchor,
+                                today: today,
+                                tasks: visibleTasks,
+                                projectsById: projectsById,
+                                onDayTap: _taskmasterOn
+                                    ? (day) => _createTaskForRange(day, day)
+                                    : widget.onDaySelected,
+                                onTaskTap: _handleTaskTap,
+                                dimOutOfRangeDays: false,
+                                showTopBorder: false,
+                                taskmasterOn: _taskmasterOn,
+                                onTaskDelete: onTaskDelete,
+                                dragRange: dragRange,
+                              ),
+                      ),
+                    );
                   },
                 ),
               ),
-              const SizedBox(width: 8),
-              NocturneSegmented<_CalendarView>(
-                options: _CalendarView.values,
-                value: _view,
-                labelBuilder: (v) => v == _CalendarView.week ? 'Week' : 'Month',
-                onChanged: (v) => setState(() => _view = v),
-              ),
             ],
           ),
-          const SizedBox(height: 16.8),
-          Row(
-            children: [
-              for (final label in _weekdayLabels)
-                Expanded(child: Center(child: StampLabel(label, size: 12))),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final gridSize = constraints.biggest;
-                final rowsCount = _view == _CalendarView.month ? 6 : 1;
-                final weekStart = _view == _CalendarView.month
-                    ? gridStart
-                    : _weekStartOf(_anchor);
-
-                DateTime dateAt(Offset local) {
-                  final col = (local.dx / gridSize.width * 7).floor().clamp(
-                    0,
-                    6,
-                  );
-                  final row = (local.dy / gridSize.height * rowsCount)
-                      .floor()
-                      .clamp(0, rowsCount - 1);
-                  return _addDays(weekStart, row * 7 + col);
-                }
-
-                return GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onPanStart: _taskmasterOn
-                      ? (d) => _handleDragStart(dateAt(d.localPosition))
-                      : null,
-                  onPanUpdate: _taskmasterOn
-                      ? (d) => _handleDragUpdate(dateAt(d.localPosition))
-                      : null,
-                  onPanEnd: _taskmasterOn ? (_) => _handleDragEnd() : null,
-                  onPanCancel: _taskmasterOn ? _cancelDrag : null,
-                  child: Container(
-                    decoration: panelDecoration(
-                      context,
-                      depth: PanelDepth.recessed,
-                      radius: 12,
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: _view == _CalendarView.month
-                        ? Column(
-                            children: [
-                              for (var week = 0; week < 6; week++)
-                                Expanded(
-                                  child: _WeekRow(
-                                    rowStart: _addDays(gridStart, week * 7),
-                                    month: _anchor,
-                                    today: today,
-                                    tasks: visibleTasks,
-                                    projectsById: projectsById,
-                                    onDayTap: _taskmasterOn
-                                        ? (day) => _createTaskForRange(day, day)
-                                        : widget.onDaySelected,
-                                    onTaskTap: _handleTaskTap,
-                                    showTopBorder: week != 0,
-                                    capLanesToFit: true,
-                                    taskmasterOn: _taskmasterOn,
-                                    onTaskDelete: onTaskDelete,
-                                    dragRange: dragRange,
-                                  ),
-                                ),
-                            ],
-                          )
-                        : _WeekRow(
-                            rowStart: _weekStartOf(_anchor),
-                            month: _anchor,
-                            today: today,
-                            tasks: visibleTasks,
-                            projectsById: projectsById,
-                            onDayTap: _taskmasterOn
-                                ? (day) => _createTaskForRange(day, day)
-                                : widget.onDaySelected,
-                            onTaskTap: _handleTaskTap,
-                            dimOutOfRangeDays: false,
-                            showTopBorder: false,
-                            taskmasterOn: _taskmasterOn,
-                            onTaskDelete: onTaskDelete,
-                            dragRange: dragRange,
-                          ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -546,12 +605,13 @@ class _WeekRow extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         border: showTopBorder
-            ? Border(top: BorderSide(color: tokens.divider))
+            ? Border(top: BorderSide(color: tokens.edge))
             : null,
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final colWidth = constraints.maxWidth / 7;
+          final compactCells = colWidth < _compactCellWidth;
 
           // Recomputed on every resize, using this row's actual available
           // height — see _maxLanesForHeight.
@@ -605,59 +665,85 @@ class _WeekRow extends StatelessWidget {
                   ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        for (var i = 0; i < 7; i++)
-                          Expanded(
-                            child: _DayNumber(
-                              date: _addDays(rowStart, i),
-                              active:
-                                  !dimOutOfRangeDays ||
-                                  _addDays(rowStart, i).month == month.month,
-                              isToday: _isSameDay(_addDays(rowStart, i), today),
-                              onTap: () => onDayTap(_addDays(rowStart, i)),
-                            ),
+              if (compactCells)
+                Positioned.fill(
+                  child: Row(
+                    children: [
+                      for (var i = 0; i < 7; i++)
+                        Expanded(
+                          child: _CompactDay(
+                            date: _addDays(rowStart, i),
+                            active:
+                                !dimOutOfRangeDays ||
+                                _addDays(rowStart, i).month == month.month,
+                            isToday: _isSameDay(_addDays(rowStart, i), today),
+                            dayTasks: _tasksOnDay(tasks, _addDays(rowStart, i)),
+                            today: today,
+                            onTap: () => onDayTap(_addDays(rowStart, i)),
                           ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          children: [
-                            for (final lane in visibleLanes) ...[
-                              _LaneRow(
-                                lane: lane,
-                                today: today,
-                                projectsById: projectsById,
-                                onTaskTap: onTaskTap,
-                                taskmasterOn: taskmasterOn,
-                                onTaskDelete: onTaskDelete,
-                                colWidth: colWidth,
+                        ),
+                    ],
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          for (var i = 0; i < 7; i++)
+                            Expanded(
+                              child: _DayNumber(
+                                date: _addDays(rowStart, i),
+                                active:
+                                    !dimOutOfRangeDays ||
+                                    _addDays(rowStart, i).month == month.month,
+                                isToday: _isSameDay(
+                                  _addDays(rowStart, i),
+                                  today,
+                                ),
+                                onTap: () => onDayTap(_addDays(rowStart, i)),
                               ),
-                              const SizedBox(height: 3),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              for (final lane in visibleLanes) ...[
+                                _LaneRow(
+                                  lane: lane,
+                                  today: today,
+                                  projectsById: projectsById,
+                                  onTaskTap: onTaskTap,
+                                  taskmasterOn: taskmasterOn,
+                                  onTaskDelete: onTaskDelete,
+                                  colWidth: colWidth,
+                                ),
+                                const SizedBox(height: 3),
+                              ],
+                              if (overflow)
+                                _OverflowRow(
+                                  rowStart: rowStart,
+                                  counts: overflowCounts,
+                                  tasks: tasks,
+                                  projectsById: projectsById,
+                                  onTaskTap: onTaskTap,
+                                ),
                             ],
-                            if (overflow)
-                              _OverflowRow(
-                                rowStart: rowStart,
-                                counts: overflowCounts,
-                                tasks: tasks,
-                                projectsById: projectsById,
-                                onTaskTap: onTaskTap,
-                              ),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              if (dragSpan != null)
+              // Compact cells have no bars; the drag tint on the days is the
+              // preview there.
+              if (dragSpan != null && !compactCells)
                 AnimatedPositioned(
                   key: const ValueKey('drag-ghost'),
                   duration: _dragGhostAnimationDuration,
@@ -726,44 +812,22 @@ class _DayCellBackground extends StatelessWidget {
     final tokens = context.nocturne;
     final accent = context.nocturneAccent;
 
-    Widget fill;
-    if (!inCurrentMonth) {
-      fill = DecoratedBox(
-        decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.18)),
-      );
-    } else if (isWeekend) {
-      // neutral700 at 0.4 reads clearly against dark mode's near-black
-      // surface, but in light mode it's a pale lavender on a near-white
-      // one — nearly invisible — so light mode gets a darker, more opaque
-      // line instead. neutral500 is the one step in the ramp defined
-      // identically in both palettes, which keeps this a deliberate
-      // one-off rather than a tweak to a token other widgets also read.
-      final isLight = Theme.of(context).brightness == Brightness.light;
-      // CustomPaint draws straight onto the ambient canvas with no clip of
-      // its own, and the stripe lines intentionally run past this cell's
-      // right edge — without ClipRect that tail paints straight over
-      // whatever cell comes next instead of stopping at this one's border.
-      fill = ClipRect(
-        child: CustomPaint(
-          painter: _DiagonalStripesPainter(
-            color: isLight
-                ? tokens.neutral500.withValues(alpha: 0.45)
-                : tokens.neutral700.withValues(alpha: 0.4),
-          ),
-        ),
-      );
-    } else {
-      fill = const SizedBox.expand();
-    }
+    // Out-of-month days and weekends are quiet neutral washes (no texture);
+    // the weekend one is lighter so the two stay distinguishable.
+    final Widget fill = !inCurrentMonth
+        ? ColoredBox(color: tokens.raised)
+        : (isWeekend
+              ? ColoredBox(color: tokens.raised.withValues(alpha: 0.5))
+              : const SizedBox.expand());
 
     // The divider is painted as a foreground decoration so it stays on
-    // top of the weekend stripes instead of being drawn underneath them.
+    // top of the fill.
     return DecoratedBox(
       decoration: BoxDecoration(
         border: isToday
-            ? Border.all(color: accent.withValues(alpha: 0.85), width: 1.5)
+            ? Border.all(color: accent, width: 1.5)
             : (showDivider
-                  ? Border(right: BorderSide(color: tokens.divider))
+                  ? Border(right: BorderSide(color: tokens.edge))
                   : null),
       ),
       position: DecorationPosition.foreground,
@@ -775,7 +839,7 @@ class _DayCellBackground extends StatelessWidget {
             if (isDragSelected)
               DecoratedBox(
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.22),
+                  color: accent.withValues(alpha: 0.18),
                 ),
               ),
           ],
@@ -785,35 +849,43 @@ class _DayCellBackground extends StatelessWidget {
   }
 }
 
-/// Paints evenly spaced 45° lines across its full size — used for the
-/// weekend columns instead of a flat tint so they read as "blocked off"
-/// rather than just a different shade.
-class _DiagonalStripesPainter extends CustomPainter {
-  _DiagonalStripesPainter({required this.color});
+/// The day-of-month numeral; today is an accent-filled circle.
+class _DayBadge extends StatelessWidget {
+  const _DayBadge({
+    required this.date,
+    required this.active,
+    required this.isToday,
+  });
 
-  final Color color;
-
-  static const _spacing = 7.0;
-  static const _strokeWidth = 1.2;
+  final DateTime date;
+  final bool active;
+  final bool isToday;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = _strokeWidth;
-    final span = size.width + size.height;
-    for (double x = -size.height; x < span; x += _spacing) {
-      canvas.drawLine(
-        Offset(x, size.height),
-        Offset(x + size.height, 0),
-        paint,
-      );
-    }
+  Widget build(BuildContext context) {
+    final tokens = context.nocturne;
+    final accent = context.nocturneAccent;
+    return Container(
+      width: 22,
+      height: 22,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: isToday ? accent : null,
+        shape: BoxShape.circle,
+      ),
+      child: Text(
+        '${date.day}',
+        style: TextStyle(
+          fontSize: 12,
+          height: 16 / 12,
+          fontWeight: isToday ? FontWeight.w600 : FontWeight.w500,
+          color: isToday
+              ? (accent.computeLuminance() > 0.5 ? Colors.black : Colors.white)
+              : (active ? tokens.neutral200 : tokens.neutral500),
+        ),
+      ),
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant _DiagonalStripesPainter oldDelegate) =>
-      oldDelegate.color != color;
 }
 
 class _DayNumber extends StatelessWidget {
@@ -831,45 +903,120 @@ class _DayNumber extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = context.nocturne;
-    final accent = context.nocturneAccent;
-
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(NocturneRadius.sm),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 2),
         child: Center(
-          child: Container(
-            width: 22,
-            height: 22,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: isToday ? accent : null,
-              shape: BoxShape.circle,
-              boxShadow: isToday
-                  ? [
-                      BoxShadow(
-                        color: accent.withValues(alpha: 0.55),
-                        blurRadius: 6,
+          child: _DayBadge(date: date, active: active, isToday: isToday),
+        ),
+      ),
+    );
+  }
+}
+
+/// A day cell too narrow for task bars: the day number, then one dot per
+/// task (as many as fit) and a "+N" for the rest. A red glyph marks a day
+/// with an overdue task, so the dots never carry that alone. The whole cell
+/// does what tapping the day number does.
+class _CompactDay extends StatelessWidget {
+  const _CompactDay({
+    required this.date,
+    required this.active,
+    required this.isToday,
+    required this.dayTasks,
+    required this.today,
+    required this.onTap,
+  });
+
+  final DateTime date;
+  final bool active;
+  final bool isToday;
+  final List<Task> dayTasks;
+  final DateTime today;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.nocturne;
+    final accent = context.nocturneAccent;
+    final n = dayTasks.length;
+    final overdue = dayTasks.any(
+      (t) =>
+          !t.isChecked &&
+          _dateOnly(t.dueDateEnd ?? t.dueDate!).isBefore(_dateOnly(today)),
+    );
+    final dotColors = [
+      for (final t in dayTasks)
+        t.isChecked
+            ? tokens.neutral600
+            : (_dateOnly(t.dueDateEnd ?? t.dueDate!).isBefore(_dateOnly(today))
+                  ? tokens.danger
+                  : accent),
+    ];
+    return Semantics(
+      button: true,
+      label:
+          '${_monthNames[date.month - 1]} ${date.day}, '
+          '$n ${n == 1 ? 'task' : 'tasks'}',
+      child: InkWell(
+        onTap: onTap,
+        child: LayoutBuilder(
+          builder: (context, c) {
+            const dot = 6.0, gap = 3.0, header = 28.0;
+            final perRow = math.max(
+              1,
+              ((c.maxWidth - 4) / (dot + gap)).floor(),
+            );
+            final lines = math.max(
+              1,
+              ((c.maxHeight - header) / (dot + gap)).floor(),
+            );
+            final capacity = perRow * lines;
+            // A "+N" label takes about two dot slots.
+            final shown = n <= capacity ? n : math.max(0, capacity - 2);
+            return ClipRect(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(2, 4, 2, 0),
+                child: Column(
+                  children: [
+                    _DayBadge(date: date, active: active, isToday: isToday),
+                    const SizedBox(height: 2),
+                    if (overdue)
+                      Icon(Icons.error_outline, size: 10, color: tokens.danger),
+                    if (n > 0)
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: gap,
+                        runSpacing: gap,
+                        children: [
+                          for (var i = 0; i < shown; i++)
+                            Container(
+                              width: dot,
+                              height: dot,
+                              decoration: BoxDecoration(
+                                color: dotColors[i],
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          if (n > shown)
+                            Text(
+                              '+${n - shown}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                height: 6 / 10,
+                                fontWeight: FontWeight.w600,
+                                color: tokens.neutral400,
+                              ),
+                            ),
+                        ],
                       ),
-                    ]
-                  : null,
-            ),
-            child: Text(
-              '${date.day}',
-              style: TextStyle(
-                fontFamily: kPanelFont,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: isToday
-                    ? (accent.computeLuminance() > 0.5
-                          ? Colors.black
-                          : Colors.white)
-                    : (active ? tokens.neutral200 : tokens.neutral600),
+                  ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
@@ -1015,7 +1162,9 @@ class _OverflowRow extends StatelessWidget {
                       child: Material(
                         color: Colors.transparent,
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(
+                            NocturneRadius.sm,
+                          ),
                           onTap: () {
                             final day = _addDays(rowStart, i);
                             _showDayTasksDialog(
@@ -1031,10 +1180,9 @@ class _OverflowRow extends StatelessWidget {
                             child: Text(
                               '+${counts[i]} more',
                               style: TextStyle(
-                                fontFamily: kPanelFont,
                                 fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: tokens.neutral500,
+                                fontWeight: FontWeight.w500,
+                                color: tokens.neutral400,
                               ),
                             ),
                           ),
@@ -1074,10 +1222,7 @@ void _showDayTasksDialog(
   showDialog<void>(
     context: context,
     builder: (dialogContext) {
-      final tokens = dialogContext.nocturne;
       return Dialog(
-        backgroundColor: tokens.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 360, maxHeight: 420),
           child: Padding(
@@ -1091,12 +1236,7 @@ void _showDayTasksDialog(
                     Expanded(
                       child: Text(
                         '${_monthNames[day.month - 1]} ${day.day}, ${day.year}',
-                        style: Theme.of(dialogContext).textTheme.titleMedium
-                            ?.copyWith(
-                              fontFamily: kPanelFont,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 20,
-                            ),
+                        style: Theme.of(dialogContext).textTheme.titleLarge,
                       ),
                     ),
                     IconButton(
@@ -1111,7 +1251,8 @@ void _showDayTasksDialog(
                   child: ListView.separated(
                     shrinkWrap: true,
                     itemCount: dayTasks.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 6),
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(height: NocturneSpace.s2),
                     itemBuilder: (_, index) {
                       final task = dayTasks[index];
                       final placement = _BarPlacement(
@@ -1191,8 +1332,10 @@ class _TaskBarState extends State<_TaskBar> {
     );
 
     final radius = BorderRadius.horizontal(
-      left: widget.roundLeft ? const Radius.circular(13) : Radius.zero,
-      right: widget.roundRight ? const Radius.circular(13) : Radius.zero,
+      left: widget.roundLeft ? const Radius.circular(_barRadius) : Radius.zero,
+      right: widget.roundRight
+          ? const Radius.circular(_barRadius)
+          : Radius.zero,
     );
 
     return MouseRegion(
@@ -1238,6 +1381,7 @@ class _TaskBarStyle {
     required this.originLabel,
     required this.priorityColor,
     required this.isOverdue,
+    required this.dangerColor,
   });
 
   final Color bg;
@@ -1247,6 +1391,7 @@ class _TaskBarStyle {
   final String originLabel;
   final Color? priorityColor;
   final bool isOverdue;
+  final Color dangerColor;
 }
 
 _TaskBarStyle _resolveTaskBarStyle(
@@ -1256,30 +1401,27 @@ _TaskBarStyle _resolveTaskBarStyle(
   DateTime today,
 ) {
   final tokens = context.nocturne;
-  final accent = context.nocturneAccent;
-
   final overallEnd = task.dueDateEnd ?? task.dueDate!;
   final isOverdue =
       !task.isChecked && _dateOnly(overallEnd).isBefore(_dateOnly(today));
 
-  // Matches the app's own buttons (see NocturneButton's primary variant): a
-  // tinted, outlined pill rather than a flat color swatch — just with the
-  // status color swapped in for the usual accent.
+  // Colour is meaning: overdue is red, due within two days is amber, anything
+  // else is a quiet neutral bar. Done stays neutral (struck through).
+  final isSoon =
+      !task.isChecked &&
+      !isOverdue &&
+      !_dateOnly(overallEnd).isAfter(_addDays(_dateOnly(today), 2));
   final statusColor = task.isChecked
       ? tokens.neutral500
-      : (isOverdue ? NocturnePriority.high : accent);
-  // Blended onto the opaque surface color (rather than left translucent) so
-  // the grid lines and shading behind a bar never show through it. A
-  // stronger wash than the button-style 0.12 that comment references: the
-  // Calendar's own background is itself a faint accent tint (`tokens.bg`,
-  // see buildNocturneTheme), so a bar tinted at that same low strength reads
-  // as barely-there against it. Pushed up so the bar still reads as a
-  // distinct colored block, not just colored text, without going so opaque
-  // it fights the full-strength text/icons drawn on top of it.
-  final bg = Color.alphaBlend(
-    statusColor.withValues(alpha: tokens.isDark ? 0.28 : 0.22),
-    tokens.surface,
-  );
+      : (isOverdue ? tokens.danger : (isSoon ? tokens.warn : null));
+  // Blended onto the opaque surface (not left translucent) so the grid lines
+  // behind a bar never show through it.
+  final bg = statusColor == null || task.isChecked
+      ? tokens.raised
+      : Color.alphaBlend(
+          statusColor.withValues(alpha: tokens.isDark ? 0.18 : 0.12),
+          tokens.surface,
+        );
   // Darkened on enamel so project-coloured legends stay readable on the tint.
   final originColor = project != null
       ? (tokens.isDark
@@ -1290,7 +1432,9 @@ _TaskBarStyle _resolveTaskBarStyle(
   return _TaskBarStyle(
     bg: bg,
     fg: task.isChecked ? tokens.neutral500 : tokens.text,
-    border: statusColor.withValues(alpha: 0.85),
+    border: statusColor == null || task.isChecked
+        ? tokens.borderStrong
+        : statusColor.withValues(alpha: 0.7),
     originColor: originColor,
     originLabel: project != null ? project.name : 'Unfiled',
     priorityColor: switch (task.priority) {
@@ -1300,6 +1444,7 @@ _TaskBarStyle _resolveTaskBarStyle(
       TaskPriority.none => null,
     },
     isOverdue: isOverdue,
+    dangerColor: tokens.danger,
   );
 }
 
@@ -1312,67 +1457,76 @@ Widget _taskBarContentRow({
   required bool hovering,
   required VoidCallback onDelete,
 }) {
-  return Row(
+  final project = Row(
+    mainAxisSize: MainAxisSize.min,
     children: [
-      if (style.isOverdue) ...[
-        const Text(
-          '!',
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w900,
-            color: Color(0xFFFF3B30),
-            height: 1,
-          ),
-        ),
-        const SizedBox(width: 4),
-      ],
-      if (style.priorityColor != null) ...[
-        Icon(Icons.flag, size: 12, color: style.priorityColor),
-        const SizedBox(width: 4),
-      ],
       Icon(Icons.folder, size: 13, color: style.originColor),
       const SizedBox(width: 4),
-      Expanded(
-        flex: 2,
-        child: Text(
-          style.originLabel,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: style.originColor,
-          ),
-        ),
-      ),
-      const SizedBox(width: 7),
-      Expanded(
-        flex: 3,
-        child: Text(
-          task.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: style.fg,
-            decoration: task.isChecked ? TextDecoration.lineThrough : null,
-          ),
-        ),
-      ),
-      if (task.hasSubtasks) ...[
-        const SizedBox(width: 4),
-        Icon(
-          Icons.checklist,
-          size: 13,
-          color: style.fg.withValues(alpha: 0.85),
-        ),
-      ],
-      if (taskmasterOn && hovering) ...[
-        const SizedBox(width: 4),
-        _DeleteDot(onTap: onDelete),
-      ],
     ],
+  );
+  Widget titleText() => Text(
+    task.title,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: TextStyle(
+      fontSize: 13,
+      height: 20 / 13,
+      fontWeight: FontWeight.w500,
+      color: style.fg,
+      decoration: task.isChecked ? TextDecoration.lineThrough : null,
+    ),
+  );
+  final lead = <Widget>[
+    if (style.isOverdue) ...[
+      Icon(Icons.error_outline, size: 13, color: style.dangerColor),
+      const SizedBox(width: 4),
+    ],
+    if (style.priorityColor != null) ...[
+      Icon(Icons.flag, size: 12, color: style.priorityColor),
+      const SizedBox(width: 4),
+    ],
+  ];
+  final tail = <Widget>[
+    if (task.hasSubtasks) ...[
+      const SizedBox(width: 4),
+      Icon(Icons.checklist, size: 13, color: style.fg.withValues(alpha: 0.85)),
+    ],
+    if (taskmasterOn && hovering) ...[
+      const SizedBox(width: 4),
+      _DeleteDot(onTap: onDelete),
+    ],
+  ];
+
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      // Too narrow for "project  title": drop the project label (its folder
+      // icon stays, in the project's colour) and give the room to the title.
+      final narrow = constraints.maxWidth < 150;
+      return Row(
+        children: [
+          ...lead,
+          project,
+          if (!narrow) ...[
+            Expanded(
+              flex: 2,
+              child: Text(
+                style.originLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: style.originColor,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+          Expanded(flex: 3, child: titleText()),
+          ...tail,
+        ],
+      );
+    },
   );
 }
 
@@ -1386,15 +1540,16 @@ class _DeleteDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final danger = context.nocturne.danger;
     return Material(
-      color: const Color(0xFFFF3B30).withValues(alpha: 0.18),
+      color: danger.withValues(alpha: 0.18),
       shape: const CircleBorder(),
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
-        child: const Padding(
-          padding: EdgeInsets.all(2),
-          child: Icon(Icons.close, size: 12, color: Color(0xFFFF3B30)),
+        child: Padding(
+          padding: const EdgeInsets.all(2),
+          child: Icon(Icons.close, size: 12, color: danger),
         ),
       ),
     );
@@ -1469,7 +1624,7 @@ class _CrossingPillBorder extends OutlinedBorder {
   );
 
   double _capRadius(bool thin) =>
-      math.min(13.0, (thin ? weekendHeight : weekdayHeight) / 2);
+      math.min(_barRadius, (thin ? weekendHeight : weekdayHeight) / 2);
 
   /// Visible length of the thin leading connector before it's absorbed into
   /// the pill's own left cap — there's no real grid boundary to anchor this

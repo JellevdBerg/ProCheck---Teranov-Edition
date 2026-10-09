@@ -6,9 +6,11 @@ import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
 import '../widgets/create_task_sheet.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
+import '../theme/nocturne_theme.dart';
 import '../widgets/panel/panel.dart';
 import '../widgets/project_name_lookup.dart';
 import '../widgets/smart_view_task_row.dart';
+import 'today_screen.dart' show screenGutter;
 
 const _monthNames = [
   'January',
@@ -63,73 +65,98 @@ class DayScreen extends ConsumerWidget {
     // DecoratedSliver/SliverList rather than a Column-in-a-Card — a single
     // day is naturally bounded, but the same lazy-building treatment keeps
     // every smart view consistent.
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16.8, 16.8, 16.8, 0),
-          sliver: SliverToBoxAdapter(
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Tasks for $label',
-                    style: Theme.of(context).textTheme.headlineSmall,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final gutter = screenGutter(constraints.maxWidth);
+        return CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                gutter,
+                NocturneSpace.s4,
+                gutter,
+                0,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Tasks for $label',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                    ),
+                    NocturneButton(
+                      label: 'New task',
+                      icon: Icons.add,
+                      dense: true,
+                      onPressed: () => showCreateTaskSheet(context),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (dayTasks.isEmpty)
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  gutter,
+                  NocturneSpace.s3,
+                  gutter,
+                  NocturneSpace.s4,
+                ),
+                sliver: SliverToBoxAdapter(
+                  child: DecoratedBox(
+                    decoration: panelDecoration(
+                      context,
+                      depth: PanelDepth.recessed,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(NocturneSpace.s6),
+                      child: Center(
+                        child: Text(
+                          'No tasks due this day.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-                NocturneButton(
-                  label: 'New task',
-                  icon: Icons.add,
-                  dense: true,
-                  onPressed: () => showCreateTaskSheet(context),
+              )
+            else
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  gutter,
+                  NocturneSpace.s3,
+                  gutter,
+                  NocturneSpace.s4,
                 ),
-              ],
-            ),
-          ),
-        ),
-        if (dayTasks.isEmpty)
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16.8, 16.8, 16.8, 16.8),
-            sliver: SliverToBoxAdapter(
-              child: DecoratedBox(
-                decoration: panelDecoration(
-                  context,
-                  depth: PanelDepth.recessed,
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(22.4),
-                  child: Center(
-                    child: Text(
-                      'No tasks due this day.',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                sliver: DecoratedSliver(
+                  decoration: panelDecoration(context),
+                  sliver: SliverPadding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: NocturneSpace.s2,
+                    ),
+                    sliver: SliverList.builder(
+                      itemCount: dayTasks.length,
+                      itemBuilder: (context, index) {
+                        final task = dayTasks[index];
+                        return SmartViewTaskRow(
+                          task: task,
+                          reduceMotion: reduceMotion,
+                          projectName: projectNameFor(
+                            projectNames,
+                            task.projectId,
+                          ),
+                          onOpenTask: onOpenTask,
+                        );
+                      },
                     ),
                   ),
                 ),
               ),
-            ),
-          )
-        else
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16.8, 16.8, 16.8, 16.8),
-            sliver: DecoratedSliver(
-              decoration: panelDecoration(context, depth: PanelDepth.flat),
-              sliver: SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 11.2),
-                sliver: SliverList.builder(
-                  itemCount: dayTasks.length,
-                  itemBuilder: (context, index) {
-                    final task = dayTasks[index];
-                    return SmartViewTaskRow(
-                      task: task,
-                      reduceMotion: reduceMotion,
-                      projectName: projectNameFor(projectNames, task.projectId),
-                      onOpenTask: onOpenTask,
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
-      ],
+          ],
+        );
+      },
     );
   }
 }
