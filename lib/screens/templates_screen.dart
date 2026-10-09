@@ -6,6 +6,7 @@ import '../providers/task_templates_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/create_task_sheet.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
+import '../widgets/panel/panel.dart';
 import 'empty_state.dart';
 import 'task_template_editor_screen.dart';
 
@@ -49,8 +50,7 @@ class TemplatesScreen extends ConsumerWidget {
             const Expanded(
               child: EmptyState(
                 icon: Icons.copy_all_outlined,
-                message:
-                    'No templates yet.\nA template sets up a main task with its subtasks, ready to reuse.',
+                message: 'No templates yet.\nA template sets up a main task with its subtasks, ready to reuse.',
               ),
             )
           else
@@ -87,41 +87,38 @@ class _TemplateRowState extends State<_TemplateRow> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.all(11.2),
-          child: Row(
-            children: [
-              Icon(
-                Icons.copy_all_outlined,
-                size: 20,
-                color: context.nocturneAccent.withValues(alpha: 0.8),
+      child: PanelCard(
+        padding: const EdgeInsets.all(11.2),
+        child: Row(
+          children: [
+            Icon(
+              Icons.copy_all_outlined,
+              size: 20,
+              color: context.nocturneAccent.withValues(alpha: 0.8),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.template.name,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  Text(
+                    '${widget.template.subtasks.length} subtask(s)',
+                    style: TextStyle(fontSize: 13, color: tokens.neutral400),
+                  ),
+                ],
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      widget.template.name,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    Text(
-                      '${widget.template.subtasks.length} subtask(s)',
-                      style: TextStyle(fontSize: 13, color: tokens.neutral400),
-                    ),
-                  ],
-                ),
+            ),
+            if (_hovering || _menuOpen)
+              IconButton(
+                icon: Icon(Icons.more_vert, size: 18),
+                onPressed: () => _openMenu(context),
               ),
-              if (_hovering || _menuOpen)
-                IconButton(
-                  icon: Icon(Icons.more_vert, size: 18),
-                  onPressed: () => _openMenu(context),
-                ),
-            ],
-          ),
+          ],
         ),
       ),
     );

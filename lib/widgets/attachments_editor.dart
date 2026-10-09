@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/attachment.dart';
 import 'nocturne/nocturne_widgets.dart';
+import 'panel/panel.dart';
 
 /// A list of [Attachment] chips plus an "Add attachment" button that opens
 /// the native file picker — shared between [TaskTile]'s expanded detail and
@@ -24,17 +25,10 @@ class AttachmentsEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'ATTACHMENTS',
-          style: theme.textTheme.labelSmall?.copyWith(
-            letterSpacing: 0.04,
-            color: theme.hintColor,
-          ),
-        ),
+        const StampLabel('Attachments', size: 12),
         const SizedBox(height: 6),
         for (var i = 0; i < attachments.length; i++)
           Padding(
@@ -103,7 +97,9 @@ class _AttachmentChipState extends State<AttachmentChip> {
     if (!_canOpen || path == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Can't open attachments in the browser — download them instead."),
+          content: Text(
+            "Can't open attachments in the browser — download them instead.",
+          ),
         ),
       );
       return;
@@ -122,10 +118,7 @@ class _AttachmentChipState extends State<AttachmentChip> {
     final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(4),
-      ),
+      decoration: panelDecoration(context, depth: PanelDepth.recessed),
       child: Row(
         children: [
           Icon(
@@ -143,7 +136,10 @@ class _AttachmentChipState extends State<AttachmentChip> {
                 onTap: () => _open(context),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 100),
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: _hoveringName
                         ? theme.colorScheme.onSurface.withValues(alpha: 0.08)
@@ -187,7 +183,9 @@ class _AttachmentChipState extends State<AttachmentChip> {
                 child: Icon(
                   Icons.close,
                   size: 13,
-                  color: _hoveringRemove ? theme.colorScheme.error : theme.hintColor,
+                  color: _hoveringRemove
+                      ? theme.colorScheme.error
+                      : theme.hintColor,
                 ),
               ),
             ),
