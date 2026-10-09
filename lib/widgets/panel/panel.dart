@@ -108,7 +108,9 @@ class PanelCard extends StatelessWidget {
                 children: [
                   if (title != null) Expanded(child: StampLabel(title!)),
                   if (title == null) const Spacer(),
-                  ?trailing,
+                  // build_runner's analyzer cannot parse `?trailing`, and CI runs it.
+                  // ignore: use_null_aware_elements
+                  if (trailing != null) trailing!,
                 ],
               ),
               const SizedBox(height: 10),
