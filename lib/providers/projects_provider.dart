@@ -106,6 +106,13 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
   String? _ownerId;
   String? _departmentId;
 
+  /// The signed-in user's display name, cached with [_ownerId]. Written into
+  /// new activity entries and comments so teammates see who acted; falls
+  /// back to 'You' when signed out / not yet loaded (pure local use).
+  String? _authorName;
+  String get authorName =>
+      (_authorName?.isNotEmpty ?? false) ? _authorName! : 'You';
+
   Future<void> _loadOwnProfile() async {
     if (!isSupabaseConfigured) return;
     final userId = supabase.auth.currentUser?.id;
@@ -118,6 +125,7 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
           .single();
       _ownerId = userId;
       _departmentId = row['department_id'] as String?;
+      _authorName = row['display_name'] as String?;
     } catch (_) {
       // Best-effort — local-only behavior continues if this fails.
     }
@@ -201,7 +209,7 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
     project.activityLog.add(
       ActivityEntry(
         kindIndex: ActivityKind.projectCreated.index,
-        description: 'You created this project',
+        description: '$authorName created this project',
         timestamp: DateTime.now(),
       ),
     );
