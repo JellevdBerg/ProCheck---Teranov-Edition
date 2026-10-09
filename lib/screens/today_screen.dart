@@ -11,8 +11,8 @@ import '../widgets/smart_view_task_row.dart';
 import '../widgets/task_filter_bar.dart';
 
 /// Page gutter: 16 compact, 24 wider, and the content is centred in a column
-/// of at most [maxWidth] on large windows (lists are not stretched).
-double screenGutter(double width, {double maxWidth = 960}) {
+/// of at most [maxWidth] (unbounded by default: lists fill the window).
+double screenGutter(double width, {double maxWidth = double.infinity}) {
   final g = width < NocturneBreakpoints.compact
       ? NocturneSpace.s4
       : NocturneSpace.s6;

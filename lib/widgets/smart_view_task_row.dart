@@ -120,7 +120,14 @@ class SmartViewTaskRow extends ConsumerWidget {
                       ),
                       if (inline && hasMeta) ...[
                         const SizedBox(width: NocturneSpace.s2),
-                        Flexible(child: TaskMeta(task: task)),
+                        // Not a Flexible: that would split the free space 50/50 with the
+                        // title and leave the meta floating mid-row.
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: constraints.maxWidth * 0.6,
+                          ),
+                          child: TaskMeta(task: task),
+                        ),
                       ],
                     ],
                   );

@@ -8,7 +8,6 @@ import '../models/project.dart';
 import '../models/task.dart';
 import '../models/task_priority.dart';
 import '../providers/projects_provider.dart';
-import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/create_task_sheet.dart';
@@ -812,12 +811,21 @@ class _DayCellBackground extends StatelessWidget {
     final tokens = context.nocturne;
     final accent = context.nocturneAccent;
 
-    // Out-of-month days and weekends are quiet neutral washes (no texture);
-    // the weekend one is lighter so the two stay distinguishable.
+    // Out-of-month days are a quiet neutral wash; weekends are hatched.
     final Widget fill = !inCurrentMonth
         ? ColoredBox(color: tokens.raised)
         : (isWeekend
-              ? ColoredBox(color: tokens.raised.withValues(alpha: 0.5))
+              // Diagonal hatching (clipped to the cell) reads as "blocked
+              // off" rather than just another shade.
+              ? ClipRect(
+                  child: CustomPaint(
+                    painter: _DiagonalStripesPainter(
+                      color: tokens.isDark
+                          ? tokens.neutral700.withValues(alpha: 0.4)
+                          : tokens.neutral600.withValues(alpha: 0.35),
+                    ),
+                  ),
+                )
               : const SizedBox.expand());
 
     // The divider is painted as a foreground decoration so it stays on
@@ -961,6 +969,7 @@ class _CompactDay extends StatelessWidget {
           '${_monthNames[date.month - 1]} ${date.day}, '
           '$n ${n == 1 ? 'task' : 'tasks'}',
       child: InkWell(
+        borderRadius: BorderRadius.circular(NocturneRadius.md),
         onTap: onTap,
         child: LayoutBuilder(
           builder: (context, c) {
@@ -1351,6 +1360,7 @@ class _TaskBarState extends State<_TaskBar> {
           ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
+            borderRadius: BorderRadius.circular(NocturneRadius.md),
             onTap: () => widget.onTap(context),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 9),
@@ -1424,9 +1434,7 @@ _TaskBarStyle _resolveTaskBarStyle(
         );
   // Darkened on enamel so project-coloured legends stay readable on the tint.
   final originColor = project != null
-      ? (tokens.isDark
-            ? accentPalette[project.colorIndex]
-            : Color.lerp(accentPalette[project.colorIndex], Colors.black, 0.4)!)
+      ? context.projectColor(project.colorIndex)
       : tokens.neutral500;
 
   return _TaskBarStyle(
@@ -1940,6 +1948,7 @@ class _CalendarCrossingPillState extends State<_CalendarCrossingPill> {
         animationDuration: Duration.zero,
         clipBehavior: Clip.antiAlias,
         child: InkWell(
+          borderRadius: BorderRadius.circular(NocturneRadius.md),
           onTap: widget.isGhost ? null : () => widget.onTap?.call(context),
           child: Stack(
             children: [
@@ -2083,4 +2092,29 @@ List<List<_BarPlacement>> _computeLanes(
     lane.sort((a, b) => a.colStart.compareTo(b.colStart));
   }
   return lanes;
+}
+
+/// Evenly spaced 45° lines across its full size, for the weekend columns.
+class _DiagonalStripesPainter extends CustomPainter {
+  _DiagonalStripesPainter({required this.color});
+
+  final Color color;
+
+  static const _spacing = 7.0;
+  static const _strokeWidth = 1.2;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = _strokeWidth;
+    final span = size.width + size.height;
+    for (double x = -size.height; x < span; x += _spacing) {
+      canvas.drawLine(Offset(x, size.height), Offset(x + size.height, 0), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DiagonalStripesPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

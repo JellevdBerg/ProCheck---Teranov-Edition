@@ -136,7 +136,7 @@ class _ProjectDetailOverlayState extends ConsumerState<ProjectDetailOverlay> {
         .where((t) => t.projectId == widget.projectId)
         .toList();
     final reduceMotion = ref.watch(settingsProvider).reduceMotion;
-    final accentColor = accentPalette[project.colorIndex];
+    final accentColor = context.projectColor(project.colorIndex);
     final doneCount = tasks.where((t) => t.isChecked).length;
     final progress = tasks.isEmpty ? 0.0 : doneCount / tasks.length;
     _scrollToHighlightIfNeeded();
@@ -175,7 +175,7 @@ class _ProjectDetailOverlayState extends ConsumerState<ProjectDetailOverlay> {
                   : Align(
                       alignment: Alignment.topLeft,
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1040),
+                        constraints: const BoxConstraints(maxWidth: double.infinity),
                         child: Card(
                           margin: EdgeInsets.zero,
                           child: ReorderableListView.builder(

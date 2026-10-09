@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -223,7 +224,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
             Align(
               alignment: Alignment.centerLeft,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1040),
+                constraints: const BoxConstraints(maxWidth: double.infinity),
                 child: Row(
                   children: [
                     const Expanded(child: NocturneSectionLabel('TASKS')),
@@ -251,7 +252,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1040),
+                  constraints: const BoxConstraints(maxWidth: double.infinity),
                   child: Card(
                     margin: EdgeInsets.zero,
                     child: Padding(
@@ -354,9 +355,11 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         const gap = NocturneSpace.s3;
+        // Never more columns than projects, so a few projects stretch to
+        // fill the row instead of huddling at the left.
         final columnCapacity = (constraints.maxWidth / _featuredCardMinWidth)
             .floor()
-            .clamp(1, 1 << 30);
+            .clamp(1, math.max(1, projects.length));
         final cardWidth =
             (constraints.maxWidth - gap * (columnCapacity - 1)) /
             columnCapacity;

@@ -11,7 +11,7 @@ class SoundService {
   /// `sounds/checkoff_click.wav` (volume 0.5) or `sounds/checkoff_chime.wav`
   /// (volume 0.35) to switch back.
   static const _checkoffAsset = 'sounds/checkoff_soft.wav';
-  static const _checkoffVolume = 0.7;
+  static const _checkoffVolume = 0.85;
 
   static final SoundService instance = SoundService._();
 

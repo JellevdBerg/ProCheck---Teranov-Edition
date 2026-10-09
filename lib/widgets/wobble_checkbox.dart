@@ -36,6 +36,9 @@ class _WobbleCheckboxState extends State<WobbleCheckbox>
     with SingleTickerProviderStateMixin {
   static const _box = 18.0;
 
+  bool _hover = false;
+  bool _focused = false;
+
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: WobbleCheckbox.duration,
@@ -68,7 +71,10 @@ class _WobbleCheckboxState extends State<WobbleCheckbox>
     return SizedBox(
       width: 28,
       height: 28,
-      child: Stack(
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: Stack(
         alignment: Alignment.center,
         children: [
           IgnorePointer(
@@ -82,16 +88,27 @@ class _WobbleCheckboxState extends State<WobbleCheckbox>
                   done: t.done,
                   border: t.borderStrong,
                   idleFill: t.well,
+                  hover: _hover,
+                  hoverFill: t.neutral800,
+                  focusRing: _focused ? context.nocturneAccent : null,
                 ),
               ),
             ),
           ),
           // Invisible but fully functional: hit target, focus ring, semantics.
-          Transform.scale(
+          Focus(
+            canRequestFocus: false,
+            skipTraversal: true,
+            onFocusChange: (v) => setState(() => _focused = v),
+            child: Transform.scale(
             scale: 1.5,
             child: Checkbox(
               value: widget.value,
               onChanged: widget.onChanged,
+              // The default round hover/focus halo is huge at this scale;
+              // the painter draws a small rounded one instead.
+              overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+              splashRadius: 0,
               fillColor: const WidgetStatePropertyAll(Colors.transparent),
               checkColor: Colors.transparent,
               side: const BorderSide(color: Colors.transparent),
@@ -99,7 +116,9 @@ class _WobbleCheckboxState extends State<WobbleCheckbox>
               visualDensity: VisualDensity.compact,
             ),
           ),
+          ),
         ],
+      ),
       ),
     );
   }
@@ -112,6 +131,9 @@ class _TickPainter extends CustomPainter {
     required this.done,
     required this.border,
     required this.idleFill,
+    required this.hover,
+    required this.hoverFill,
+    required this.focusRing,
   });
 
   final bool checked;
@@ -119,6 +141,9 @@ class _TickPainter extends CustomPainter {
   final Color done;
   final Color border;
   final Color idleFill;
+  final bool hover;
+  final Color hoverFill;
+  final Color? focusRing;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -128,6 +153,28 @@ class _TickPainter extends CustomPainter {
       Rect.fromCenter(center: c, width: s, height: s),
       const Radius.circular(5),
     );
+
+    if (hover) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(center: c, width: s + 8, height: s + 8),
+          const Radius.circular(7),
+        ),
+        Paint()..color = hoverFill,
+      );
+    }
+    if (focusRing != null) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(center: c, width: s + 6, height: s + 6),
+          const Radius.circular(7),
+        ),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2
+          ..color = focusRing!,
+      );
+    }
 
     if (!checked) {
       canvas.drawRRect(rect, Paint()..color = idleFill);
@@ -193,5 +240,8 @@ class _TickPainter extends CustomPainter {
       old.progress != progress ||
       old.done != done ||
       old.border != border ||
-      old.idleFill != idleFill;
+      old.idleFill != idleFill ||
+      old.hover != hover ||
+      old.hoverFill != hoverFill ||
+      old.focusRing != focusRing;
 }

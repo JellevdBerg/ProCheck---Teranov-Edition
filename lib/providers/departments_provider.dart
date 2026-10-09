@@ -11,8 +11,10 @@ import 'auth_provider.dart';
 /// safe for any signed-in user to read, not just an Operator.
 final departmentsProvider = FutureProvider<List<Department>>((ref) async {
   if (!isSupabaseConfigured) return [];
-  if (supabase.auth.currentUser == null) return [];
+  // Watched BEFORE the signed-out early return so a later sign-in re-runs
+  // this provider (otherwise the signed-out result is cached forever).
   ref.watch(currentProfileProvider);
+  if (supabase.auth.currentUser == null) return [];
 
   final rows = await supabase.from('departments').select().order('name');
   return (rows as List)
@@ -28,8 +30,10 @@ final departmentsProvider = FutureProvider<List<Department>>((ref) async {
 /// would then refuse.
 final isOperatorProvider = FutureProvider<bool>((ref) async {
   if (!isSupabaseConfigured) return false;
-  if (supabase.auth.currentUser == null) return false;
+  // Watched BEFORE the signed-out early return so a later sign-in re-runs
+  // this provider (otherwise the signed-out result is cached forever).
   ref.watch(currentProfileProvider);
+  if (supabase.auth.currentUser == null) return false;
 
   return await supabase.rpc('is_operator') as bool;
 });
@@ -40,8 +44,10 @@ final isOperatorProvider = FutureProvider<bool>((ref) async {
 /// policies use (see `20261008140000_it_department.sql`).
 final isAdminProvider = FutureProvider<bool>((ref) async {
   if (!isSupabaseConfigured) return false;
-  if (supabase.auth.currentUser == null) return false;
+  // Watched BEFORE the signed-out early return so a later sign-in re-runs
+  // this provider (otherwise the signed-out result is cached forever).
   ref.watch(currentProfileProvider);
+  if (supabase.auth.currentUser == null) return false;
 
   return await supabase.rpc('is_admin') as bool;
 });

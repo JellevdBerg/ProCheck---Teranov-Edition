@@ -44,7 +44,7 @@ class AdminScreen extends ConsumerWidget {
         return Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1080),
+            constraints: const BoxConstraints(maxWidth: double.infinity),
             child: Padding(
               padding: EdgeInsets.all(gutter),
               child: Column(

@@ -164,10 +164,10 @@ class _TaskTileState extends ConsumerState<TaskTile> {
           child: ListTile(
             dense: true,
             visualDensity: compact
-                ? const VisualDensity(horizontal: -4, vertical: -4)
+                ? const VisualDensity(horizontal: -2, vertical: -2)
                 : VisualDensity.compact,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(NocturneRadius.sm),
+              borderRadius: BorderRadius.circular(NocturneRadius.md),
             ),
             hoverColor: context.nocturneHoverColor,
             splashColor: context.nocturneSplashColor,
@@ -175,7 +175,7 @@ class _TaskTileState extends ConsumerState<TaskTile> {
               left: NocturneSpace.s3,
               right: NocturneSpace.s1,
             ),
-            minVerticalPadding: compact ? 0 : NocturneSpace.s1,
+            minVerticalPadding: compact ? NocturneSpace.s1 / 2 : NocturneSpace.s1,
             horizontalTitleGap: NocturneSpace.s2,
             minLeadingWidth: 28,
             onTap: () => _setExpanded(!_effectiveExpanded),
@@ -208,7 +208,14 @@ class _TaskTileState extends ConsumerState<TaskTile> {
                       Expanded(child: title),
                       if (hasMeta) ...[
                         const SizedBox(width: NocturneSpace.s2),
-                        Flexible(child: TaskMeta(task: task)),
+                        // Not a Flexible: that would split the free space 50/50 with the
+                        // title and leave the meta floating mid-row.
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: constraints.maxWidth * 0.6,
+                          ),
+                          child: TaskMeta(task: task),
+                        ),
                       ],
                     ],
                   );
@@ -239,7 +246,7 @@ class _TaskTileState extends ConsumerState<TaskTile> {
                   icon: const Icon(Icons.delete_outline),
                   tooltip: 'Delete task',
                   visualDensity: compact
-                      ? const VisualDensity(horizontal: -4, vertical: -4)
+                      ? const VisualDensity(horizontal: -2, vertical: -2)
                       : VisualDensity.compact,
                   onPressed: () {
                     widget.onExplicitDelete?.call();

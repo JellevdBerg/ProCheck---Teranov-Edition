@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../models/project.dart';
 import '../models/task.dart';
-import '../providers/settings_provider.dart';
 import '../theme/nocturne_theme.dart';
 import 'nocturne/nocturne_widgets.dart';
 import 'panel/panel.dart';
@@ -130,7 +129,7 @@ class _ProjectCardState extends State<ProjectCard> {
             type: MaterialType.transparency,
             child: Icon(
               Icons.folder,
-              color: accentPalette[widget.project.colorIndex],
+              color: context.projectColor(widget.project.colorIndex),
             ),
           ),
         ),
@@ -257,13 +256,14 @@ class _ProjectCardState extends State<ProjectCard> {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
+        borderRadius: BorderRadius.circular(NocturneRadius.md),
         onTap: widget.onTap,
         child: DecoratedBox(
           // The project's own colour, as a tinted edge on the plate.
           decoration: BoxDecoration(
             border: Border(
               left: BorderSide(
-                color: accentPalette[widget.project.colorIndex],
+                color: context.projectColor(widget.project.colorIndex),
                 width: 4,
               ),
             ),
@@ -278,7 +278,7 @@ class _ProjectCardState extends State<ProjectCard> {
                   const SizedBox(height: NocturneSpace.s2),
                   GaugeBar(
                     value: progress,
-                    color: accentPalette[widget.project.colorIndex],
+                    color: context.projectColor(widget.project.colorIndex),
                     height: 4,
                   ),
                   const SizedBox(height: NocturneSpace.s1),
@@ -350,7 +350,7 @@ class _ProjectCardState extends State<ProjectCard> {
                         child: Icon(
                           Icons.folder_outlined,
                           size: 18,
-                          color: accentPalette[widget.project.colorIndex],
+                          color: context.projectColor(widget.project.colorIndex),
                         ),
                       ),
                     ),

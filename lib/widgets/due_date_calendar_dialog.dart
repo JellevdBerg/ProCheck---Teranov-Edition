@@ -199,6 +199,7 @@ class _DueDateCalendarDialogState extends State<_DueDateCalendarDialog> {
                       rangeEnd != null && _isSameDay(date, rangeEnd);
 
                   return InkWell(
+                    borderRadius: BorderRadius.circular(NocturneRadius.md),
                     onTap: () => _handleDayTap(date),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 2),

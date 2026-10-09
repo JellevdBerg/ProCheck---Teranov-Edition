@@ -8,7 +8,6 @@ import '../models/project.dart';
 import '../models/task.dart';
 import '../models/task_priority.dart';
 import '../providers/projects_provider.dart';
-import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
@@ -118,7 +117,7 @@ ProjectSummary _summaryFor(
   );
 }
 
-const _kDashboardMaxWidth = 2000.0;
+const _kDashboardMaxWidth = double.infinity;
 
 /// The Dashboard: a header, then the shared [ProjectsOverview] scoped to
 /// every active (non-archived) project and unfiled tasks.
@@ -624,7 +623,13 @@ class _StatCard extends StatelessWidget {
     );
     return Card(
       margin: EdgeInsets.zero,
-      child: onTap == null ? content : InkWell(onTap: onTap, child: content),
+      child: onTap == null
+          ? content
+          : InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(NocturneRadius.lg),
+              child: content,
+            ),
     );
   }
 }
@@ -1160,7 +1165,7 @@ class _ProjectsTableRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nocturne;
     final project = summary.project;
-    final color = accentPalette[project.colorIndex];
+    final color = context.projectColor(project.colorIndex);
     final progress = summary.progress;
 
     final name = Row(

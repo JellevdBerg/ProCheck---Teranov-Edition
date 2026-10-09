@@ -83,6 +83,7 @@ void main() {
             container.read(tasksProvider.notifier).restoreAll(seed.tasks);
             final settings = container.read(settingsProvider.notifier);
             settings.setThemeMode(dark ? ThemeMode.dark : ThemeMode.light);
+            settings.setCompactRows(Platform.environment['COMPACT'] == '1');
 
             final key = GlobalKey();
             await tester.pumpWidget(
