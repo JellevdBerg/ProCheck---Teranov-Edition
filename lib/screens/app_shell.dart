@@ -10,6 +10,8 @@ import '../providers/settings_provider.dart';
 import '../providers/undo_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/create_task_sheet.dart';
+import '../widgets/nocturne/nocturne_widgets.dart';
+import '../widgets/panel/panel.dart';
 import '../widgets/sidebar/app_sidebar.dart';
 import '../widgets/text_prompt_dialog.dart';
 import 'admin_screen.dart';
@@ -28,7 +30,10 @@ import 'upcoming_screen.dart';
 
 /// Requests the bottom-right undo button, replacing whatever it was
 /// currently offering to undo.
-typedef ShowUndo = void Function({required String label, required VoidCallback onUndo});
+typedef ShowUndo = void Function({
+  required String label,
+  required VoidCallback onUndo,
+});
 
 /// Requests the project-detail overlay open on top of whatever screen is
 /// currently showing — [originRect] is the tapped card's rect (in the main
@@ -188,7 +193,11 @@ class _AppShellState extends ConsumerState<AppShell>
   /// card to morph from). An unfiled task has no project to open, so it
   /// opens the Projects screen instead, scrolled to and highlighting it in
   /// the unfiled list there.
-  void _openTask(String? projectId, String taskId, [BuildContext? cardContext]) {
+  void _openTask(
+    String? projectId,
+    String taskId, [
+    BuildContext? cardContext,
+  ]) {
     if (projectId == null) {
       _openUnfiledTask(taskId);
       return;
@@ -236,7 +245,9 @@ class _AppShellState extends ConsumerState<AppShell>
     );
     if (result != null) {
       final (name, colorIndex) = result;
-      ref.read(projectsProvider.notifier).addProject(name, colorIndex: colorIndex);
+      ref
+          .read(projectsProvider.notifier)
+          .addProject(name, colorIndex: colorIndex);
     }
   }
 
@@ -365,10 +376,7 @@ class _AppShellState extends ConsumerState<AppShell>
             elevation: 8,
             clipBehavior: Clip.antiAlias,
             borderRadius: BorderRadius.circular(NocturneRadius.md),
-            child: Opacity(
-              opacity: contentOpacity,
-              child: child,
-            ),
+            child: Opacity(opacity: contentOpacity, child: child),
           ),
         );
       },
@@ -431,12 +439,14 @@ class _UndoButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FloatingActionButton.extended(
-      heroTag: 'undo-button',
-      onPressed: onPressed,
-      tooltip: label,
-      icon: const Icon(Icons.undo),
-      label: const Text('Undo'),
+    return Tooltip(
+      message: label,
+      child: NocturneButton(
+        label: 'Undo',
+        icon: Icons.undo,
+        variant: NocturneButtonVariant.primary,
+        onPressed: onPressed,
+      ),
     );
   }
 }
@@ -450,13 +460,7 @@ class _Toast extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nocturne;
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: tokens.neutral800,
-        borderRadius: BorderRadius.circular(NocturneRadius.md),
-        boxShadow: const [
-          BoxShadow(color: Colors.black45, blurRadius: 18, offset: Offset(0, 6)),
-        ],
-      ),
+      decoration: panelDecoration(context),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
         child: Text(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/nocturne_theme.dart';
+import '../panel/panel.dart';
 
 const _monthNames = [
   'January',
@@ -52,14 +53,9 @@ class MiniCalendar extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
+            child: StampLabel(
               '${_monthNames[month.month - 1]} ${month.year}',
-              style: TextStyle(
-                fontSize: 11,
-                letterSpacing: 0.06,
-                fontWeight: FontWeight.w500,
-                color: tokens.neutral500,
-              ),
+              size: 12,
             ),
           ),
           Row(
@@ -69,55 +65,68 @@ class MiniCalendar extends StatelessWidget {
                   child: Text(
                     label,
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 10, color: tokens.neutral500),
+                    style: TextStyle(
+                      fontFamily: kPanelFont,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11,
+                      color: tokens.neutral500,
+                    ),
                   ),
                 ),
             ],
           ),
           const SizedBox(height: 4),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 7,
-              mainAxisSpacing: 3,
-              crossAxisSpacing: 3,
-              childAspectRatio: 1.6,
-            ),
-            itemCount: startOffset + daysInMonth,
-            itemBuilder: (context, index) {
-              if (index < startOffset) return const SizedBox.shrink();
-              final day = index - startOffset + 1;
-              final date = DateTime(month.year, month.month, day);
-              final isToday = isSameDay(date, today);
-              final isSelected = selectedDay != null
-                  ? isSameDay(date, selectedDay!)
-                  : false;
-
-              return InkWell(
-                onTap: () => onDayTap(date),
-                borderRadius: BorderRadius.circular(4),
-                child: Container(
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: isToday ? accent : null,
-                    shape: BoxShape.circle,
-                    border: (!isToday && isSelected)
-                        ? Border.all(color: accent)
-                        : null,
-                  ),
-                  child: Text(
-                    '$day',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isToday
-                          ? Colors.white
-                          : (isSelected ? accent : tokens.neutral300),
-                    ),
-                  ),
+          DecoratedBox(
+            decoration: panelDecoration(context, depth: PanelDepth.recessed),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 7,
+                  mainAxisSpacing: 3,
+                  crossAxisSpacing: 3,
+                  childAspectRatio: 1.6,
                 ),
-              );
-            },
+                itemCount: startOffset + daysInMonth,
+                itemBuilder: (context, index) {
+                  if (index < startOffset) return const SizedBox.shrink();
+                  final day = index - startOffset + 1;
+                  final date = DateTime(month.year, month.month, day);
+                  final isToday = isSameDay(date, today);
+                  final isSelected = selectedDay != null
+                      ? isSameDay(date, selectedDay!)
+                      : false;
+
+                  return InkWell(
+                    onTap: () => onDayTap(date),
+                    borderRadius: BorderRadius.circular(4),
+                    child: Container(
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: isToday ? accent : null,
+                        shape: BoxShape.circle,
+                        border: (!isToday && isSelected)
+                            ? Border.all(color: accent)
+                            : null,
+                      ),
+                      child: Text(
+                        '$day',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isToday
+                              ? (accent.computeLuminance() > 0.5
+                                    ? Colors.black
+                                    : Colors.white)
+                              : (isSelected ? accent : tokens.neutral300),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
         ],
       ),
