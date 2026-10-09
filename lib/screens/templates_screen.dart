@@ -10,7 +10,7 @@ import '../widgets/panel/panel.dart';
 import 'empty_state.dart';
 import 'task_template_editor_screen.dart';
 
-/// A reusable pattern's list: each row rolls down an "Edit template"/"Use
+/// A reusable pattern's list: each card rolls down an "Edit template"/"Use
 /// template" menu on its overflow icon, replacing what were previously two
 /// always-visible buttons.
 class TemplatesScreen extends ConsumerWidget {
@@ -20,58 +20,93 @@ class TemplatesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final templates = ref.watch(taskTemplatesProvider);
 
-    return Padding(
-      padding: const EdgeInsets.all(16.8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final gutter = width < NocturneBreakpoints.compact
+            ? NocturneSpace.s4
+            : NocturneSpace.s6;
+        // 1 column compact, 2 medium, 3 standard, 4 wide.
+        final columns = width < NocturneBreakpoints.compact
+            ? 1
+            : width < NocturneBreakpoints.medium
+            ? 2
+            : width < NocturneBreakpoints.wide
+            ? 3
+            : 4;
+        final cardWidth =
+            (width - gutter * 2 - NocturneSpace.s3 * (columns - 1)) / columns;
+
+        return Padding(
+          padding: EdgeInsets.all(gutter),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  'Templates',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Templates',
+                      style: Theme.of(context).textTheme.displaySmall,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: NocturneSpace.s2),
+                  NocturneButton(
+                    label: 'New template',
+                    icon: Icons.add,
+                    variant: NocturneButtonVariant.primary,
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const TaskTemplateEditorScreen(),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              NocturneButton(
-                label: 'New template',
-                icon: Icons.add,
-                variant: NocturneButtonVariant.primary,
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const TaskTemplateEditorScreen(),
+              const SizedBox(height: NocturneSpace.s4),
+              if (templates.isEmpty)
+                const Expanded(
+                  child: EmptyState(
+                    icon: Icons.copy_all_outlined,
+                    message:
+                        'No templates yet.\nA template sets up a main task with its subtasks, ready to reuse.',
+                  ),
+                )
+              else
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Wrap(
+                      spacing: NocturneSpace.s3,
+                      runSpacing: NocturneSpace.s3,
+                      children: [
+                        for (final template in templates)
+                          SizedBox(
+                            width: cardWidth,
+                            child: _TemplateRow(
+                              template: template,
+                              // No hover on touch / narrow windows.
+                              alwaysShowMenu:
+                                  width < NocturneBreakpoints.compact,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
-          const SizedBox(height: 16.8),
-          if (templates.isEmpty)
-            const Expanded(
-              child: EmptyState(
-                icon: Icons.copy_all_outlined,
-                message: 'No templates yet.\nA template sets up a main task with its subtasks, ready to reuse.',
-              ),
-            )
-          else
-            Expanded(
-              child: ListView.separated(
-                itemCount: templates.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 8.4),
-                itemBuilder: (context, index) =>
-                    _TemplateRow(template: templates[index]),
-              ),
-            ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
 
 class _TemplateRow extends StatefulWidget {
-  const _TemplateRow({required this.template});
+  const _TemplateRow({required this.template, required this.alwaysShowMenu});
 
   final TaskTemplate template;
+  final bool alwaysShowMenu;
 
   @override
   State<_TemplateRow> createState() => _TemplateRowState();
@@ -84,19 +119,25 @@ class _TemplateRowState extends State<_TemplateRow> {
   @override
   Widget build(BuildContext context) {
     final tokens = context.nocturne;
+    final count = widget.template.subtasks.length;
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
       child: PanelCard(
-        padding: const EdgeInsets.all(11.2),
+        padding: const EdgeInsets.fromLTRB(
+          NocturneSpace.s4,
+          NocturneSpace.s3,
+          NocturneSpace.s2,
+          NocturneSpace.s3,
+        ),
         child: Row(
           children: [
             Icon(
               Icons.copy_all_outlined,
               size: 20,
-              color: context.nocturneAccent.withValues(alpha: 0.8),
+              color: context.nocturneAccent,
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: NocturneSpace.s3),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -104,24 +145,28 @@ class _TemplateRowState extends State<_TemplateRow> {
                 children: [
                   Text(
                     widget.template.name,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontFamily: kPanelFont,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 20,
-                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleSmall,
                   ),
                   Text(
-                    '${widget.template.subtasks.length} subtask(s)',
-                    style: TextStyle(fontSize: 13, color: tokens.neutral400),
+                    '$count subtask(s)',
+                    style: TextStyle(fontSize: 12, color: tokens.neutral500),
                   ),
                 ],
               ),
             ),
-            if (_hovering || _menuOpen)
-              IconButton(
-                icon: Icon(Icons.more_vert, size: 18),
-                onPressed: () => _openMenu(context),
-              ),
+            // Fixed slot so the card does not jump when the button appears.
+            SizedBox(
+              width: 40,
+              height: 40,
+              child: (_hovering || _menuOpen || widget.alwaysShowMenu)
+                  ? IconButton(
+                      icon: const Icon(Icons.more_vert, size: 18),
+                      onPressed: () => _openMenu(context),
+                    )
+                  : null,
+            ),
           ],
         ),
       ),
@@ -148,20 +193,20 @@ class _TemplateRowState extends State<_TemplateRow> {
       context: context,
       position: position,
       items: [
-        PopupMenuItem(
+        const PopupMenuItem(
           value: 'edit',
           child: ListTile(
             contentPadding: EdgeInsets.zero,
             leading: Icon(Icons.edit_outlined),
-            title: const Text('Edit template'),
+            title: Text('Edit template'),
           ),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: 'use',
           child: ListTile(
             contentPadding: EdgeInsets.zero,
             leading: Icon(Icons.copy_all_outlined),
-            title: const Text('Use template'),
+            title: Text('Use template'),
           ),
         ),
       ],
