@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/projects_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
-import '../theme/nocturne_theme.dart';
+import '../widgets/panel/panel.dart';
 import '../widgets/project_name_lookup.dart';
 import '../widgets/smart_view_task_row.dart';
 import 'empty_state.dart';
@@ -47,7 +47,6 @@ class UpcomingScreen extends ConsumerWidget {
     }
 
     final projectNames = buildProjectNameLookup(projects);
-    final tokens = context.nocturne;
 
     // See today_screen.dart's build method for why this is a
     // CustomScrollView/SliverList rather than a Column-in-a-Card: Upcoming
@@ -58,17 +57,16 @@ class UpcomingScreen extends ConsumerWidget {
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16.8, 16.8, 16.8, 0),
           sliver: SliverToBoxAdapter(
-            child: Text('Upcoming', style: Theme.of(context).textTheme.headlineSmall),
+            child: Text(
+              'Upcoming',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
           ),
         ),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16.8, 16.8, 16.8, 16.8),
           sliver: DecoratedSliver(
-            decoration: BoxDecoration(
-              color: tokens.surface,
-              borderRadius: BorderRadius.circular(NocturneRadius.md),
-              border: Border.all(color: tokens.neutral800),
-            ),
+            decoration: panelDecoration(context, depth: PanelDepth.flat),
             sliver: SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 11.2),
               sliver: SliverList.builder(

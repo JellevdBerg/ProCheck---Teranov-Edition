@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/projects_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
-import '../theme/nocturne_theme.dart';
+import '../widgets/panel/panel.dart';
 import '../widgets/project_name_lookup.dart';
 import '../widgets/smart_view_task_row.dart';
 import 'empty_state.dart';
@@ -29,10 +29,11 @@ class TodayScreen extends ConsumerWidget {
     final reduceMotion = ref.watch(settingsProvider).reduceMotion;
     final now = DateTime.now();
 
-    final todayTasks = tasks
-        .where((t) => t.dueDate != null && _isSameDay(t.dueDate!, now))
-        .toList()
-      ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
+    final todayTasks =
+        tasks
+            .where((t) => t.dueDate != null && _isSameDay(t.dueDate!, now))
+            .toList()
+          ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
 
     if (todayTasks.isEmpty) {
       return const EmptyState(
@@ -42,7 +43,6 @@ class TodayScreen extends ConsumerWidget {
     }
 
     final projectNames = buildProjectNameLookup(projects);
-    final tokens = context.nocturne;
 
     // A CustomScrollView + SliverList, not the Column-in-a-Card used
     // elsewhere in the app, so that with thousands of tasks due today only
@@ -54,17 +54,16 @@ class TodayScreen extends ConsumerWidget {
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16.8, 16.8, 16.8, 0),
           sliver: SliverToBoxAdapter(
-            child: Text('Today', style: Theme.of(context).textTheme.headlineSmall),
+            child: Text(
+              'Today',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
           ),
         ),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16.8, 16.8, 16.8, 16.8),
           sliver: DecoratedSliver(
-            decoration: BoxDecoration(
-              color: tokens.surface,
-              borderRadius: BorderRadius.circular(NocturneRadius.md),
-              border: Border.all(color: tokens.neutral800),
-            ),
+            decoration: panelDecoration(context, depth: PanelDepth.flat),
             sliver: SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 11.2),
               sliver: SliverList.builder(
