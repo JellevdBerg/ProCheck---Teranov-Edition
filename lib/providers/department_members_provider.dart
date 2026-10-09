@@ -14,18 +14,26 @@ class DirectoryEntry {
     required this.displayName,
     required this.role,
     this.departmentId,
+    this.customRoleId,
+    this.customRoleName,
   });
 
   final String id;
   final String displayName;
   final UserRole role;
   final String? departmentId;
+  final String? customRoleId;
+
+  /// The job title, when this person has one.
+  final String? customRoleName;
 
   factory DirectoryEntry.fromJson(Map<String, dynamic> json) => DirectoryEntry(
     id: json['id'] as String,
     displayName: json['display_name'] as String,
     role: json['role'] == 'manager' ? UserRole.manager : UserRole.member,
     departmentId: json['department_id'] as String?,
+    customRoleId: json['custom_role_id'] as String?,
+    customRoleName: json['custom_role_name'] as String?,
   );
 }
 

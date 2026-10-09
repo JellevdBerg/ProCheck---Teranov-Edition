@@ -25,7 +25,7 @@ const _dragGhostAnimationDuration = Duration(milliseconds: 150);
 // positioning (which lane it visually lands in) — one source of truth so
 // the two can never drift apart.
 const _rowTopInset = 35.0; // 6px top padding + the day-number row + 3px gap
-const _laneHeight = 30.0; // 27px bar + 3px gap below it
+const _laneHeight = 32.0; // 27px bar + 5px gap below it
 const _overflowChipHeight = 20.0;
 
 /// Corner radius of a task bar (and of its weekend connector's cap).
@@ -351,12 +351,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   ],
                 ),
                 const SizedBox(height: NocturneSpace.s2),
-                Row(
-                  children: [
-                    taskmaster,
-                    const SizedBox(width: NocturneSpace.s2),
-                    Flexible(child: viewToggle),
-                  ],
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: NocturneSpace.s2,
+                  runSpacing: NocturneSpace.s2,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [taskmaster, viewToggle],
                 ),
               ] else
                 Row(
@@ -365,8 +365,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     const SizedBox(width: NocturneSpace.s2),
                     ...chevrons,
                     const SizedBox(width: NocturneSpace.s1),
-                    Flexible(child: headerText),
-                    const Spacer(),
+                    Expanded(child: headerText),
                     taskmaster,
                     const SizedBox(width: NocturneSpace.s2),
                     viewToggle,
@@ -1426,10 +1425,13 @@ _TaskBarStyle _resolveTaskBarStyle(
       : (isOverdue ? tokens.danger : (isSoon ? tokens.warn : null));
   // Blended onto the opaque surface (not left translucent) so the grid lines
   // behind a bar never show through it.
+  // Neutral bars sit one step darker than the grid so they stand out from it
+  // (light: grey on white; dark: lifted off the near-black cell), and keep a
+  // strong border so adjacent bars read as separate.
   final bg = statusColor == null || task.isChecked
-      ? tokens.raised
+      ? tokens.neutral800
       : Color.alphaBlend(
-          statusColor.withValues(alpha: tokens.isDark ? 0.18 : 0.12),
+          statusColor.withValues(alpha: tokens.isDark ? 0.26 : 0.20),
           tokens.surface,
         );
   // Darkened on enamel so project-coloured legends stay readable on the tint.
@@ -1441,14 +1443,14 @@ _TaskBarStyle _resolveTaskBarStyle(
     bg: bg,
     fg: task.isChecked ? tokens.neutral500 : tokens.text,
     border: statusColor == null || task.isChecked
-        ? tokens.borderStrong
-        : statusColor.withValues(alpha: 0.7),
+        ? tokens.neutral600
+        : statusColor,
     originColor: originColor,
     originLabel: project != null ? project.name : 'Unfiled',
     priorityColor: switch (task.priority) {
-      TaskPriority.high => NocturnePriority.high,
-      TaskPriority.med => NocturnePriority.med,
-      TaskPriority.low => NocturnePriority.low,
+      TaskPriority.high => tokens.danger,
+      TaskPriority.med => tokens.warn,
+      TaskPriority.low => tokens.low,
       TaskPriority.none => null,
     },
     isOverdue: isOverdue,

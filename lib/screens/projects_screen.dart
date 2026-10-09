@@ -10,6 +10,7 @@ import '../providers/projects_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
 import '../providers/undo_provider.dart';
+import '../providers/roles_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/create_task_sheet.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
@@ -195,13 +196,17 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: NocturneSpace.s3),
-                NocturneButton(
-                  label: 'New project',
-                  icon: Icons.add,
-                  variant: NocturneButtonVariant.primary,
-                  onPressed: () => _createProject(context),
-                ),
+                // Only people the database lets create projects see the button.
+                if (ref.watch(permissionsProvider).createProjects) ...[
+                  const SizedBox(width: NocturneSpace.s3),
+                  NocturneButton(
+                    label: 'New project',
+                    minWidth: 132,
+                    icon: Icons.add,
+                    variant: NocturneButtonVariant.primary,
+                    onPressed: () => _createProject(context),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: NocturneSpace.s4),
@@ -230,6 +235,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                     const Expanded(child: NocturneSectionLabel('TASKS')),
                     NocturneButton(
                       label: 'New task',
+                  minWidth: 132,
                       icon: Icons.add,
                       variant: NocturneButtonVariant.primary,
                       onPressed: () => showCreateTaskSheet(context),

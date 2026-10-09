@@ -14,9 +14,12 @@ import '../theme/nocturne_theme.dart';
 /// `Member` / `Manager` chip. Manager is filled and Member outlined, so the
 /// difference does not depend on colour.
 class RolePlate extends StatelessWidget {
-  const RolePlate({super.key, required this.isManager});
+  const RolePlate({super.key, required this.isManager, this.title});
 
   final bool isManager;
+
+  /// A member's job title (custom role). Managers always read "Manager".
+  final String? title;
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +32,7 @@ class RolePlate extends StatelessWidget {
         border: Border.all(color: isManager ? Colors.transparent : t.borderStrong),
       ),
       child: Text(
-        isManager ? 'Manager' : 'Member',
+        isManager ? 'Manager' : ((title ?? '').isEmpty ? 'Member' : title!),
         maxLines: 1,
         style: TextStyle(
           fontSize: 11.5,

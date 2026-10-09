@@ -1446,3 +1446,711 @@ create trigger protect_operator_department
   for each row
   when (old.is_operator)
   execute function public.prevent_operator_department_delete();
+
+
+-- ===== 20261009160000_department_roles.sql =====
+-- Custom roles (job titles with a few permissions), per department, plus the
+-- guards that make profile role/department/role-assignment tamper-proof.
+-- Additive: existing users have no custom role and keep working as plain
+-- members; managers are unchanged.
+
+-- ---------------------------------------------------------------- roles table
+create table public.department_roles (
+  id uuid primary key default gen_random_uuid(),
+  department_id uuid not null references public.departments (id) on delete cascade,
+  name text not null,
+  -- The only things a custom role can add on top of plain member rights.
+  -- Everything else (managing roles, promoting managers, adding/removing
+  -- members, deleting projects) stays manager-only and has no flag here.
+  create_projects boolean not null default false,
+  edit_projects boolean not null default false,
+  manage_tasks boolean not null default false,
+  view_team boolean not null default false,
+  created_at timestamptz not null default now(),
+  constraint department_roles_name_ok check (
+    length(btrim(name)) between 1 and 40
+    and lower(btrim(name)) <> 'manager'  -- "Manager" is the one fixed role
+  )
+);
+create unique index department_roles_dept_name_key
+  on public.department_roles (department_id, lower(btrim(name)));
+
+alter table public.profiles
+  add column custom_role_id uuid references public.department_roles (id) on delete restrict;  -- blocks deleting a role that is still assigned
+
+alter table public.department_roles enable row level security;
+revoke all on public.department_roles from anon;
+grant select, insert, update, delete on public.department_roles to authenticated;
+
+-- ------------------------------------------------------------------- helpers
+create or replace function public.my_department()
+returns uuid language sql stable security definer set search_path = public as $$
+  select department_id from public.profiles where id = auth.uid();
+$$;
+
+create or replace function public.is_dept_manager()
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((select role = 'manager' from public.profiles where id = auth.uid()), false);
+$$;
+
+-- Manager, or a member whose custom role carries permission p. Does NOT cover
+-- Operator/IT (callers add `is_admin() or ...`).
+create or replace function public.has_dept_permission(p text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((
+    select pr.role = 'manager'
+        or coalesce(case p
+             when 'create_projects' then dr.create_projects
+             when 'edit_projects'   then dr.edit_projects
+             when 'manage_tasks'    then dr.manage_tasks
+             when 'view_team'       then dr.view_team
+           end, false)
+    from public.profiles pr
+    left join public.department_roles dr
+      on dr.id = pr.custom_role_id and dr.department_id = pr.department_id
+    where pr.id = auth.uid()
+  ), false);
+$$;
+
+create or replace function public.is_it_manager()
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((
+    select p.role = 'manager' and d.is_it
+    from public.profiles p join public.departments d on d.id = p.department_id
+    where p.id = auth.uid()
+  ), false);
+$$;
+
+-- --------------------------------------------------------- roles table policies
+create policy department_roles_select on public.department_roles
+  for select to authenticated
+  using (public.is_admin() or department_id = public.my_department());
+
+create policy department_roles_insert on public.department_roles
+  for insert to authenticated
+  with check (public.is_admin()
+    or (public.is_dept_manager() and department_id = public.my_department()));
+
+create policy department_roles_update on public.department_roles
+  for update to authenticated
+  using (public.is_admin()
+    or (public.is_dept_manager() and department_id = public.my_department()))
+  with check (public.is_admin()
+    or (public.is_dept_manager() and department_id = public.my_department()));
+
+create policy department_roles_delete on public.department_roles
+  for delete to authenticated
+  using (public.is_admin()
+    or (public.is_dept_manager() and department_id = public.my_department()));
+
+-- A role's department can never change (it would "reach across departments").
+create or replace function public.protect_department_role()
+returns trigger language plpgsql as $$
+begin
+  if new.department_id is distinct from old.department_id then
+    raise exception 'A role cannot be moved to another department';
+  end if;
+  return new;
+end;
+$$;
+create trigger protect_department_role_trigger
+  before update on public.department_roles
+  for each row execute function public.protect_department_role();
+
+-- ----------------------------------------------------- profile tamper-proofing
+-- role, department, custom role, username and email may only change inside the
+-- admin functions below (they set procheck.rpc), or from the SQL editor /
+-- service role (auth.uid() is null). Everything else a user may edit on
+-- their own row (display_name) still works.
+create or replace function public.protect_profile_privileges()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null or current_setting('procheck.rpc', true) = 'on' then
+    return new;
+  end if;
+  if new.id is distinct from old.id
+     or new.role is distinct from old.role
+     or new.department_id is distinct from old.department_id
+     or new.custom_role_id is distinct from old.custom_role_id
+     or new.username is distinct from old.username
+     or new.email is distinct from old.email
+     or new.created_at is distinct from old.created_at then
+    raise exception 'Role, department and username can only be changed by an admin';
+  end if;
+  return new;
+end;
+$$;
+
+-- Keeps a custom role valid: only on members, only from the profile's own
+-- department; moving department or becoming manager clears it.
+create or replace function public.check_profile_custom_role()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'UPDATE'
+     and (new.department_id is distinct from old.department_id or new.role = 'manager') then
+    new.custom_role_id := null;
+  end if;
+  if new.custom_role_id is not null and not exists (
+       select 1 from public.department_roles r
+       where r.id = new.custom_role_id and r.department_id = new.department_id) then
+    raise exception 'That role belongs to another department';
+  end if;
+  return new;
+end;
+$$;
+create trigger check_profile_custom_role_trigger
+  before insert or update on public.profiles
+  for each row execute function public.check_profile_custom_role();
+
+-- The Operator department has exactly one user.
+create or replace function public.enforce_single_operator()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.department_id is not null
+     and (tg_op = 'INSERT' or new.department_id is distinct from old.department_id)
+     and exists (select 1 from public.departments d where d.id = new.department_id and d.is_operator)
+     and exists (select 1 from public.profiles p
+                 where p.department_id = new.department_id and p.id <> new.id) then
+    raise exception 'The Operator department has exactly one user';
+  end if;
+  return new;
+end;
+$$;
+create trigger enforce_single_operator_trigger
+  before insert or update of department_id on public.profiles
+  for each row execute function public.enforce_single_operator();
+
+-- ------------------------------------------------------------ profile reads
+-- Managers, and members whose role has "view_team", see their department's
+-- profiles (Team dashboard). Operator/IT still see everyone; everyone sees self.
+drop policy if exists profiles_select_department_as_manager on public.profiles;
+create policy profiles_select_department_team on public.profiles
+  for select to authenticated
+  using (department_id = public.my_department()
+         and public.has_dept_permission('view_team'));
+
+-- Same people as before, now with the job title.
+drop function if exists public.profile_directory();
+create function public.profile_directory()
+returns table (id uuid, display_name text, role user_role, department_id uuid,
+               custom_role_id uuid, custom_role_name text)
+language sql stable security definer set search_path = public as $$
+  select p.id, p.display_name, p.role, p.department_id, p.custom_role_id, dr.name
+  from public.profiles p
+  left join public.department_roles dr on dr.id = p.custom_role_id
+  where p.id = auth.uid()
+     or public.is_admin()
+     or p.department_id = public.my_department();
+$$;
+
+-- --------------------------------------------------- function exposure cleanup
+-- Helpers and trigger functions need not be callable by signed-out visitors.
+revoke execute on function public.prevent_operator_department_delete() from public, anon, authenticated;
+alter function public.prevent_operator_department_delete() set search_path = public;
+revoke execute on function public.protect_profile_privileges() from public, anon, authenticated;
+revoke execute on function public.check_profile_custom_role() from public, anon, authenticated;
+revoke execute on function public.enforce_single_operator() from public, anon, authenticated;
+revoke execute on function public.protect_department_role() from public, anon, authenticated;
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+revoke execute on function public.set_department_from_owner() from public, anon, authenticated;
+revoke execute on function public.protect_task_project_assignment() from public, anon, authenticated;
+revoke execute on function public.admin_create_department(text) from public, anon;
+revoke execute on function public.admin_create_department(text, boolean) from public, anon;
+revoke execute on function public.admin_create_profile(text, text, text, text, uuid) from public, anon;
+revoke execute on function public.admin_delete_department(uuid) from public, anon;
+revoke execute on function public.admin_delete_profile(uuid) from public, anon;
+revoke execute on function public.current_profile() from public, anon;
+revoke execute on function public.is_admin() from public, anon;
+revoke execute on function public.is_operator() from public, anon;
+revoke execute on function public.profile_directory() from public, anon;
+grant execute on function public.profile_directory() to authenticated;
+revoke execute on function public.my_department() from public, anon;
+revoke execute on function public.is_dept_manager() from public, anon;
+revoke execute on function public.has_dept_permission(text) from public, anon;
+revoke execute on function public.is_it_manager() from public, anon;
+
+
+-- ===== 20261009161000_account_rules.sql =====
+-- Who may create / delete accounts and change roles, enforced server-side.
+-- These functions are the only way to change a profile's role, department or
+-- custom role (see protect_profile_privileges).
+--
+-- Operator: everything, except there is exactly one Operator account.
+-- IT manager: add/remove IT members; everything IT can do.
+-- IT member: everything IT can do except touch the IT department's people.
+-- IT (any): create departments (existing), add managers and members to any
+--   department other than Operator/IT, promote/demote managers there.
+-- Department manager: add/remove MEMBERS of their own department, hand out
+--   that department's custom roles. Cannot make managers.
+-- Only the Operator can create, promote or remove IT managers.
+
+create or replace function public.admin_create_profile(
+  p_username text, p_password text, p_display_name text,
+  p_role text default 'member', p_department_id uuid default null)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  me public.profiles;
+  dept public.departments;
+  new_user_id uuid;
+  synthetic_email text;
+  clean_username text;
+begin
+  select * into me from public.profiles where id = auth.uid();
+  if me.id is null then raise exception 'Not signed in'; end if;
+
+  select * into dept from public.departments where id = p_department_id;
+  if dept.id is null then raise exception 'Pick a department'; end if;
+  if p_role not in ('member', 'manager') then
+    raise exception 'role must be ''member'' or ''manager''';
+  end if;
+  if dept.is_operator then
+    raise exception 'The Operator department has exactly one user';
+  end if;
+
+  if public.is_operator() then
+    null;
+  elsif dept.is_it then
+    if not public.is_it_manager() then
+      raise exception 'Only the Operator or an IT manager can add IT accounts';
+    end if;
+    if p_role = 'manager' then
+      raise exception 'Only the Operator can assign IT managers';
+    end if;
+  elsif public.is_admin() then
+    null;
+  elsif me.role = 'manager' and me.department_id = dept.id then
+    if p_role <> 'member' then
+      raise exception 'Managers can add members only';
+    end if;
+  else
+    raise exception 'You are not allowed to create accounts in this department';
+  end if;
+
+  clean_username := lower(trim(p_username));
+  if length(clean_username) = 0 then raise exception 'Username cannot be empty'; end if;
+  if length(p_password) < 6 then raise exception 'Password must be at least 6 characters'; end if;
+  if exists (select 1 from public.profiles where username = clean_username) then
+    raise exception 'Username "%" is already taken', clean_username;
+  end if;
+
+  synthetic_email := clean_username || '@procheck.local';
+  new_user_id := gen_random_uuid();
+
+  insert into auth.users (
+    instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, email_change, email_change_token_new, recovery_token
+  ) values (
+    '00000000-0000-0000-0000-000000000000', new_user_id, 'authenticated', 'authenticated',
+    synthetic_email, extensions.crypt(p_password, extensions.gen_salt('bf')), now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    jsonb_build_object('username', clean_username, 'display_name', trim(p_display_name)),
+    now(), now(), '', '', '', ''
+  );
+
+  insert into auth.identities (
+    id, user_id, provider_id, identity_data, provider,
+    last_sign_in_at, created_at, updated_at
+  ) values (
+    gen_random_uuid(), new_user_id, new_user_id::text,
+    jsonb_build_object('sub', new_user_id::text, 'email', synthetic_email),
+    'email', now(), now(), now()
+  );
+
+  perform set_config('procheck.rpc', 'on', true);
+  update public.profiles
+     set role = p_role::user_role, department_id = dept.id
+   where id = new_user_id;
+
+  return new_user_id;
+end;
+$$;
+
+create or replace function public.admin_delete_profile(p_user_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  me public.profiles;
+  target public.profiles;
+  tdept public.departments;
+begin
+  select * into me from public.profiles where id = auth.uid();
+  select * into target from public.profiles where id = p_user_id;
+  if target.id is null then raise exception 'Account not found'; end if;
+  select * into tdept from public.departments where id = target.department_id;
+
+  if p_user_id = auth.uid() then raise exception 'Cannot delete your own account'; end if;
+  if lower(target.username) = 'dev' then raise exception 'The Dev account cannot be deleted'; end if;
+  if coalesce(tdept.is_operator, false) then
+    raise exception 'The Operator account cannot be deleted';
+  end if;
+
+  if public.is_operator() then
+    null;
+  elsif coalesce(tdept.is_it, false) then
+    if not (public.is_it_manager() and target.role = 'member') then
+      raise exception 'Only the Operator can remove IT managers; IT managers can remove IT members';
+    end if;
+  elsif public.is_admin() then
+    null;
+  elsif me.role = 'manager' and me.department_id = target.department_id and target.role = 'member' then
+    null;
+  else
+    raise exception 'You are not allowed to delete this account';
+  end if;
+
+  delete from auth.users where id = p_user_id;
+end;
+$$;
+
+-- Promote a member to manager, or demote a manager to member.
+create or replace function public.set_user_role(p_user_id uuid, p_role text)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  target public.profiles;
+  tdept public.departments;
+begin
+  if p_role not in ('member', 'manager') then
+    raise exception 'role must be ''member'' or ''manager''';
+  end if;
+  select * into target from public.profiles where id = p_user_id;
+  if target.id is null then raise exception 'Account not found'; end if;
+  select * into tdept from public.departments where id = target.department_id;
+
+  if p_user_id = auth.uid() then raise exception 'You cannot change your own role'; end if;
+  if lower(target.username) = 'dev' or coalesce(tdept.is_operator, false) then
+    raise exception 'That account''s role is fixed';
+  end if;
+
+  if coalesce(tdept.is_it, false) then
+    if not public.is_operator() then
+      raise exception 'Only the Operator can assign or remove IT managers';
+    end if;
+  elsif not public.is_admin() then
+    raise exception 'Only IT or the Operator can assign or remove managers';
+  end if;
+
+  perform set_config('procheck.rpc', 'on', true);
+  update public.profiles set role = p_role::user_role where id = p_user_id;
+end;
+$$;
+
+-- Give a member a job title (or clear it with null).
+create or replace function public.set_member_role(p_user_id uuid, p_role_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  me public.profiles;
+  target public.profiles;
+begin
+  select * into me from public.profiles where id = auth.uid();
+  select * into target from public.profiles where id = p_user_id;
+  if target.id is null then raise exception 'Account not found'; end if;
+  if target.role <> 'member' then raise exception 'Only members can have a job title'; end if;
+
+  if not (public.is_admin()
+          or (me.role = 'manager' and me.department_id = target.department_id)) then
+    raise exception 'You are not allowed to change this person''s role';
+  end if;
+  if p_role_id is not null and not exists (
+       select 1 from public.department_roles r
+       where r.id = p_role_id and r.department_id = target.department_id) then
+    raise exception 'That role belongs to another department';
+  end if;
+
+  perform set_config('procheck.rpc', 'on', true);
+  update public.profiles set custom_role_id = p_role_id where id = p_user_id;
+end;
+$$;
+
+revoke execute on function public.set_user_role(uuid, text) from public, anon;
+revoke execute on function public.set_member_role(uuid, uuid) from public, anon;
+grant execute on function public.set_user_role(uuid, text) to authenticated;
+grant execute on function public.set_member_role(uuid, uuid) to authenticated;
+revoke execute on function public.admin_create_profile(text, text, text, text, uuid) from public, anon;
+revoke execute on function public.admin_delete_profile(uuid) from public, anon;
+
+
+-- ===== 20261009162000_project_task_rules.sql =====
+-- Projects belong to a DEPARTMENT (never a user); who may create/edit them,
+-- who sees which tasks, who may assign, and who checked a task off.
+--
+-- Projects:  Operator/IT see and change everything (incl. the owning
+--   department). Everyone else sees their own department's projects. Create =
+--   manager or a role with create_projects; edit/archive = manager or
+--   edit_projects; delete = manager only.
+-- Tasks in a project: every member of the project's department can see them
+--   (so a check-off reaches everyone who should see it, live). Members can
+--   change only tasks they own or are assigned; managers (and manage_tasks
+--   roles) can create/assign/move them.
+-- Personal tasks (no project): the creator, their department manager,
+--   Operator and IT only.
+
+alter table public.tasks
+  add column completed_by uuid references public.profiles (id) on delete set null;
+
+-- The department that currently owns a task's project (used so a project
+-- handed to another department takes its tasks' visibility with it).
+create or replace function public.task_project_department(p_project_id uuid)
+returns uuid language sql stable security definer set search_path = public as $$
+  select department_id from public.projects where id = p_project_id;
+$$;
+revoke execute on function public.task_project_department(uuid) from public, anon;
+grant execute on function public.task_project_department(uuid) to authenticated;
+
+-- ---------------------------------------------------------------- projects
+drop policy projects_select on public.projects;
+drop policy projects_insert_own on public.projects;
+drop policy projects_update on public.projects;
+drop policy projects_delete on public.projects;
+
+create policy projects_select on public.projects for select to authenticated
+  using (public.is_admin() or department_id = public.my_department());
+
+-- Real "create" permission is enforced in the insert trigger (the check here
+-- also lets edit-only roles through, because the app saves with upsert).
+create policy projects_insert on public.projects for insert to authenticated
+  with check (public.is_admin()
+    or (department_id = public.my_department()
+        and (public.has_dept_permission('create_projects')
+             or public.has_dept_permission('edit_projects'))));
+
+create policy projects_update on public.projects for update to authenticated
+  using (public.is_admin()
+    or (department_id = public.my_department()
+        and public.has_dept_permission('edit_projects')))
+  with check (public.is_admin() or department_id = public.my_department());
+
+create policy projects_delete on public.projects for delete to authenticated
+  using (public.is_admin()
+    or (department_id = public.my_department() and public.is_dept_manager()));
+
+create or replace function public.set_project_ownership()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare mydept uuid;
+begin
+  if auth.uid() is null then return new; end if;
+  -- An upsert that lands on an existing row is an update: leave it to the
+  -- update guard so it can't re-home the project.
+  if exists (select 1 from public.projects where id = new.id) then return new; end if;
+  mydept := public.my_department();
+  if mydept is null then raise exception 'You need a department to create projects'; end if;
+  if not (public.is_admin() or public.has_dept_permission('create_projects')) then
+    raise exception 'You are not allowed to create projects';
+  end if;
+  new.owner_id := auth.uid();   -- "created by" only; ownership is the department
+  new.department_id := mydept;
+  return new;
+end;
+$$;
+drop trigger set_project_department on public.projects;
+create trigger set_project_ownership_trigger
+  before insert on public.projects
+  for each row execute function public.set_project_ownership();
+
+create or replace function public.protect_project_changes()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return new; end if;
+  new.owner_id := old.owner_id;
+  if new.department_id is distinct from old.department_id and not public.is_admin() then
+    raise exception 'Only IT or the Operator can change a project''s owning department';
+  end if;
+  return new;
+end;
+$$;
+create trigger protect_project_changes_trigger
+  before update on public.projects
+  for each row execute function public.protect_project_changes();
+
+-- Comments / activity: any member of the owning department (or IT/Operator)
+-- may add one entry, without needing edit rights on the project row.
+create or replace function public.append_project_comment(p_project_id uuid, p_comment jsonb)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if jsonb_typeof(p_comment) is distinct from 'object'
+      or not (p_comment ?& array['id', 'author', 'text', 'timestamp']) then
+    raise exception 'invalid comment';
+  end if;
+  if not exists (select 1 from public.projects
+                 where id = p_project_id
+                   and (public.is_admin() or department_id = public.my_department())) then
+    raise exception 'project not found or not permitted';
+  end if;
+  update public.projects
+     set comments = comments || jsonb_build_array(p_comment)
+   where id = p_project_id;
+end;
+$$;
+
+create or replace function public.append_project_activity(p_project_id uuid, p_entry jsonb)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if jsonb_typeof(p_entry) is distinct from 'object'
+      or not (p_entry ?& array['kindIndex', 'description', 'timestamp']) then
+    raise exception 'invalid activity entry';
+  end if;
+  if not exists (select 1 from public.projects
+                 where id = p_project_id
+                   and (public.is_admin() or department_id = public.my_department())) then
+    raise exception 'project not found or not permitted';
+  end if;
+  update public.projects
+     set activity_log = (
+       select coalesce(jsonb_agg(e order by i), '[]'::jsonb)
+         from jsonb_array_elements(activity_log || jsonb_build_array(p_entry))
+              with ordinality as t(e, i)
+        where i > jsonb_array_length(activity_log) + 1 - 200
+     )
+   where id = p_project_id;
+end;
+$$;
+revoke execute on function public.append_project_comment(uuid, jsonb) from public, anon;
+revoke execute on function public.append_project_activity(uuid, jsonb) from public, anon;
+grant execute on function public.append_project_comment(uuid, jsonb) to authenticated;
+grant execute on function public.append_project_activity(uuid, jsonb) to authenticated;
+
+-- ------------------------------------------------------------------- tasks
+drop policy tasks_select on public.tasks;
+drop policy tasks_insert_own on public.tasks;
+drop policy tasks_update on public.tasks;
+drop policy tasks_delete on public.tasks;
+
+create policy tasks_select on public.tasks for select to authenticated
+  using (
+    public.is_admin()
+    or owner_id = auth.uid()
+    or assignee_id = auth.uid()
+    or (project_id is not null
+        and public.task_project_department(project_id) = public.my_department())
+    or (project_id is null
+        and department_id = public.my_department() and public.is_dept_manager())
+  );
+
+create policy tasks_insert on public.tasks for insert to authenticated
+  with check (
+    owner_id = auth.uid()
+    and (
+      (project_id is null and (department_id = public.my_department() or public.is_admin()))
+      or (project_id is not null and (
+            public.is_admin()
+            or (public.task_project_department(project_id) = public.my_department()
+                and public.has_dept_permission('manage_tasks'))))
+    )
+  );
+
+create policy tasks_update on public.tasks for update to authenticated
+  using (
+    public.is_admin()
+    or owner_id = auth.uid()
+    or assignee_id = auth.uid()
+    or (project_id is not null
+        and public.task_project_department(project_id) = public.my_department()
+        and public.has_dept_permission('manage_tasks'))
+    or (project_id is null
+        and department_id = public.my_department() and public.is_dept_manager())
+  )
+  with check (
+    public.is_admin()
+    or department_id = public.my_department()
+    or (project_id is not null
+        and public.task_project_department(project_id) = public.my_department())
+  );
+
+create policy tasks_delete on public.tasks for delete to authenticated
+  using (
+    owner_id = auth.uid()
+    or public.is_admin()
+    or (public.is_dept_manager()
+        and coalesce(public.task_project_department(project_id), department_id)
+            = public.my_department())
+  );
+
+create or replace function public.set_task_ownership()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return new; end if;
+  if exists (select 1 from public.tasks where id = new.id) then return new; end if;
+  new.owner_id := auth.uid();
+  new.department_id := case
+    when new.project_id is not null
+      then coalesce(public.task_project_department(new.project_id), public.my_department())
+    else public.my_department() end;
+  if new.department_id is null then
+    raise exception 'You need a department to create tasks';
+  end if;
+  if new.assignee_id is not null and not public.is_admin() then
+    if new.assignee_id <> auth.uid() and not public.has_dept_permission('manage_tasks') then
+      raise exception 'You cannot assign tasks to other people';
+    end if;
+    if not exists (select 1 from public.profiles
+                   where id = new.assignee_id and department_id = new.department_id) then
+      raise exception 'The assignee must be in the same department';
+    end if;
+  end if;
+  new.completed_by := case when new.is_checked then auth.uid() end;
+  return new;
+end;
+$$;
+drop trigger set_task_department on public.tasks;
+create trigger set_task_ownership_trigger
+  before insert on public.tasks
+  for each row execute function public.set_task_ownership();
+
+create or replace function public.protect_task_changes()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return new; end if;
+
+  if not public.is_admin() then new.owner_id := old.owner_id; end if;
+
+  if new.project_id is distinct from old.project_id then
+    if not (public.is_admin() or public.has_dept_permission('manage_tasks')) then
+      raise exception 'Only a manager (or a role that can manage tasks) can move a task into or out of a project';
+    end if;
+    if not public.is_admin() and new.project_id is not null
+       and public.task_project_department(new.project_id) is distinct from public.my_department() then
+      raise exception 'That project belongs to another department';
+    end if;
+    new.department_id := coalesce(public.task_project_department(new.project_id), new.department_id);
+  elsif not public.is_admin() then
+    new.department_id := old.department_id;
+  end if;
+
+  if new.assignee_id is distinct from old.assignee_id
+     and new.assignee_id is not null and not public.is_admin() then
+    if new.assignee_id <> auth.uid() and not public.has_dept_permission('manage_tasks') then
+      raise exception 'You cannot assign tasks to other people';
+    end if;
+    if not exists (select 1 from public.profiles
+                   where id = new.assignee_id
+                     and department_id = coalesce(public.task_project_department(new.project_id), new.department_id)) then
+      raise exception 'The assignee must be in the same department';
+    end if;
+  end if;
+
+  -- Who checked it off is set here, never by the client.
+  if new.is_checked is distinct from old.is_checked then
+    new.completed_by := case when new.is_checked then auth.uid() end;
+  else
+    new.completed_by := old.completed_by;
+  end if;
+  return new;
+end;
+$$;
+drop trigger protect_task_project_assignment_trigger on public.tasks;
+create trigger protect_task_changes_trigger
+  before update on public.tasks
+  for each row execute function public.protect_task_changes();
+
+drop function public.protect_task_project_assignment();
+drop function public.set_department_from_owner();
+
+revoke execute on function public.set_project_ownership() from public, anon, authenticated;
+revoke execute on function public.protect_project_changes() from public, anon, authenticated;
+revoke execute on function public.set_task_ownership() from public, anon, authenticated;
+revoke execute on function public.protect_task_changes() from public, anon, authenticated;
+
+
+-- ===== 20261009163000_drop_ambiguous_department_overload.sql =====
+-- The one-argument overload made `admin_create_department('x')` ambiguous
+-- (the two-argument version has a default). The app always passes both.
+drop function if exists public.admin_create_department(text);

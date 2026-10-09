@@ -10,6 +10,7 @@ import '../models/task_priority.dart';
 import '../models/profile.dart';
 import '../providers/auth_provider.dart';
 import '../providers/department_members_provider.dart';
+import '../providers/roles_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
@@ -852,7 +853,8 @@ class _AssigneeAndEstimateRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final profile = ref.watch(currentProfileProvider).valueOrNull;
-    final canAssign = profile?.isManager ?? false;
+    // Managers and roles with "add and assign tasks" (the database decides).
+    final canAssign = profile != null && ref.watch(permissionsProvider).manageTasks;
     final members =
         ref.watch(departmentMembersProvider).valueOrNull ?? const <Profile>[];
     // A member can't read other profiles directly, so name an assignee who
@@ -868,6 +870,18 @@ class _AssigneeAndEstimateRow extends ConsumerWidget {
         : task.ownerId == myId
         ? 'You'
         : directory[task.ownerId]?.displayName;
+    // Everyone in the task's department, by name (the directory works for
+    // roles that can assign tasks but cannot read other profiles directly).
+    final byId = <String, String>{
+      for (final m in members) m.id: m.displayName,
+      for (final e in directory.values)
+        if (e.departmentId == task.departmentId) e.id: e.displayName,
+    };
+    if (task.assigneeId != null && assignee != null) {
+      byId.putIfAbsent(task.assigneeId!, () => assignee);
+    }
+    final assigneeOptions = byId.entries.toList()
+      ..sort((a, b) => a.value.toLowerCase().compareTo(b.value.toLowerCase()));
     final avatar = AvatarWell(
       initial: _initials(assignee),
       size: 24,
@@ -906,10 +920,10 @@ class _AssigneeAndEstimateRow extends ConsumerWidget {
                             value: null,
                             child: Text('Unassigned'),
                           ),
-                          for (final member in members)
+                          for (final option in assigneeOptions)
                             DropdownMenuItem<String?>(
-                              value: member.id,
-                              child: Text(member.displayName),
+                              value: option.key,
+                              child: Text(option.value),
                             ),
                         ],
                         onChanged: (assigneeId) => ref
@@ -967,6 +981,19 @@ class _AssigneeAndEstimateRow extends ConsumerWidget {
               ),
               const SizedBox(width: 6),
               Text(ownerName),
+            ],
+          ),
+        if (task.isChecked && task.completedAt != null)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.check_circle_outline, size: 18, color: context.nocturne.done),
+              const SizedBox(width: NocturneSpace.s2),
+              Text(
+                'Checked off${task.completedBy == null ? '' : ' by ${task.completedBy == myId ? 'You' : (directory[task.completedBy]?.displayName ?? 'a teammate')}'}'
+                ' · ${_stamp(task.completedAt!.toLocal())}',
+                style: TextStyle(color: theme.hintColor),
+              ),
             ],
           ),
         Row(
@@ -1075,4 +1102,9 @@ class _SubtasksSection extends ConsumerWidget {
       ],
     );
   }
+}
+
+String _stamp(DateTime d) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
 }

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/project.dart';
 import '../models/shortcut_binding.dart';
 import '../providers/projects_provider.dart';
+import '../providers/roles_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/undo_provider.dart';
 import '../theme/nocturne_theme.dart';
@@ -242,6 +243,7 @@ class _AppShellState extends ConsumerState<AppShell>
   }
 
   Future<void> _newProjectShortcut() async {
+    if (!ref.read(permissionsProvider).createProjects) return;
     _showToast('New project');
     final result = await showProjectPromptDialog(
       context,

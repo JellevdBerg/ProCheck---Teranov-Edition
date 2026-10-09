@@ -18,7 +18,12 @@ class NocturneButton extends StatelessWidget {
     this.variant = NocturneButtonVariant.secondary,
     this.color,
     this.dense = false,
+    this.minWidth,
   });
+
+  /// Optional minimum width so sibling actions (New project / New task /
+  /// New template) come out the same size.
+  final double? minWidth;
 
   final String label;
   final VoidCallback? onPressed;
@@ -47,6 +52,7 @@ class NocturneButton extends StatelessWidget {
 
     final child = Row(
       mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (icon != null) ...[
           Icon(icon, size: 16, color: fg),
@@ -88,7 +94,10 @@ class NocturneButton extends StatelessWidget {
               : tokens.raised,
           focusColor: accent.withValues(alpha: 0.2),
           child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: dense ? 28 : 32),
+            constraints: BoxConstraints(
+              minHeight: dense ? 28 : 32,
+              minWidth: minWidth ?? 0,
+            ),
             child: Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: dense ? 8 : 12,

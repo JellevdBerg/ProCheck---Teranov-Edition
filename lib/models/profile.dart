@@ -18,6 +18,8 @@ class Profile {
     required this.displayName,
     required this.role,
     this.departmentId,
+    this.customRoleId,
+    this.createdAt,
   });
 
   final String id;
@@ -33,6 +35,10 @@ class Profile {
   final UserRole role;
   final String? departmentId;
 
+  /// The job title (a `department_roles` row) a manager gave this member.
+  final String? customRoleId;
+  final DateTime? createdAt;
+
   bool get isManager => role == UserRole.manager;
 
   factory Profile.fromJson(Map<String, dynamic> json) => Profile(
@@ -42,5 +48,9 @@ class Profile {
     displayName: json['display_name'] as String,
     role: _roleFromString(json['role'] as String),
     departmentId: json['department_id'] as String?,
+    customRoleId: json['custom_role_id'] as String?,
+    createdAt: json['created_at'] == null
+        ? null
+        : DateTime.tryParse(json['created_at'] as String),
   );
 }

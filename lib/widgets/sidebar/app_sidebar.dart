@@ -8,6 +8,7 @@ import '../../models/task.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/departments_provider.dart';
 import '../../providers/projects_provider.dart';
+import '../../providers/roles_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_templates_provider.dart';
 import '../../providers/tasks_provider.dart';
@@ -153,6 +154,12 @@ class AppSidebar extends ConsumerWidget {
                   ? _UserCard(
                       name: profile.displayName,
                       isManager: profile.isManager,
+                      title: ref
+                          .watch(departmentRolesProvider)
+                          .valueOrNull
+                          ?.where((r) => r.id == profile.customRoleId)
+                          .firstOrNull
+                          ?.name,
                       department: department,
                       onTap: () => _confirmSignOut(context, ref),
                     )
@@ -193,7 +200,7 @@ class AppSidebar extends ConsumerWidget {
                           accent: accent,
                           onTap: () => onScreenSelected(AppScreen.dashboard),
                         ),
-                        if (profile?.isManager ?? false) ...[
+                        if (signedIn && ref.watch(permissionsProvider).viewTeam) ...[
                           const SizedBox(height: 1),
                           _NavRow(
                             icon: Icons.groups_outlined,
@@ -487,12 +494,14 @@ class _UserCard extends StatelessWidget {
   const _UserCard({
     required this.name,
     required this.isManager,
+    this.title,
     required this.department,
     required this.onTap,
   });
 
   final String name;
   final bool isManager;
+  final String? title;
   final Department? department;
   final VoidCallback onTap;
 
@@ -544,7 +553,7 @@ class _UserCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 3),
                       ],
-                      RolePlate(isManager: isManager),
+                      RolePlate(isManager: isManager, title: title),
                     ],
                   ),
                 ),
