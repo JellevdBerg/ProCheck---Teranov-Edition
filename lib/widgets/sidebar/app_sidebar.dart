@@ -734,7 +734,9 @@ class _NavRow extends StatelessWidget {
                           ),
                         ),
                       ),
-                      ?trailing,
+                      // build_runner's analyzer cannot parse `?trailing`, and CI runs it.
+                      // ignore: use_null_aware_elements
+                      if (trailing != null) trailing!,
                       if (count != null && count! > 0)
                         DecoratedBox(
                           decoration: panelDecoration(
