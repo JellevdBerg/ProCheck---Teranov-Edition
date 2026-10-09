@@ -43,3 +43,14 @@ theme; run `flutter analyze` after any partial revert.
 ## Not changed
 Providers, models, queries, RPCs, RLS, auth flow and all existing callbacks.
 The only database change is the Operator trigger (item 1).
+
+## Follow-up fixes (branch `fix/redesign-feedback`)
+- **macOS sign-in:** added the `com.apple.security.network.client` entitlement (Debug and Release). The sandboxed app could not open outgoing connections. Revert: remove the key from `macos/Runner/*.entitlements`.
+- **Admin missing after logout/login:** `isAdminProvider`, `isOperatorProvider`, `departmentsProvider`, `departmentMembersProvider` and `profileDirectoryProvider` returned early when signed out *before* watching the signed-in profile, so the signed-out result was cached for good. They now watch it first. Revert: move the `ref.watch(currentProfileProvider)` line back below the signed-out `return`.
+- **Check-off sound:** louder (peak -7 dBFS, volume 0.85), higher pitch and slightly longer so it carries on laptop speakers.
+- **User card** shows department on its own line, then role.
+- **Colours:** one orange (`warn`) everywhere; priority chips use the theme tokens instead of darkened blends; project colours go through `context.projectColor` (no blending toward black, which turned orange into brown).
+- **Calendar:** weekend diagonal hatching restored.
+- **Hover/focus:** rounded on list rows, icon buttons and card taps; the checkbox no longer shows a large circular halo (small rounded hover/focus indicator instead).
+- **Layout:** the content-width caps from the redesign are removed so screens fill the window; project cards stretch to fill their row (never more columns than projects).
+- **Task rows:** the meta cluster (priority, due, subtasks, assignee) is right-aligned instead of floating mid-row; compact rows use gentler density so nothing overlaps.

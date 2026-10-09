@@ -122,7 +122,7 @@ class NocturneColors {
     borderStrong: Color(0xFF3A4150),
     done: Color(0xFF4CC38A),
     danger: Color(0xFFFF6B63),
-    warn: Color(0xFFF0B04A),
+    warn: Color(0xFFF59E42),
     low: Color(0xFF8FA0C2),
     isDark: true,
   );
@@ -150,7 +150,7 @@ class NocturneColors {
     borderStrong: Color(0xFFC9CED8),
     done: Color(0xFF1E8A4C),
     danger: Color(0xFFC7372F),
-    warn: Color(0xFF9A5B00),
+    warn: Color(0xFFBD5200),
     low: Color(0xFF5B6B8A),
     isDark: false,
   );
@@ -161,7 +161,7 @@ class NocturneColors {
 /// when the color is used as text.
 class NocturnePriority {
   static const high = Color(0xFFE5484D);
-  static const med = Color(0xFFD9930D);
+  static const med = Color(0xFFF59E42);
   static const low = Color(0xFF6B7FA8);
 }
 
@@ -431,7 +431,18 @@ ThemeData buildNocturneTheme({
       thickness: const WidgetStatePropertyAll(6),
     ),
     iconTheme: IconThemeData(color: tokens.neutral400, size: 18),
+    // Rounded hover/focus on every list row and icon button.
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(NocturneRadius.md),
+        ),
+      ),
+    ),
     listTileTheme: ListTileThemeData(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(NocturneRadius.md),
+      ),
       iconColor: tokens.neutral400,
       selectedColor: accent,
     ),
@@ -483,6 +494,14 @@ extension NocturneThemeContext on BuildContext {
   /// Hover wash for interactive surfaces: a quiet neutral, not the accent.
   Color get nocturneHoverColor => nocturne.raised;
   Color get nocturneSplashColor => nocturne.neutral800;
+
+  /// A project's swatch, tuned for the active theme (never blended toward
+  /// black, which turns orange into brown). Use everywhere a project colour
+  /// shows so it is the same colour on every screen.
+  Color projectColor(int index) => tuneAccent(
+    nocturneAccentPalette[index.clamp(0, nocturneAccentPalette.length - 1)],
+    Theme.of(this).brightness,
+  );
 
   /// Stable categorical color for a department (hash of [key], e.g. its
   /// name or id). Pair with the name; never colour alone.

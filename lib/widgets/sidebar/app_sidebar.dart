@@ -261,7 +261,7 @@ class AppSidebar extends ConsumerWidget {
                               icon: Icons.folder,
                               label: project.name,
                               expanded: expanded,
-                              iconColor: accentPalette[project.colorIndex],
+                              iconColor: context.projectColor(project.colorIndex),
                               onTap: () => onFavoriteProjectTap(project),
                               onSecondaryTapDown: (details) =>
                                   _showFavoriteContextMenu(
@@ -533,20 +533,18 @@ class _UserCard extends StatelessWidget {
                           height: 16 / 13,
                         ),
                       ),
-                      const SizedBox(height: 3),
-                      Wrap(
-                        spacing: 4,
-                        runSpacing: 3,
-                        children: [
-                          RolePlate(isManager: isManager),
-                          if (department != null)
-                            DepartmentPlate(
-                              name: department!.name,
-                              isOperator: department!.isOperator,
-                              isIt: department!.isIt,
-                            ),
-                        ],
-                      ),
+                      const SizedBox(height: 4),
+                      // Department on its own line so a long name ellipsizes
+                      // instead of pushing the role chip around.
+                      if (department != null) ...[
+                        DepartmentPlate(
+                          name: department!.name,
+                          isOperator: department!.isOperator,
+                          isIt: department!.isIt,
+                        ),
+                        const SizedBox(height: 3),
+                      ],
+                      RolePlate(isManager: isManager),
                     ],
                   ),
                 ),
@@ -693,7 +691,7 @@ class _SidebarSearch extends ConsumerWidget {
                       leading: Icon(
                         Icons.folder,
                         size: 16,
-                        color: accentPalette[project.colorIndex],
+                        color: context.projectColor(project.colorIndex),
                       ),
                       title: Text(
                         project.name,

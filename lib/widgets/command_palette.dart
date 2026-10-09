@@ -222,6 +222,7 @@ class _CommandPaletteState extends ConsumerState<_CommandPalette> {
       final isSel = i == selected;
       rows.add(
         InkWell(
+          borderRadius: BorderRadius.circular(NocturneRadius.md),
           key: isSel ? _selectedKey : null,
           onTap: () => _run(e),
           child: Container(

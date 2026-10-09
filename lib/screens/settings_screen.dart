@@ -49,7 +49,7 @@ class SettingsScreen extends ConsumerWidget {
                     alignment: Alignment.topLeft,
                     // Settings read best as one capped column of cards.
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 960),
+                      constraints: const BoxConstraints(maxWidth: double.infinity),
                       child: const Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [

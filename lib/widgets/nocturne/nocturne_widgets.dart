@@ -139,14 +139,22 @@ class NocturneTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.nocturne;
+    // The fixed priority/status constants resolve to the theme's own tokens,
+    // so a "medium" chip is the same orange as a due-soon bar or tile.
+    final resolved = switch (color) {
+      NocturnePriority.high => t.danger,
+      NocturnePriority.med => t.warn,
+      NocturnePriority.low => t.low,
+      NocturneStatus.done => t.done,
+      final c => c,
+    };
     final Color fg;
     final Color? bg;
     final Color border;
-    if (color != null) {
-      // Darken (light theme) / keep (dark theme) so the text stays >= 4.5:1.
-      fg = t.isDark ? color! : Color.lerp(color!, Colors.black, 0.4)!;
-      bg = outline ? null : color!.withValues(alpha: t.isDark ? 0.16 : 0.12);
-      border = outline ? color! : Colors.transparent;
+    if (resolved != null) {
+      fg = resolved;
+      bg = outline ? null : resolved.withValues(alpha: t.isDark ? 0.16 : 0.12);
+      border = outline ? resolved : Colors.transparent;
     } else {
       fg = t.neutral300;
       bg = outline ? null : t.neutral800;

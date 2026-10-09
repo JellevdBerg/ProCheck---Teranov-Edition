@@ -111,7 +111,7 @@ class _TaskTemplateEditorScreenState
           return Align(
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1080),
+              constraints: const BoxConstraints(maxWidth: double.infinity),
               child: SingleChildScrollView(
                 padding: EdgeInsets.all(gutter),
                 child: twoColumns

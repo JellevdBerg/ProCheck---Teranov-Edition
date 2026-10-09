@@ -36,8 +36,10 @@ final profileDirectoryProvider = FutureProvider<Map<String, DirectoryEntry>>((
   ref,
 ) async {
   if (!isSupabaseConfigured) return const {};
-  if (supabase.auth.currentUser == null) return const {};
+  // Watched BEFORE the signed-out early return so a later sign-in re-runs
+  // this provider (otherwise the signed-out result is cached forever).
   ref.watch(currentProfileProvider);
+  if (supabase.auth.currentUser == null) return const {};
   try {
     final rows = await supabase.rpc('profile_directory');
     return {
@@ -58,10 +60,12 @@ final profileDirectoryProvider = FutureProvider<Map<String, DirectoryEntry>>((
 /// directly; it's a convenience list, not an extra permission.
 final departmentMembersProvider = FutureProvider<List<Profile>>((ref) async {
   if (!isSupabaseConfigured) return [];
+  // Watched BEFORE the signed-out early return so a later sign-in re-runs
+  // this provider (otherwise the signed-out result is cached forever).
+  ref.watch(currentProfileProvider);
   if (supabase.auth.currentUser == null) return [];
   // Re-fetch whenever the signed-in profile changes (sign-in/out, or a
   // department reassignment landing via the next pull).
-  ref.watch(currentProfileProvider);
 
   final rows = await supabase.from('profiles').select();
   return (rows as List)
