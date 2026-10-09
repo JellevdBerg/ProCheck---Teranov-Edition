@@ -218,16 +218,24 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                 _buildGrid(context, projects, tasksByProject, reduceMotion),
               const SizedBox(height: NocturneSpace.s4),
             ],
-            Row(
-              children: [
-                const Expanded(child: NocturneSectionLabel('TASKS')),
-                NocturneButton(
-                  label: 'New task',
-                  icon: Icons.add,
-                  variant: NocturneButtonVariant.primary,
-                  onPressed: () => showCreateTaskSheet(context),
+            // Same cap as the task list below, so the button sits at the
+            // list's right edge instead of the window's on wide screens.
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1040),
+                child: Row(
+                  children: [
+                    const Expanded(child: NocturneSectionLabel('TASKS')),
+                    NocturneButton(
+                      label: 'New task',
+                      icon: Icons.add,
+                      variant: NocturneButtonVariant.primary,
+                      onPressed: () => showCreateTaskSheet(context),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
             const SizedBox(height: 8),
             if (unfiledTasks.isEmpty)
