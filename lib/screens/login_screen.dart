@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/auth_provider.dart';
 import '../widgets/app_logo.dart';
+import '../widgets/nocturne/nocturne_widgets.dart';
+import '../widgets/panel/panel.dart';
 import 'app_shell.dart';
 
 /// Username/password sign-in, shown instead of [AppShell] when no Supabase
@@ -47,9 +49,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         password: _passwordController.text,
       );
       if (!mounted) return;
-      Navigator.of(
-        context,
-      ).pushReplacement(MaterialPageRoute(builder: (_) => const AppShell()));
+      Navigator.of(context)
+          .pushReplacement(MaterialPageRoute(builder: (_) => const AppShell()));
     } on AuthException catch (e) {
       setState(() => _errorText = e.message);
     } catch (e) {
@@ -73,61 +74,70 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           padding: const EdgeInsets.all(32),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Center(child: AppLogo(size: 64)),
-                  const SizedBox(height: 16),
-                  Text(
-                    'ProCheck — Teranov Edition',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  TextFormField(
-                    controller: _usernameController,
-                    decoration: const InputDecoration(labelText: 'Username'),
-                    autocorrect: false,
-                    validator: (value) =>
-                        (value == null || value.trim().isEmpty)
-                        ? 'Enter a username'
-                        : null,
-                    onFieldSubmitted: (_) => _submit(),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordController,
-                    decoration: const InputDecoration(labelText: 'Password'),
-                    obscureText: true,
-                    validator: (value) => (value == null || value.length < 6)
-                        ? 'At least 6 characters'
-                        : null,
-                    onFieldSubmitted: (_) => _submit(),
-                  ),
-                  if (_errorText != null) ...[
+            child: PanelCard(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Center(child: AppLogo(size: 64)),
                     const SizedBox(height: 16),
                     Text(
-                      _errorText!,
-                      style: TextStyle(color: theme.colorScheme.error),
+                      'ProCheck — Teranov Edition',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.headlineSmall,
                     ),
-                  ],
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _isSubmitting ? null : _submit,
-                    child: _isSubmitting
-                        ? const SizedBox(
+                    const SizedBox(height: 32),
+                    TextFormField(
+                      controller: _usernameController,
+                      decoration: const InputDecoration(labelText: 'Username'),
+                      autocorrect: false,
+                      validator: (value) =>
+                          (value == null || value.trim().isEmpty)
+                          ? 'Enter a username'
+                          : null,
+                      onFieldSubmitted: (_) => _submit(),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _passwordController,
+                      decoration: const InputDecoration(labelText: 'Password'),
+                      obscureText: true,
+                      validator: (value) => (value == null || value.length < 6)
+                          ? 'At least 6 characters'
+                          : null,
+                      onFieldSubmitted: (_) => _submit(),
+                    ),
+                    if (_errorText != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        _errorText!,
+                        style: TextStyle(color: theme.colorScheme.error),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        NocturneButton(
+                          label: 'Sign in',
+                          variant: NocturneButtonVariant.primary,
+                          onPressed: _isSubmitting ? null : _submit,
+                        ),
+                        if (_isSubmitting) ...[
+                          const SizedBox(width: 12),
+                          const SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Sign in'),
-                  ),
-                ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

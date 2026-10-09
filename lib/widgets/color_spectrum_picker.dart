@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/nocturne_theme.dart';
+import 'nocturne/nocturne_widgets.dart';
 
 /// A spectrum + hue-slider color picker, with an optional hex field for
 /// entering an exact value. Replaces the old hex-only dialog; same
@@ -81,7 +82,10 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
           children: [
             AspectRatio(
               aspectRatio: 1.6,
-              child: _SaturationValueField(hsv: _hsv, onChanged: _updateFromSpectrum),
+              child: _SaturationValueField(
+                hsv: _hsv,
+                onChanged: _updateFromSpectrum,
+              ),
             ),
             const SizedBox(height: 14),
             _HueSlider(hue: _hsv.hue, onChanged: _updateHue),
@@ -94,7 +98,7 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
                   decoration: BoxDecoration(
                     color: color,
                     shape: BoxShape.circle,
-                    border: Border.all(color: tokens.divider),
+                    border: Border.all(color: tokens.edge, width: 2),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -108,7 +112,8 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
                       isDense: true,
                     ),
                     onSubmitted: _updateFromHex,
-                    onEditingComplete: () => _updateFromHex(_hexController.text),
+                    onEditingComplete: () =>
+                        _updateFromHex(_hexController.text),
                   ),
                 ),
               ],
@@ -117,13 +122,14 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        NocturneButton(
+          label: 'Cancel',
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
         ),
-        FilledButton(
+        NocturneButton(
+          label: 'Use color',
+          variant: NocturneButtonVariant.primary,
           onPressed: () => Navigator.of(context).pop(color),
-          child: const Text('Use color'),
         ),
       ],
     );
@@ -151,14 +157,16 @@ class _SaturationValueField extends StatelessWidget {
         }
 
         return ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(NocturneRadius.md),
           child: GestureDetector(
             onPanDown: (d) => handle(d.localPosition),
             onPanUpdate: (d) => handle(d.localPosition),
             child: Stack(
               fit: StackFit.expand,
               children: [
-                ColoredBox(color: HSVColor.fromAHSV(1, hsv.hue, 1, 1).toColor()),
+                ColoredBox(
+                  color: HSVColor.fromAHSV(1, hsv.hue, 1, 1).toColor(),
+                ),
                 const DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -221,7 +229,7 @@ class _HueSlider extends StatelessWidget {
               clipBehavior: Clip.none,
               children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(NocturneRadius.md),
                   child: Container(
                     height: 24,
                     decoration: BoxDecoration(
@@ -265,7 +273,11 @@ class _PickerDot extends StatelessWidget {
           shape: BoxShape.circle,
           border: Border.all(color: Colors.white, width: 2.5),
           boxShadow: const [
-            BoxShadow(color: Color(0x40000000), blurRadius: 3, offset: Offset(0, 1)),
+            BoxShadow(
+              color: Color(0x40000000),
+              blurRadius: 3,
+              offset: Offset(0, 1),
+            ),
           ],
         ),
       ),

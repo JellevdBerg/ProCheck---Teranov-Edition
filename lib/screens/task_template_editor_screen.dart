@@ -8,6 +8,7 @@ import '../models/template_subtask.dart';
 import '../providers/task_templates_provider.dart';
 import '../widgets/attachments_editor.dart';
 import '../widgets/notes_field.dart';
+import '../widgets/panel/panel.dart';
 import '../widgets/text_prompt_dialog.dart';
 
 class TaskTemplateEditorScreen extends ConsumerStatefulWidget {
@@ -43,9 +44,7 @@ class _TaskTemplateEditorScreenState
     _attachments = template == null
         ? []
         : template.attachments
-              .map(
-                (a) => Attachment(name: a.name, size: a.size, path: a.path),
-              )
+              .map((a) => Attachment(name: a.name, size: a.size, path: a.path))
               .toList();
   }
 
@@ -104,10 +103,7 @@ class _TaskTemplateEditorScreenState
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: TextField(
               controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Main task name',
-                border: OutlineInputBorder(),
-              ),
+              decoration: const InputDecoration(labelText: 'Main task name'),
             ),
           ),
           ConstrainedBox(
@@ -139,7 +135,6 @@ class _TaskTemplateEditorScreenState
                     controller: _newSubtaskController,
                     decoration: const InputDecoration(
                       hintText: 'Add a subtask',
-                      border: OutlineInputBorder(),
                       isDense: true,
                     ),
                     onSubmitted: (_) => _addSubtask(),
@@ -155,52 +150,59 @@ class _TaskTemplateEditorScreenState
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              'Subtasks',
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
+            child: const StampLabel('Subtasks'),
           ),
+          const SizedBox(height: 6),
           Expanded(
-            child: _subtasks.isEmpty
-                ? Center(
-                    child: Text(
-                      'No subtasks yet. Add one above.',
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  )
-                : ReorderableListView.builder(
-                    // Without this, Flutter also auto-appends its own
-                    // drag handle after the trailing delete button —
-                    // leaving two handle-looking icons per row where only
-                    // the second one actually did anything. Wiring the
-                    // existing leading icon as the real (only) handle
-                    // instead matches where a drag handle sits everywhere
-                    // else in the app (TaskTile's reorderIndex).
-                    buildDefaultDragHandles: false,
-                    itemCount: _subtasks.length,
-                    onReorderItem: (oldIndex, newIndex) {
-                      setState(() {
-                        final subtask = _subtasks.removeAt(oldIndex);
-                        _subtasks.insert(newIndex, subtask);
-                      });
-                    },
-                    itemBuilder: (context, index) {
-                      final subtask = _subtasks[index];
-                      return ListTile(
-                        key: ValueKey(subtask.id),
-                        leading: ReorderableDragStartListener(
-                          index: index,
-                          child: const Icon(Icons.drag_handle),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: DecoratedBox(
+                decoration: panelDecoration(
+                  context,
+                  depth: PanelDepth.recessed,
+                ),
+                child: _subtasks.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No subtasks yet. Add one above.',
+                          style: Theme.of(context).textTheme.bodyLarge,
                         ),
-                        title: Text(subtask.title),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () =>
-                              setState(() => _subtasks.removeAt(index)),
-                        ),
-                      );
-                    },
-                  ),
+                      )
+                    : ReorderableListView.builder(
+                        // Without this, Flutter also auto-appends its own
+                        // drag handle after the trailing delete button —
+                        // leaving two handle-looking icons per row where only
+                        // the second one actually did anything. Wiring the
+                        // existing leading icon as the real (only) handle
+                        // instead matches where a drag handle sits everywhere
+                        // else in the app (TaskTile's reorderIndex).
+                        buildDefaultDragHandles: false,
+                        itemCount: _subtasks.length,
+                        onReorderItem: (oldIndex, newIndex) {
+                          setState(() {
+                            final subtask = _subtasks.removeAt(oldIndex);
+                            _subtasks.insert(newIndex, subtask);
+                          });
+                        },
+                        itemBuilder: (context, index) {
+                          final subtask = _subtasks[index];
+                          return ListTile(
+                            key: ValueKey(subtask.id),
+                            leading: ReorderableDragStartListener(
+                              index: index,
+                              child: const Icon(Icons.drag_handle),
+                            ),
+                            title: Text(subtask.title),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: () =>
+                                  setState(() => _subtasks.removeAt(index)),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ),
           ),
         ],
       ),

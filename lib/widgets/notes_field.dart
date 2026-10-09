@@ -13,11 +13,7 @@ class NotesField extends StatelessWidget {
     return TextField(
       controller: controller,
       focusNode: focusNode,
-      decoration: const InputDecoration(
-        labelText: 'Notes',
-        border: OutlineInputBorder(),
-        isDense: true,
-      ),
+      decoration: const InputDecoration(labelText: 'Notes', isDense: true),
       minLines: 3,
       maxLines: 6,
     );

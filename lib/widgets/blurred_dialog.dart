@@ -15,7 +15,7 @@ Future<T?> showBlurredDialog<T>({
     context: context,
     barrierDismissible: barrierDismissible,
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-    barrierColor: Colors.black.withValues(alpha: 0.15),
+    barrierColor: Colors.black.withValues(alpha: 0.35),
     transitionDuration: const Duration(milliseconds: 220),
     pageBuilder: (context, animation, secondaryAnimation) {
       return SafeArea(

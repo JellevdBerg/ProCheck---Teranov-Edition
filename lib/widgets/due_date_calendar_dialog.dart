@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../theme/nocturne_theme.dart';
+import 'nocturne/nocturne_widgets.dart';
+import 'panel/panel.dart';
 
 const _monthNames = [
   'January',
@@ -57,8 +59,7 @@ class _DueDateCalendarDialog extends StatefulWidget {
   final DateTime? initialEnd;
 
   @override
-  State<_DueDateCalendarDialog> createState() =>
-      _DueDateCalendarDialogState();
+  State<_DueDateCalendarDialog> createState() => _DueDateCalendarDialogState();
 }
 
 class _DueDateCalendarDialogState extends State<_DueDateCalendarDialog> {
@@ -122,6 +123,7 @@ class _DueDateCalendarDialogState extends State<_DueDateCalendarDialog> {
       backgroundColor: tokens.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(NocturneRadius.lg),
+        side: BorderSide(color: tokens.edge),
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -134,13 +136,10 @@ class _DueDateCalendarDialogState extends State<_DueDateCalendarDialog> {
               Row(
                 children: [
                   Expanded(
-                    child: Text(
+                    child: StampLabel(
                       '${_monthNames[_visibleMonth.month - 1]} ${_visibleMonth.year}',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: tokens.text,
-                      ),
+                      size: 16,
+                      color: tokens.text,
                     ),
                   ),
                   IconButton(
@@ -158,7 +157,7 @@ class _DueDateCalendarDialogState extends State<_DueDateCalendarDialog> {
               const SizedBox(height: 4),
               Text(
                 helperText,
-                style: TextStyle(fontSize: 12, color: tokens.neutral500),
+                style: TextStyle(fontSize: 13, color: tokens.neutral500),
               ),
               const SizedBox(height: 12),
               Row(
@@ -168,7 +167,10 @@ class _DueDateCalendarDialogState extends State<_DueDateCalendarDialog> {
                       child: Text(
                         label,
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 11, color: tokens.neutral500),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: tokens.neutral500,
+                        ),
                       ),
                     ),
                 ],
@@ -250,7 +252,7 @@ class _DueDateCalendarDialogState extends State<_DueDateCalendarDialog> {
                               style: TextStyle(
                                 fontSize: 13,
                                 color: isTapped
-                                    ? Colors.white
+                                    ? Theme.of(context).colorScheme.onPrimary
                                     : (isToday ? accent : tokens.neutral200),
                               ),
                             ),
@@ -265,18 +267,20 @@ class _DueDateCalendarDialogState extends State<_DueDateCalendarDialog> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(
+                  NocturneButton(
+                    label: 'Cancel',
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 6),
                   if (_taps.isNotEmpty)
-                    TextButton(
+                    NocturneButton(
+                      label: 'Clear',
                       onPressed: () => setState(_taps.clear),
-                      child: const Text('Clear'),
                     ),
-                  const SizedBox(width: 4),
-                  FilledButton(
+                  const SizedBox(width: 6),
+                  NocturneButton(
+                    label: 'Save',
+                    variant: NocturneButtonVariant.primary,
                     onPressed: _taps.isEmpty
                         ? null
                         : () {
@@ -289,7 +293,6 @@ class _DueDateCalendarDialogState extends State<_DueDateCalendarDialog> {
                               ),
                             );
                           },
-                    child: const Text('Save'),
                   ),
                 ],
               ),

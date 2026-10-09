@@ -8,7 +8,9 @@ import '../providers/projects_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/task_templates_provider.dart';
 import '../providers/tasks_provider.dart';
+import '../theme/nocturne_theme.dart';
 import 'blurred_dialog.dart';
+import 'nocturne/nocturne_widgets.dart';
 import 'task_tile.dart';
 
 Future<Task?> showCreateTaskSheet(
@@ -21,7 +23,15 @@ Future<Task?> showCreateTaskSheet(
   return showBlurredDialog<Task>(
     context: context,
     builder: (context) => Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(NocturneRadius.lg),
+        side: BorderSide(
+          color: Theme.of(context)
+              .extension<NocturneThemeExtension>()!
+              .tokens
+              .edge,
+        ),
+      ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
         child: _CreateTaskSheet(
@@ -104,19 +114,13 @@ class _CreateTaskSheetState extends ConsumerState<_CreateTaskSheet> {
           TextField(
             controller: _nameController,
             autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Task name',
-              border: OutlineInputBorder(),
-            ),
+            decoration: const InputDecoration(labelText: 'Task name'),
             onChanged: (_) => _nameEditedByUser = true,
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<TaskTemplate?>(
             initialValue: _selectedTemplate,
-            decoration: const InputDecoration(
-              labelText: 'Start from',
-              border: OutlineInputBorder(),
-            ),
+            decoration: const InputDecoration(labelText: 'Start from'),
             items: [
               const DropdownMenuItem<TaskTemplate?>(
                 value: null,
@@ -141,10 +145,7 @@ class _CreateTaskSheetState extends ConsumerState<_CreateTaskSheet> {
           const SizedBox(height: 16),
           DropdownButtonFormField<String?>(
             initialValue: _selectedProjectId,
-            decoration: const InputDecoration(
-              labelText: 'Project',
-              border: OutlineInputBorder(),
-            ),
+            decoration: const InputDecoration(labelText: 'Project'),
             items: [
               const DropdownMenuItem<String?>(
                 value: null,
@@ -161,11 +162,12 @@ class _CreateTaskSheetState extends ConsumerState<_CreateTaskSheet> {
                 setState(() => _selectedProjectId = projectId),
           ),
           const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
+          Align(
+            alignment: Alignment.centerRight,
+            child: NocturneButton(
+              label: 'Continue',
+              variant: NocturneButtonVariant.primary,
               onPressed: _createAndContinue,
-              child: const Text('Continue'),
             ),
           ),
         ],
@@ -231,11 +233,12 @@ class _CreateTaskSheetState extends ConsumerState<_CreateTaskSheet> {
           const SizedBox(height: 12),
           TaskDetailEditor(task: task, padding: EdgeInsets.zero),
           const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
+          Align(
+            alignment: Alignment.centerRight,
+            child: NocturneButton(
+              label: 'Done',
+              variant: NocturneButtonVariant.primary,
               onPressed: () => Navigator.of(context).pop(task),
-              child: const Text('Done'),
             ),
           ),
         ],

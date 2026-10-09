@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../providers/settings_provider.dart';
 import 'blurred_dialog.dart';
+import 'nocturne/nocturne_widgets.dart';
 
 /// A simple dialog that prompts for a single line of text.
 /// Returns the trimmed text, or null if cancelled / left empty.
@@ -19,23 +20,24 @@ Future<String?> showTextPromptDialog(
       content: TextField(
         controller: controller,
         autofocus: true,
-        decoration: const InputDecoration(border: OutlineInputBorder()),
+        decoration: const InputDecoration(),
         onSubmitted: (value) {
           final trimmed = value.trim();
           if (trimmed.isNotEmpty) Navigator.of(context).pop(trimmed);
         },
       ),
       actions: [
-        TextButton(
+        NocturneButton(
+          label: 'Cancel',
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
         ),
-        FilledButton(
+        NocturneButton(
+          label: confirmLabel,
+          variant: NocturneButtonVariant.primary,
           onPressed: () {
             final trimmed = controller.text.trim();
             if (trimmed.isNotEmpty) Navigator.of(context).pop(trimmed);
           },
-          child: Text(confirmLabel),
         ),
       ],
     ),
@@ -66,7 +68,7 @@ Future<(String, int)?> showProjectPromptDialog(
             TextField(
               controller: controller,
               autofocus: true,
-              decoration: const InputDecoration(border: OutlineInputBorder()),
+              decoration: const InputDecoration(),
             ),
             const SizedBox(height: 16),
             Wrap(
@@ -93,18 +95,19 @@ Future<(String, int)?> showProjectPromptDialog(
           ],
         ),
         actions: [
-          TextButton(
+          NocturneButton(
+            label: 'Cancel',
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
           ),
-          FilledButton(
+          NocturneButton(
+            label: confirmLabel,
+            variant: NocturneButtonVariant.primary,
             onPressed: () {
               final trimmed = controller.text.trim();
               if (trimmed.isNotEmpty) {
                 Navigator.of(context).pop((trimmed, selectedColor));
               }
             },
-            child: Text(confirmLabel),
           ),
         ],
       ),
@@ -124,13 +127,14 @@ Future<bool> showConfirmDialog(
       title: Text(title),
       content: Text(message),
       actions: [
-        TextButton(
+        NocturneButton(
+          label: 'Cancel',
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
         ),
-        FilledButton.tonal(
+        NocturneButton(
+          label: confirmLabel,
+          variant: NocturneButtonVariant.primary,
           onPressed: () => Navigator.of(context).pop(true),
-          child: Text(confirmLabel),
         ),
       ],
     ),

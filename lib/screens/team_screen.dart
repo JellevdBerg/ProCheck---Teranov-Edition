@@ -6,6 +6,8 @@ import '../models/task.dart';
 import '../providers/department_members_provider.dart';
 import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
+import '../widgets/panel/panel.dart';
+import '../widgets/people_plates.dart';
 
 /// A manager-only view of the department's workload: every member next to
 /// their open task count and total estimated time remaining ("occupancy").
@@ -23,14 +25,20 @@ class TeamScreen extends ConsumerWidget {
 
     return membersAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => Center(child: Text('Could not load team: $error')),
+      error: (error, _) => Center(
+        child: PanelNotice('Could not load team: $error', isError: true),
+      ),
       data: (members) {
         if (members.isEmpty) {
-          return const Center(child: Text('No team members yet.'));
+          return const Center(child: PanelNotice('No team members yet.'));
         }
         final rows = [
           for (final member in members) _occupancyFor(member, tasks),
         ]..sort((a, b) => b.totalMinutes.compareTo(a.totalMinutes));
+        final maxOpen = rows.fold<int>(
+          1,
+          (m, r) => r.openTaskCount > m ? r.openTaskCount : m,
+        );
 
         return Padding(
           padding: const EdgeInsets.all(24),
@@ -45,11 +53,17 @@ class TeamScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 20),
               Expanded(
-                child: ListView.separated(
-                  itemCount: rows.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, index) => _TeamMemberRow(
-                    row: rows[index],
+                child: DecoratedBox(
+                  decoration: panelDecoration(context),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 4,
+                    ),
+                    itemCount: rows.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) =>
+                        _TeamMemberRow(row: rows[index], maxOpen: maxOpen),
                   ),
                 ),
               ),
@@ -89,32 +103,32 @@ class _MemberOccupancy {
 }
 
 class _TeamMemberRow extends StatelessWidget {
-  const _TeamMemberRow({required this.row});
+  const _TeamMemberRow({required this.row, required this.maxOpen});
 
   final _MemberOccupancy row;
 
+  /// Largest open-task count on the page: the occupancy gauge's full scale.
+  final int maxOpen;
+
   @override
   Widget build(BuildContext context) {
-    final tokens = context.nocturne;
     final hours = row.totalMinutes ~/ 60;
     final minutes = row.totalMinutes % 60;
     final estimateLabel = row.totalMinutes == 0
         ? 'No estimate'
         : hours > 0
-            ? '${hours}h ${minutes}m'
-            : '${minutes}m';
+        ? '${hours}h ${minutes}m'
+        : '${minutes}m';
 
+    const figures = [FontFeature.tabularFigures()];
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 16,
-            child: Text(
-              row.member.displayName.isEmpty
-                  ? '?'
-                  : row.member.displayName[0].toUpperCase(),
-            ),
+          AvatarWell(
+            initial: row.member.displayName.isEmpty
+                ? '?'
+                : row.member.displayName[0].toUpperCase(),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -122,18 +136,43 @@ class _TeamMemberRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(row.member.displayName),
-                Text(
-                  row.member.isManager ? 'Manager' : 'Member',
-                  style: TextStyle(fontSize: 12, color: tokens.neutral500),
-                ),
+                const SizedBox(height: 3),
+                RolePlate(isManager: row.member.isManager),
               ],
             ),
           ),
-          Text('${row.openTaskCount} open'),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${row.openTaskCount} open',
+                style: const TextStyle(fontFeatures: figures),
+              ),
+              const SizedBox(height: 4),
+              SizedBox(
+                width: 80,
+                child: GaugeBar(
+                  value: row.openTaskCount / maxOpen,
+                  segments: 10,
+                  height: 6,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(width: 20),
           SizedBox(
-            width: 90,
-            child: Text(estimateLabel, textAlign: TextAlign.right),
+            width: 112,
+            child: DecoratedBox(
+              decoration: panelDecoration(context, depth: PanelDepth.recessed),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Text(
+                  estimateLabel,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(fontFeatures: figures),
+                ),
+              ),
+            ),
           ),
         ],
       ),

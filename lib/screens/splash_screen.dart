@@ -29,8 +29,7 @@ class _SplashScreenState extends State<SplashScreen> {
           isSupabaseConfigured && supabase.auth.currentSession == null;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) =>
-              needsSignIn ? const LoginScreen() : const AppShell(),
+          builder: (_) => needsSignIn ? const LoginScreen() : const AppShell(),
         ),
       );
     });
@@ -46,12 +45,7 @@ class _SplashScreenState extends State<SplashScreen> {
           children: [
             const AppLogo(size: 96),
             const SizedBox(height: 20),
-            Text(
-              'ProCheck',
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            Text('ProCheck', style: theme.textTheme.headlineMedium),
           ],
         ),
       ),
