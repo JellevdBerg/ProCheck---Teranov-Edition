@@ -43,7 +43,11 @@ class _NocturneButtonState extends State<NocturneButton> {
     final accent = widget.color ?? context.nocturneAccent;
     final ghost = widget.variant == NocturneButtonVariant.ghost;
     final primary = widget.variant == NocturneButtonVariant.primary;
-    final fg = (ghost || primary) ? accent : tokens.text;
+    // On enamel, a pale accent (e.g. a pink project colour) is darkened for
+    // the label only; the key's edge and tint keep the true colour.
+    final fg = (ghost || primary)
+        ? (tokens.isDark ? accent : Color.lerp(accent, Colors.black, 0.45)!)
+        : tokens.text;
     final radius = BorderRadius.circular(NocturneRadius.md);
 
     final child = Row(
