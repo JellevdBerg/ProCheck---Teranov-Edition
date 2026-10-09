@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -25,6 +26,25 @@ void main() {
     if (!enabled) return;
     tempDir = await Directory.systemTemp.createTemp('procheck_shots_');
     await setUpHive(testDirectoryPath: tempDir.path);
+    // flutter test renders every font as blocks unless loaded explicitly.
+    Future<void> load(String family, List<String> paths) async {
+      final loader = FontLoader(family);
+      for (final path in paths) {
+        loader.addFont(
+          Future.value(ByteData.sublistView(File(path).readAsBytesSync())),
+        );
+      }
+      await loader.load();
+    }
+
+    await load('IBMPlexSans', [
+      'assets/fonts/IBMPlexSans-Regular.ttf',
+      'assets/fonts/IBMPlexSans-Medium.ttf',
+      'assets/fonts/IBMPlexSans-SemiBold.ttf',
+    ]);
+    await load('MaterialIcons', [
+      'C:/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
+    ]);
   });
 
   const sizes = {'narrow': Size(720, 900), 'wide': Size(2200, 1200)};
@@ -63,8 +83,6 @@ void main() {
             container.read(tasksProvider.notifier).restoreAll(seed.tasks);
             final settings = container.read(settingsProvider.notifier);
             settings.setThemeMode(dark ? ThemeMode.dark : ThemeMode.light);
-            settings.setDefaultLanding(LandingScreenOption.lastViewed);
-            settings.recordLastViewedScreen(screen.index);
 
             final key = GlobalKey();
             await tester.pumpWidget(
@@ -74,6 +92,8 @@ void main() {
               ),
             );
             await tester.pump(const Duration(milliseconds: 1200));
+            await tester.pumpAndSettle();
+            await tester.tap(find.text(screen.name[0].toUpperCase() + screen.name.substring(1)).first);
             await tester.pumpAndSettle();
 
             expect(tester.takeException(), isNull);
