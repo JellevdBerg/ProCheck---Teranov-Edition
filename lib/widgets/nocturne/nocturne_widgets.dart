@@ -4,12 +4,12 @@ import '../../models/task_priority.dart';
 import '../../theme/nocturne_theme.dart';
 import '../panel/panel.dart';
 
-/// Three button voices: `primary` (a keycap with a lit accent edge),
-/// `secondary` (a plain keycap), `ghost` (printed legend, no key).
+/// Three button voices: `primary` (accent fill), `secondary` (outlined),
+/// `ghost` (text only, hover wash).
 enum NocturneButtonVariant { primary, secondary, ghost }
 
-/// An icon+label keycap. It travels 2px down while pressed.
-class NocturneButton extends StatefulWidget {
+/// An icon+label button, 32px tall (28px when [dense]).
+class NocturneButton extends StatelessWidget {
   const NocturneButton({
     super.key,
     required this.label,
@@ -31,91 +31,80 @@ class NocturneButton extends StatefulWidget {
   final bool dense;
 
   @override
-  State<NocturneButton> createState() => _NocturneButtonState();
-}
-
-class _NocturneButtonState extends State<NocturneButton> {
-  bool _down = false;
-
-  @override
   Widget build(BuildContext context) {
     final tokens = context.nocturne;
-    final accent = widget.color ?? context.nocturneAccent;
-    final ghost = widget.variant == NocturneButtonVariant.ghost;
-    final primary = widget.variant == NocturneButtonVariant.primary;
-    // On enamel, a pale accent (e.g. a pink project colour) is darkened for
-    // the label only; the key's edge and tint keep the true colour.
-    final fg = (ghost || primary)
-        ? (tokens.isDark ? accent : Color.lerp(accent, Colors.black, 0.45)!)
-        : tokens.text;
+    final brightness = Theme.of(context).brightness;
+    final accent = color == null
+        ? context.nocturneAccent
+        : tuneAccent(color!, brightness);
+    final primary = variant == NocturneButtonVariant.primary;
+    final ghost = variant == NocturneButtonVariant.ghost;
+    final onAccent = accent.computeLuminance() > 0.5
+        ? Colors.black
+        : Colors.white;
+    final fg = primary ? onAccent : (ghost && color != null ? accent : tokens.text);
     final radius = BorderRadius.circular(NocturneRadius.md);
 
     final child = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (widget.icon != null) ...[
-          Icon(widget.icon, size: 16, color: fg),
+        if (icon != null) ...[
+          Icon(icon, size: 16, color: fg),
           const SizedBox(width: 6),
         ],
-        Text(
-          widget.label,
-          style: TextStyle(
-            color: fg,
-            fontSize: widget.dense ? 14 : 15,
-            fontWeight: FontWeight.w500,
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: fg,
+              fontSize: 13,
+              height: 20 / 13,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ],
     );
 
-    Widget body = InkWell(
-      onTap: widget.onPressed,
-      onHighlightChanged: (v) => setState(() => _down = v),
-      borderRadius: radius,
-      hoverColor: context.nocturneHoverColor,
-      splashColor: context.nocturneSplashColor,
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: widget.dense ? 10 : 12,
-          vertical: widget.dense ? 6 : 8,
+    return Opacity(
+      opacity: onPressed == null ? 0.45 : 1,
+      child: Material(
+        color: primary
+            ? accent
+            : (ghost ? Colors.transparent : tokens.surface),
+        shape: RoundedRectangleBorder(
+          borderRadius: radius,
+          side: (primary || ghost)
+              ? BorderSide.none
+              : BorderSide(color: tokens.borderStrong),
         ),
-        child: child,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: radius,
+          hoverColor: primary
+              ? Colors.white.withValues(alpha: 0.12)
+              : tokens.raised,
+          focusColor: accent.withValues(alpha: 0.2),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: dense ? 28 : 32),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: dense ? 8 : 12,
+                vertical: dense ? 4 : 6,
+              ),
+              child: child,
+            ),
+          ),
+        ),
       ),
     );
-
-    if (ghost) {
-      body = Material(type: MaterialType.transparency, child: body);
-    } else {
-      var decoration = panelDecoration(
-        context,
-        depth: _down ? PanelDepth.recessed : PanelDepth.raised,
-        fill: (!_down && primary)
-            ? Color.lerp(tokens.surface, accent, tokens.isDark ? 0.18 : 0.14)
-            : null,
-      );
-      if (primary) {
-        decoration = decoration.copyWith(
-          border: Border.all(color: accent.withValues(alpha: 0.8)),
-        );
-      }
-      body = AnimatedContainer(
-        duration: const Duration(milliseconds: 60),
-        transform: Matrix4.translationValues(0, _down ? 2 : 0, 0),
-        decoration: decoration,
-        child: Material(
-          type: MaterialType.transparency,
-          borderRadius: radius,
-          child: body,
-        ),
-      );
-    }
-
-    return Opacity(opacity: widget.onPressed == null ? 0.5 : 1, child: body);
   }
 }
 
-/// A small stamped label — used for priority tags (`.tag` + priority
-/// colors) and generic outline/neutral tags (due dates, etc).
+/// A small chip — priority, due date, or a generic label. Color is paired
+/// with text (and a glyph for priority), never alone.
 class NocturneTag extends StatelessWidget {
   const NocturneTag({
     super.key,
@@ -125,57 +114,50 @@ class NocturneTag extends StatelessWidget {
     this.outline = false,
   });
 
-  /// Builds the High/Med/Low priority tag with its fixed color, or null for
-  /// [TaskPriority.none] (nothing to show).
+  /// Builds the High/Med/Low priority tag with its fixed color and glyph,
+  /// or null for [TaskPriority.none] (nothing to show).
   static Widget? forPriority(TaskPriority priority) {
-    final color = switch (priority) {
-      TaskPriority.high => NocturnePriority.high,
-      TaskPriority.med => NocturnePriority.med,
-      TaskPriority.low => NocturnePriority.low,
-      TaskPriority.none => null,
+    final (color, icon) = switch (priority) {
+      TaskPriority.high => (NocturnePriority.high, Icons.keyboard_double_arrow_up),
+      TaskPriority.med => (NocturnePriority.med, Icons.drag_handle),
+      TaskPriority.low => (NocturnePriority.low, Icons.keyboard_arrow_down),
+      TaskPriority.none => (null, null),
     };
     if (color == null) return null;
-    return NocturneTag(label: priority.label, color: color);
+    return NocturneTag(label: priority.label, color: color, icon: icon);
   }
 
   final String label;
   final IconData? icon;
 
-  /// Fill/text color for a solid tag, or the fg/border color for an
-  /// [outline] one (which otherwise defaults to the Appearance accent).
+  /// Status hue for the chip. Null = neutral.
   final Color? color;
 
-  /// An outlined tag (e.g. the due-date chip) instead of a filled one.
+  /// A bordered chip with no fill instead of a tinted one.
   final bool outline;
 
   @override
   Widget build(BuildContext context) {
-    final accent = context.nocturneAccent;
-    final tokens = context.nocturne;
-
+    final t = context.nocturne;
     final Color fg;
     final Color? bg;
-    final Color borderColor;
-    if (outline) {
-      fg = color ?? accent;
-      bg = null;
-      borderColor = color ?? accent;
-    } else if (color != null) {
-      // Status hues stay legible on enamel by darkening the text only.
-      fg = tokens.isDark ? color! : Color.lerp(color!, Colors.black, 0.5)!;
-      bg = color!.withValues(alpha: 0.22);
-      borderColor = color!.withValues(alpha: 0.55);
+    final Color border;
+    if (color != null) {
+      // Darken (light theme) / keep (dark theme) so the text stays >= 4.5:1.
+      fg = t.isDark ? color! : Color.lerp(color!, Colors.black, 0.4)!;
+      bg = outline ? null : color!.withValues(alpha: t.isDark ? 0.16 : 0.12);
+      border = outline ? color! : Colors.transparent;
     } else {
-      fg = tokens.neutral200;
-      bg = tokens.neutral800;
-      borderColor = tokens.edge;
+      fg = t.neutral300;
+      bg = outline ? null : t.neutral800;
+      border = outline ? t.borderStrong : Colors.transparent;
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1.5),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(
         color: bg,
-        border: Border.all(color: borderColor),
+        border: Border.all(color: border),
         borderRadius: BorderRadius.circular(NocturneRadius.sm),
       ),
       child: Row(
@@ -183,16 +165,19 @@ class NocturneTag extends StatelessWidget {
         children: [
           if (icon != null) ...[
             Icon(icon, size: 12, color: fg),
-            const SizedBox(width: 4),
+            const SizedBox(width: 3),
           ],
-          Text(
-            label.toUpperCase(),
-            style: TextStyle(
-              color: fg,
-              fontFamily: kPanelFont,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.8,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: fg,
+                fontSize: 11.5,
+                height: 16 / 11.5,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
@@ -201,9 +186,9 @@ class NocturneTag extends StatelessWidget {
   }
 }
 
-/// A row of mutually-exclusive options in one recessed housing; the
-/// selected option is a keycap standing proud of it (view toggle,
-/// priority/date-format/landing pickers).
+/// A row of mutually-exclusive options in one track; the selected option is
+/// an accent-tinted segment (view toggle, priority/date-format/landing
+/// pickers).
 class NocturneSegmented<T> extends StatelessWidget {
   const NocturneSegmented({
     super.key,
@@ -226,65 +211,63 @@ class NocturneSegmented<T> extends StatelessWidget {
     final accent = context.nocturneAccent;
 
     return DecoratedBox(
-      decoration: panelDecoration(context, depth: PanelDepth.recessed),
+      decoration: BoxDecoration(
+        color: tokens.raised,
+        border: Border.all(color: tokens.edge),
+        borderRadius: BorderRadius.circular(NocturneRadius.md),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(2),
-        // A SingleChildScrollView rather than a bare Row: with enough
-        // options (or a narrow enough container — the Settings screen's
-        // responsive columns can get quite tight), a fixed-width Row of
-        // segments can ask for more space than it's given, which would
-        // otherwise be a hard overflow error rather than something a user
-        // ever notices.
+        // Scrolls rather than overflows when a narrow container can't fit
+        // every option.
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               for (var i = 0; i < options.length; i++)
-                DecoratedBox(
-                  decoration: value == options[i]
-                      ? panelDecoration(
-                          context,
-                          radius: NocturneRadius.sm + 1,
-                          fill: Color.lerp(
-                            tokens.surface,
-                            accent,
-                            tokens.isDark ? 0.45 : 0.35,
-                          ),
-                        )
-                      : const BoxDecoration(),
-                  child: InkWell(
-                    onTap: () => onChanged(options[i]),
-                    borderRadius: BorderRadius.circular(NocturneRadius.sm),
-                    hoverColor: context.nocturneHoverColor,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (iconBuilder != null)
-                            Icon(
-                              iconBuilder!(options[i]),
-                              size: 15,
-                              color: tokens.text,
-                            ),
-                          if (labelBuilder != null)
-                            Text(
-                              labelBuilder!(options[i]),
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: value == options[i]
-                                    ? FontWeight.w500
-                                    : FontWeight.w400,
-                                color: tokens.text,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
+                _segment(context, tokens, accent, options[i]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _segment(
+    BuildContext context,
+    NocturneColors tokens,
+    Color accent,
+    T option,
+  ) {
+    final selected = value == option;
+    final fg = selected ? accent : tokens.neutral300;
+    return Material(
+      color: selected
+          ? accent.withValues(alpha: tokens.isDark ? 0.18 : 0.12)
+          : Colors.transparent,
+      borderRadius: BorderRadius.circular(NocturneRadius.sm + 1),
+      child: InkWell(
+        onTap: () => onChanged(option),
+        borderRadius: BorderRadius.circular(NocturneRadius.sm + 1),
+        hoverColor: tokens.neutral800,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (iconBuilder != null)
+                Icon(iconBuilder!(option), size: 15, color: fg),
+              if (iconBuilder != null && labelBuilder != null)
+                const SizedBox(width: 5),
+              if (labelBuilder != null)
+                Text(
+                  labelBuilder!(option),
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 20 / 13,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    color: fg,
                   ),
                 ),
             ],
@@ -295,12 +278,12 @@ class NocturneSegmented<T> extends StatelessWidget {
   }
 }
 
-/// An engraved uppercase section header, e.g. "PROJECTS" / "FAVORITES".
+/// A section header, e.g. "PROJECTS" / "FAVORITES".
 class NocturneSectionLabel extends StatelessWidget {
   const NocturneSectionLabel(
     this.text, {
     super.key,
-    this.padding = const EdgeInsets.fromLTRB(0, 0, 0, 12),
+    this.padding = const EdgeInsets.fromLTRB(0, 0, 0, 8),
   });
 
   final String text;
