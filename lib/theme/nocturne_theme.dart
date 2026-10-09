@@ -156,6 +156,11 @@ ThemeData buildNocturneTheme({
   final tokens = brightness == Brightness.dark
       ? NocturneColors.dark
       : NocturneColors.light;
+  // Accent used as *text* (links, text buttons): darkened on enamel so it
+  // keeps 4.5:1 against the pale plates; the accent itself is unchanged.
+  final accentText = brightness == Brightness.dark
+      ? accent
+      : Color.lerp(accent, Colors.black, 0.45)!;
   final onAccent = accent.computeLuminance() > 0.5
       ? Colors.black
       : Colors.white;
@@ -275,7 +280,7 @@ ThemeData buildNocturneTheme({
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: accent,
+        foregroundColor: accentText,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(NocturneRadius.md),
         ),
