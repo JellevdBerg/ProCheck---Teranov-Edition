@@ -14,6 +14,9 @@ import '../providers/departments_provider.dart';
 import '../providers/sync_log_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/blurred_dialog.dart';
+import '../widgets/nocturne/nocturne_widgets.dart';
+import '../widgets/panel/panel.dart';
+import '../widgets/people_plates.dart';
 
 /// Operator/IT-only: create departments and user accounts. Reachable only
 /// from the sidebar's Admin nav item, itself gated on [isAdminProvider] —
@@ -64,12 +67,14 @@ class AdminScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   departmentsAsync.when(
-                    loading: () =>
-                        const Padding(
-                          padding: EdgeInsets.all(8),
-                          child: LinearProgressIndicator(),
-                        ),
-                    error: (error, _) => Text('Could not load departments: $error'),
+                    loading: () => const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: LinearProgressIndicator(),
+                    ),
+                    error: (error, _) => PanelNotice(
+                      'Could not load departments: $error',
+                      isError: true,
+                    ),
                     data: (departments) => _DepartmentList(
                       departments: departments,
                       isOperator: isOperator,
@@ -90,18 +95,21 @@ class AdminScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   peopleAsync.when(
-                    loading: () =>
-                        const Padding(
-                          padding: EdgeInsets.all(8),
-                          child: LinearProgressIndicator(),
-                        ),
-                    error: (error, _) => Text('Could not load people: $error'),
+                    loading: () => const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: LinearProgressIndicator(),
+                    ),
+                    error: (error, _) => PanelNotice(
+                      'Could not load people: $error',
+                      isError: true,
+                    ),
                     data: (people) => _PeopleList(
                       people: people,
                       departments: departmentsAsync.valueOrNull ?? const [],
                       isOperator: isOperator,
                       currentUserId: supabase.auth.currentUser?.id,
-                      onDelete: (person) => _deleteAccount(context, ref, person),
+                      onDelete: (person) =>
+                          _deleteAccount(context, ref, person),
                     ),
                   ),
                   if (isOperator) ...[
@@ -158,13 +166,15 @@ class AdminScreen extends ConsumerWidget {
     if (result == null) return;
 
     try {
-      await ref.read(adminControllerProvider).createAccount(
-        username: result.username,
-        password: result.password,
-        displayName: result.displayName,
-        role: result.role,
-        departmentId: result.departmentId,
-      );
+      await ref
+          .read(adminControllerProvider)
+          .createAccount(
+            username: result.username,
+            password: result.password,
+            displayName: result.displayName,
+            role: result.role,
+            departmentId: result.departmentId,
+          );
       ref.invalidate(departmentMembersProvider);
     } on AuthException catch (e) {
       if (context.mounted) _showError(context, e.message);
@@ -225,13 +235,14 @@ class AdminScreen extends ConsumerWidget {
         title: Text(title),
         content: Text(message),
         actions: [
-          TextButton(
+          NocturneButton(
+            label: 'Cancel',
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
           ),
-          FilledButton(
+          NocturneButton(
+            label: 'Delete',
+            variant: NocturneButtonVariant.primary,
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
           ),
         ],
       ),
@@ -240,7 +251,8 @@ class AdminScreen extends ConsumerWidget {
   }
 
   void _showError(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -274,8 +286,7 @@ Future<_NewDepartmentResult?> _showNewDepartmentDialog(
                 controller: nameController,
                 autofocus: true,
                 decoration: const InputDecoration(labelText: 'Name'),
-                validator: (value) =>
-                    (value == null || value.trim().isEmpty)
+                validator: (value) => (value == null || value.trim().isEmpty)
                     ? 'Enter a department name'
                     : null,
               ),
@@ -297,11 +308,13 @@ Future<_NewDepartmentResult?> _showNewDepartmentDialog(
           ),
         ),
         actions: [
-          TextButton(
+          NocturneButton(
+            label: 'Cancel',
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
           ),
-          FilledButton(
+          NocturneButton(
+            label: 'Create',
+            variant: NocturneButtonVariant.primary,
             onPressed: () {
               if (!formKey.currentState!.validate()) return;
               Navigator.of(context).pop(
@@ -311,7 +324,6 @@ Future<_NewDepartmentResult?> _showNewDepartmentDialog(
                 ),
               );
             },
-            child: const Text('Create'),
           ),
         ],
       ),
@@ -365,24 +377,27 @@ Future<_NewAccountResult?> _showNewAccountDialog(
                 TextFormField(
                   controller: displayNameController,
                   decoration: const InputDecoration(labelText: 'Name'),
-                  validator: (value) =>
-                      (value == null || value.trim().isEmpty) ? 'Enter a name' : null,
+                  validator: (value) => (value == null || value.trim().isEmpty)
+                      ? 'Enter a name'
+                      : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: usernameController,
                   decoration: const InputDecoration(labelText: 'Username'),
                   autocorrect: false,
-                  validator: (value) =>
-                      (value == null || value.trim().isEmpty) ? 'Enter a username' : null,
+                  validator: (value) => (value == null || value.trim().isEmpty)
+                      ? 'Enter a username'
+                      : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: passwordController,
                   decoration: const InputDecoration(labelText: 'Password'),
                   obscureText: true,
-                  validator: (value) =>
-                      (value == null || value.length < 6) ? 'At least 6 characters' : null,
+                  validator: (value) => (value == null || value.length < 6)
+                      ? 'At least 6 characters'
+                      : null,
                 ),
                 const SizedBox(height: 12),
                 if (forcedManager)
@@ -399,9 +414,13 @@ Future<_NewAccountResult?> _showNewAccountDialog(
                     decoration: const InputDecoration(labelText: 'Role'),
                     items: const [
                       DropdownMenuItem(value: 'member', child: Text('Member')),
-                      DropdownMenuItem(value: 'manager', child: Text('Manager')),
+                      DropdownMenuItem(
+                        value: 'manager',
+                        child: Text('Manager'),
+                      ),
                     ],
-                    onChanged: (value) => setState(() => role = value ?? 'member'),
+                    onChanged: (value) =>
+                        setState(() => role = value ?? 'member'),
                   ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String?>(
@@ -421,11 +440,13 @@ Future<_NewAccountResult?> _showNewAccountDialog(
             ),
           ),
           actions: [
-            TextButton(
+            NocturneButton(
+              label: 'Cancel',
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
             ),
-            FilledButton(
+            NocturneButton(
+              label: 'Create',
+              variant: NocturneButtonVariant.primary,
               onPressed: () {
                 if (!formKey.currentState!.validate()) return;
                 Navigator.of(context).pop(
@@ -438,7 +459,6 @@ Future<_NewAccountResult?> _showNewAccountDialog(
                   ),
                 );
               },
-              child: const Text('Create'),
             ),
           ],
         );
@@ -463,11 +483,12 @@ class _SectionHeader extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: Theme.of(context).textTheme.titleMedium),
-        TextButton.icon(
+        StampLabel(title, size: 15),
+        NocturneButton(
+          label: actionLabel,
+          icon: Icons.add,
+          dense: true,
           onPressed: onAction,
-          icon: const Icon(Icons.add, size: 18),
-          label: Text(actionLabel),
         ),
       ],
     );
@@ -487,32 +508,44 @@ class _DepartmentList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (departments.isEmpty) return const Text('No departments yet.');
-    return Column(
-      children: [
-        for (final department in departments)
-          ListTile(
-            dense: true,
-            leading: const Icon(Icons.apartment_outlined),
-            title: Text(department.name),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (department.isOperator)
-                  const Text('Operator')
-                else if (department.isIt)
-                  const Text('IT'),
-                // Only an Operator can remove the Operator/IT department
-                // itself — same asymmetry as creating one.
-                if (isOperator || !department.isAdminTier)
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 20),
-                    onPressed: () => onDelete(department),
-                  ),
-              ],
-            ),
-          ),
-      ],
+    if (departments.isEmpty) return const PanelNotice('No departments yet.');
+    return PanelCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      child: Column(
+        children: [
+          for (var i = 0; i < departments.length; i++) ...[
+            if (i > 0) const Divider(height: 1),
+            _row(context, departments[i]),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _row(BuildContext context, Department department) {
+    final tokens = context.nocturne;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(Icons.apartment_outlined, color: tokens.neutral400),
+          const SizedBox(width: 12),
+          Expanded(child: Text(department.name)),
+          if (department.isOperator)
+            const DepartmentPlate(name: 'Operator', isOperator: true)
+          else if (department.isIt)
+            const DepartmentPlate(name: 'IT', isIt: true),
+          // Only an Operator can remove the Operator/IT department
+          // itself — same asymmetry as creating one.
+          if (isOperator || !department.isAdminTier)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 20),
+              onPressed: () => onDelete(department),
+            )
+          else
+            const SizedBox(width: 48),
+        ],
+      ),
     );
   }
 }
@@ -534,35 +567,74 @@ class _PeopleList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (people.isEmpty) return const Text('No one else yet.');
-    return Column(
-      children: [
-        for (final person in people)
-          ListTile(
-            dense: true,
-            leading: CircleAvatar(
-              radius: 14,
-              child: Text(
-                person.displayName.isEmpty
-                    ? '?'
-                    : person.displayName[0].toUpperCase(),
-              ),
-            ),
-            title: Text(person.displayName),
-            subtitle: Text('@${person.username}'),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
+    if (people.isEmpty) return const PanelNotice('No one else yet.');
+    return PanelCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      child: Column(
+        children: [
+          for (var i = 0; i < people.length; i++) ...[
+            if (i > 0) const Divider(height: 1),
+            _row(context, people[i]),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _row(BuildContext context, Profile person) {
+    final tokens = context.nocturne;
+    final department = departments
+        .where((d) => d.id == person.departmentId)
+        .firstOrNull;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          AvatarWell(
+            initial: person.displayName.isEmpty
+                ? '?'
+                : person.displayName[0].toUpperCase(),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_departmentLabel(person, departments)),
-                if (_canDelete(person))
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 20),
-                    onPressed: () => onDelete(person),
+                Text(person.displayName),
+                Text(
+                  '@${person.username}',
+                  style: TextStyle(fontSize: 13, color: tokens.neutral500),
+                ),
+              ],
+            ),
+          ),
+          Flexible(
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                RolePlate(isManager: person.isManager),
+                if (department != null)
+                  DepartmentPlate(
+                    name: department.name,
+                    isOperator: department.isOperator,
+                    isIt: department.isIt,
                   ),
               ],
             ),
           ),
-      ],
+          if (_canDelete(person))
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 20),
+              onPressed: () => onDelete(person),
+            )
+          else
+            // Keeps the plates in a column when there is no delete icon.
+            const SizedBox(width: 48),
+        ],
+      ),
     );
   }
 
@@ -576,13 +648,6 @@ class _PeopleList extends StatelessWidget {
     // same asymmetry as creating an account there.
     if (department?.isAdminTier ?? false) return isOperator;
     return true;
-  }
-
-  String _departmentLabel(Profile person, List<Department> departments) {
-    final roleLabel = person.isManager ? 'Manager' : 'Member';
-    final department = departments.where((d) => d.id == person.departmentId);
-    if (department.isEmpty) return roleLabel;
-    return '$roleLabel · ${department.first.name}';
   }
 }
 
@@ -613,76 +678,111 @@ class _DevPanel extends ConsumerWidget {
         .firstOrNull
         ?.name;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Developer', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        _DevRow(
-          label: 'App version',
-          value: packageInfo.when(
-            data: (info) => '${info.version}+${info.buildNumber}',
-            loading: () => '…',
-            error: (_, _) => 'unknown',
+    return PanelCard(
+      title: 'Developer',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DevRow(
+            label: 'App version',
+            value: packageInfo.when(
+              data: (info) => '${info.version}+${info.buildNumber}',
+              loading: () => '…',
+              error: (_, _) => 'unknown',
+            ),
           ),
+          _DevRow(label: 'Supabase project', value: supabaseUrl),
+          _DevRow(
+            label: 'Realtime',
+            value: supabase.realtime.isConnected ? 'connected' : 'disconnected',
+          ),
+          _DevRow(label: 'User id', value: userId ?? '—'),
+          _DevRow(
+            label: 'Role / department',
+            value: profile == null
+                ? '—'
+                : '${profile.isManager ? 'manager' : 'member'} / '
+                      '${departmentName ?? 'none'}',
+          ),
+          _DevRow(
+            label: 'Last sync',
+            value: syncLog.lastSyncAt?.toLocal().toString() ?? 'never',
+          ),
+          _DevRow(label: 'Latest migration', value: latestMigration),
+          _DevRow(label: 'Accounts', value: '${people.length}'),
+          _DevRow(label: 'Departments', value: '${departments.length}'),
+          const SizedBox(height: 14),
+          const StampLabel('Accounts by department'),
+          const SizedBox(height: 6),
+          _Readout(
+            child: departments.isEmpty
+                ? Text('None.', style: TextStyle(color: tokens.neutral500))
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final department in departments)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: Text(
+                            '${department.name}: '
+                            '${people.where((p) => p.departmentId == department.id).length}',
+                            style: _readoutStyle(tokens).copyWith(fontSize: 13),
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+          const SizedBox(height: 14),
+          const StampLabel('Recent sync errors'),
+          const SizedBox(height: 6),
+          _Readout(
+            child: syncLog.entries.isEmpty
+                ? Text('None.', style: TextStyle(color: tokens.neutral500))
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final entry in syncLog.entries)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            '${entry.at.toLocal()} · ${entry.source}/${entry.action} · '
+                            '${entry.message}',
+                            style: _readoutStyle(tokens).copyWith(fontSize: 13),
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Tabular figures so digits line up like a seven-segment readout.
+TextStyle _readoutStyle(NocturneColors tokens) => TextStyle(
+  fontSize: 14,
+  color: tokens.neutral200,
+  fontFeatures: const [FontFeature.tabularFigures()],
+);
+
+/// A recessed window the service-panel values are read through.
+class _Readout extends StatelessWidget {
+  const _Readout({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: DecoratedBox(
+        decoration: panelDecoration(context, depth: PanelDepth.recessed),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: child,
         ),
-        _DevRow(label: 'Supabase project', value: supabaseUrl),
-        _DevRow(
-          label: 'Realtime',
-          value: supabase.realtime.isConnected ? 'connected' : 'disconnected',
-        ),
-        _DevRow(label: 'User id', value: userId ?? '—'),
-        _DevRow(
-          label: 'Role / department',
-          value: profile == null
-              ? '—'
-              : '${profile.isManager ? 'manager' : 'member'} / '
-                    '${departmentName ?? 'none'}',
-        ),
-        _DevRow(
-          label: 'Last sync',
-          value: syncLog.lastSyncAt?.toLocal().toString() ?? 'never',
-        ),
-        _DevRow(label: 'Latest migration', value: latestMigration),
-        _DevRow(label: 'Accounts', value: '${people.length}'),
-        _DevRow(label: 'Departments', value: '${departments.length}'),
-        const SizedBox(height: 12),
-        Text(
-          'Accounts by department',
-          style: Theme.of(context).textTheme.labelLarge,
-        ),
-        const SizedBox(height: 4),
-        if (departments.isEmpty)
-          Text('None.', style: TextStyle(color: tokens.neutral500))
-        else
-          for (final department in departments)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 2),
-              child: Text(
-                '${department.name}: '
-                '${people.where((p) => p.departmentId == department.id).length}',
-                style: TextStyle(fontSize: 12, color: tokens.neutral500),
-              ),
-            ),
-        const SizedBox(height: 12),
-        Text(
-          'Recent sync errors',
-          style: Theme.of(context).textTheme.labelLarge,
-        ),
-        const SizedBox(height: 4),
-        if (syncLog.entries.isEmpty)
-          Text('None.', style: TextStyle(color: tokens.neutral500))
-        else
-          for (final entry in syncLog.entries)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(
-                '${entry.at.toLocal()} · ${entry.source}/${entry.action} · '
-                '${entry.message}',
-                style: TextStyle(fontSize: 12, color: tokens.neutral500),
-              ),
-            ),
-      ],
+      ),
     );
   }
 }
@@ -697,14 +797,22 @@ class _DevRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nocturne;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 160,
-            child: Text(label, style: TextStyle(color: tokens.neutral500)),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 7),
+              child: StampLabel(label, size: 12),
+            ),
           ),
-          Expanded(child: SelectableText(value)),
+          Expanded(
+            child: _Readout(
+              child: SelectableText(value, style: _readoutStyle(tokens)),
+            ),
+          ),
         ],
       ),
     );
