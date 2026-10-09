@@ -93,7 +93,7 @@ class NocturneColors {
   /// Inputs and anything that must read as interactive.
   final Color borderStrong;
 
-  /// Text-safe status colors. Green means done and nothing else.
+  /// Text-safe status colors. Green means done (and the Low priority tag).
   final Color done;
   final Color danger;
   final Color warn;
@@ -123,7 +123,7 @@ class NocturneColors {
     done: Color(0xFF4CC38A),
     danger: Color(0xFFFF6B63),
     warn: Color(0xFFF59E42),
-    low: Color(0xFF8FA0C2),
+    low: Color(0xFF8FCB7A),
     isDark: true,
   );
 
@@ -151,7 +151,7 @@ class NocturneColors {
     done: Color(0xFF1E8A4C),
     danger: Color(0xFFC7372F),
     warn: Color(0xFFBD5200),
-    low: Color(0xFF5B6B8A),
+    low: Color(0xFF3F7F2A),
     isDark: false,
   );
 }
@@ -162,7 +162,7 @@ class NocturneColors {
 class NocturnePriority {
   static const high = Color(0xFFE5484D);
   static const med = Color(0xFFF59E42);
-  static const low = Color(0xFF6B7FA8);
+  static const low = Color(0xFF3F7F2A);
 }
 
 /// Success/"done" and destructive-action colors. Green = done only.

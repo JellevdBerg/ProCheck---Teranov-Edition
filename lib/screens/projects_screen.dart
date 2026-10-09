@@ -198,6 +198,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                 const SizedBox(width: NocturneSpace.s3),
                 NocturneButton(
                   label: 'New project',
+                  minWidth: 132,
                   icon: Icons.add,
                   variant: NocturneButtonVariant.primary,
                   onPressed: () => _createProject(context),
@@ -230,6 +231,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                     const Expanded(child: NocturneSectionLabel('TASKS')),
                     NocturneButton(
                       label: 'New task',
+                  minWidth: 132,
                       icon: Icons.add,
                       variant: NocturneButtonVariant.primary,
                       onPressed: () => showCreateTaskSheet(context),

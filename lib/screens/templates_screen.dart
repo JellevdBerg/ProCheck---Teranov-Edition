@@ -54,6 +54,7 @@ class TemplatesScreen extends ConsumerWidget {
                   const SizedBox(width: NocturneSpace.s2),
                   NocturneButton(
                     label: 'New template',
+                  minWidth: 132,
                     icon: Icons.add,
                     variant: NocturneButtonVariant.primary,
                     onPressed: () => Navigator.of(context).push(
