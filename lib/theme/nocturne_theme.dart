@@ -208,6 +208,10 @@ const _deptDark = [
   Color(0xFF9CCB6B),
   Color(0xFF6DB6F2),
   Color(0xFFD9B26A),
+  Color(0xFFE08A8A),
+  Color(0xFF8FA7B8),
+  Color(0xFFC6A0F0),
+  Color(0xFF7FD1B0),
 ];
 const _deptLight = [
   Color(0xFF3F5BE8),
@@ -218,6 +222,10 @@ const _deptLight = [
   Color(0xFF4F7D1C),
   Color(0xFF1F6FB8),
   Color(0xFF8A6A1F),
+  Color(0xFFA23B4E),
+  Color(0xFF4F6D82),
+  Color(0xFF8A3FB0),
+  Color(0xFF1F7A5C),
 ];
 
 const _fontFamily = 'IBMPlexSans';
