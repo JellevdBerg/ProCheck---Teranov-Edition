@@ -104,7 +104,11 @@ class _TemplateRowState extends State<_TemplateRow> {
                 children: [
                   Text(
                     widget.template.name,
-                    style: Theme.of(context).textTheme.titleMedium,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontFamily: kPanelFont,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 20,
+                    ),
                   ),
                   Text(
                     '${widget.template.subtasks.length} subtask(s)',

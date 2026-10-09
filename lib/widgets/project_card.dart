@@ -145,7 +145,11 @@ class _ProjectCardState extends State<ProjectCard> {
               type: MaterialType.transparency,
               child: Text(
                 widget.project.name,
-                style: theme.textTheme.titleMedium,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontFamily: kPanelFont,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 20,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),

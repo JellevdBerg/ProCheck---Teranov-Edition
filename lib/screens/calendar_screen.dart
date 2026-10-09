@@ -1091,7 +1091,12 @@ void _showDayTasksDialog(
                     Expanded(
                       child: Text(
                         '${_monthNames[day.month - 1]} ${day.day}, ${day.year}',
-                        style: Theme.of(dialogContext).textTheme.titleMedium,
+                        style: Theme.of(dialogContext).textTheme.titleMedium
+                            ?.copyWith(
+                              fontFamily: kPanelFont,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 20,
+                            ),
                       ),
                     ),
                     IconButton(

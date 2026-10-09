@@ -208,7 +208,7 @@ ThemeData buildNocturneTheme({
       headlineMedium: heading(29),
       headlineSmall: heading(24),
       titleLarge: heading(22),
-      titleMedium: heading(19),
+      titleMedium: body(18, weight: FontWeight.w500),
       titleSmall: body(15, weight: FontWeight.w500),
       bodyLarge: body(16),
       bodyMedium: body(15),
@@ -315,7 +315,10 @@ ThemeData buildNocturneTheme({
       ),
     ),
     iconTheme: IconThemeData(color: tokens.neutral300),
-    listTileTheme: ListTileThemeData(iconColor: tokens.neutral300),
+    listTileTheme: ListTileThemeData(
+      iconColor: tokens.neutral300,
+      selectedColor: accentText,
+    ),
     dividerTheme: DividerThemeData(color: tokens.divider, thickness: 1),
     extensions: [NocturneThemeExtension(tokens: tokens, accent: accent)],
   );
