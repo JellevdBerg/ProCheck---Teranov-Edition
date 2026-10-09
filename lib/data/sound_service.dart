@@ -7,11 +7,17 @@ import 'package:flutter/services.dart' show ServicesBinding;
 class SoundService {
   SoundService._();
 
+  /// The check-off sound. To switch back to the old chime, point this at
+  /// `sounds/checkoff_chime.wav` (the file is still bundled) and use a
+  /// volume of 0.35.
+  static const _checkoffAsset = 'sounds/checkoff_click.wav';
+  static const _checkoffVolume = 0.5;
+
   static final SoundService instance = SoundService._();
 
   AudioPlayer? _player;
 
-  /// The quick "ding-ding" played when a task (or, via its subtasks, a
+  /// The short relay-style click played when a task (or, via its subtasks, a
   /// task's last remaining subtask) is checked off. Swallows errors —
   /// a missing/blocked audio output shouldn't ever stop a checkbox from
   /// toggling — and replays from the start if it's still finishing from a
@@ -31,10 +37,10 @@ class SoundService {
     }
 
     try {
-      final player =
-          _player ??= AudioPlayer()..setReleaseMode(ReleaseMode.stop);
+      final player = _player ??= AudioPlayer()
+        ..setReleaseMode(ReleaseMode.stop);
       await player.stop();
-      await player.play(AssetSource('sounds/checkoff_chime.wav'), volume: 0.35);
+      await player.play(AssetSource(_checkoffAsset), volume: _checkoffVolume);
     } catch (_) {
       // Best-effort: no audio output, unsupported platform, etc.
     }
