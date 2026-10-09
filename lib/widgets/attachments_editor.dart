@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/attachment.dart';
+import '../theme/nocturne_theme.dart';
 import 'nocturne/nocturne_widgets.dart';
 import 'panel/panel.dart';
 
@@ -142,9 +143,9 @@ class _AttachmentChipState extends State<AttachmentChip> {
                   ),
                   decoration: BoxDecoration(
                     color: _hoveringName
-                        ? theme.colorScheme.onSurface.withValues(alpha: 0.08)
+                        ? context.nocturne.neutral800
                         : Colors.transparent,
-                    borderRadius: BorderRadius.circular(3),
+                    borderRadius: BorderRadius.circular(NocturneRadius.sm),
                   ),
                   child: Text(
                     widget.attachment.name,
@@ -176,7 +177,7 @@ class _AttachmentChipState extends State<AttachmentChip> {
                 padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
                   color: _hoveringRemove
-                      ? theme.colorScheme.error.withValues(alpha: 0.14)
+                      ? context.nocturne.danger.withValues(alpha: 0.14)
                       : Colors.transparent,
                   shape: BoxShape.circle,
                 ),
@@ -184,7 +185,7 @@ class _AttachmentChipState extends State<AttachmentChip> {
                   Icons.close,
                   size: 13,
                   color: _hoveringRemove
-                      ? theme.colorScheme.error
+                      ? context.nocturne.danger
                       : theme.hintColor,
                 ),
               ),

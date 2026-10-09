@@ -25,12 +25,7 @@ Future<Task?> showCreateTaskSheet(
     builder: (context) => Dialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(NocturneRadius.lg),
-        side: BorderSide(
-          color: Theme.of(context)
-              .extension<NocturneThemeExtension>()!
-              .tokens
-              .edge,
-        ),
+        side: BorderSide(color: context.nocturne.edge),
       ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
