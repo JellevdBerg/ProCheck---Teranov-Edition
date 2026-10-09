@@ -186,6 +186,7 @@ class AdminScreen extends ConsumerWidget {
     WidgetRef ref,
     Department department,
   ) async {
+    if (department.isOperator) return; // defence in depth; no button is shown
     final confirmed = await _confirmDelete(
       context,
       title: 'Delete department?',
@@ -535,9 +536,9 @@ class _DepartmentList extends StatelessWidget {
             const DepartmentPlate(name: 'Operator', isOperator: true)
           else if (department.isIt)
             const DepartmentPlate(name: 'IT', isIt: true),
-          // Only an Operator can remove the Operator/IT department
-          // itself — same asymmetry as creating one.
-          if (isOperator || !department.isAdminTier)
+          // The Operator department can never be removed; only an Operator
+          // can remove the IT department — same asymmetry as creating one.
+          if (!department.isOperator && (isOperator || !department.isAdminTier))
             IconButton(
               icon: const Icon(Icons.delete_outline, size: 20),
               onPressed: () => onDelete(department),
