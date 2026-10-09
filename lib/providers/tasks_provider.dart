@@ -109,6 +109,13 @@ class TasksNotifier extends StateNotifier<List<Task>> {
   String? _ownerId;
   String? _departmentId;
 
+  /// The signed-in user's display name, cached with [_ownerId]. Written into
+  /// new activity entries and comments so teammates see who acted; falls
+  /// back to 'You' when signed out / not yet loaded (pure local use).
+  String? _authorName;
+  String get authorName =>
+      (_authorName?.isNotEmpty ?? false) ? _authorName! : 'You';
+
   Future<void> _loadOwnProfile() async {
     if (!isSupabaseConfigured) return;
     final userId = supabase.auth.currentUser?.id;
@@ -121,6 +128,7 @@ class TasksNotifier extends StateNotifier<List<Task>> {
           .single();
       _ownerId = userId;
       _departmentId = row['department_id'] as String?;
+      _authorName = row['display_name'] as String?;
     } catch (_) {
       // Best-effort — local-only behavior continues if this fails.
     }
@@ -307,7 +315,7 @@ class TasksNotifier extends StateNotifier<List<Task>> {
     unawaited(_box.put(task.id, task));
     unawaited(_mirrorUpsert(task));
     state = [task, ...state];
-    _logActivity(task, ActivityKind.taskAdded, 'You added "${task.title}"');
+    _logActivity(task, ActivityKind.taskAdded, '$authorName added "${task.title}"');
     if (dueDate != null) {
       unawaited(NotificationService.instance.scheduleForTask(task));
     }
@@ -322,7 +330,7 @@ class TasksNotifier extends StateNotifier<List<Task>> {
     _logActivity(
       updated,
       ActivityKind.taskEdited,
-      'You edited "${updated.title}"',
+      '$authorName edited "${updated.title}"',
     );
   }
 
@@ -422,7 +430,7 @@ class TasksNotifier extends StateNotifier<List<Task>> {
       _logActivity(
         updated,
         ActivityKind.taskCompleted,
-        'You completed "${updated.title}"',
+        '$authorName completed "${updated.title}"',
       );
     }
   }

@@ -200,7 +200,7 @@ class Project extends HiveObject {
     comments: ((row['comments'] as List<dynamic>?) ?? [])
         .map((c) => ProjectComment.fromJson(c as Map<String, dynamic>))
         .toList(),
-    ownerId: row['owner_id'] as String,
+    ownerId: row['owner_id'] as String? ?? '',
     departmentId: row['department_id'] as String,
   );
 

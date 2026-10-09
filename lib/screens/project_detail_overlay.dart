@@ -600,9 +600,8 @@ class _CommentsCardState extends ConsumerState<_CommentsCard> {
   void _post() {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
-    ref
-        .read(projectsProvider.notifier)
-        .addComment(widget.project.id, 'You', text);
+    final projects = ref.read(projectsProvider.notifier);
+    projects.addComment(widget.project.id, projects.authorName, text);
     _controller.clear();
   }
 }

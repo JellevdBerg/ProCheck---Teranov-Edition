@@ -332,7 +332,7 @@ class Task extends HiveObject {
     completedAt: row['completed_at'] == null
         ? null
         : DateTime.parse(row['completed_at'] as String),
-    ownerId: row['owner_id'] as String,
+    ownerId: row['owner_id'] as String? ?? '',
     assigneeId: row['assignee_id'] as String?,
     departmentId: row['department_id'] as String,
     estimatedMinutes: row['estimated_minutes'] as int?,
