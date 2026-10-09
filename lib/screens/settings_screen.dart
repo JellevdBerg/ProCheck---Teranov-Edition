@@ -18,7 +18,9 @@ import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/color_spectrum_picker.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
+import '../widgets/panel/panel.dart';
 import '../widgets/text_prompt_dialog.dart';
+import '../widgets/wobble_checkbox.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -35,7 +37,10 @@ class SettingsScreen extends ConsumerWidget {
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final columns = (constraints.maxWidth / 300).floor().clamp(1, 3);
+                final columns = (constraints.maxWidth / 300).floor().clamp(
+                  1,
+                  3,
+                );
                 return SingleChildScrollView(
                   key: const Key('settings-scroll'),
                   child: Wrap(
@@ -43,22 +48,26 @@ class SettingsScreen extends ConsumerWidget {
                     runSpacing: 22.4,
                     children: [
                       SizedBox(
-                        width: (constraints.maxWidth - 22.4 * (columns - 1)) /
+                        width:
+                            (constraints.maxWidth - 22.4 * (columns - 1)) /
                             columns,
                         child: const _AppearanceCard(),
                       ),
                       SizedBox(
-                        width: (constraints.maxWidth - 22.4 * (columns - 1)) /
+                        width:
+                            (constraints.maxWidth - 22.4 * (columns - 1)) /
                             columns,
                         child: const _TaskDefaultsCard(),
                       ),
                       SizedBox(
-                        width: (constraints.maxWidth - 22.4 * (columns - 1)) /
+                        width:
+                            (constraints.maxWidth - 22.4 * (columns - 1)) /
                             columns,
                         child: const _BackupCard(),
                       ),
                       SizedBox(
-                        width: (constraints.maxWidth - 22.4 * (columns - 1)) /
+                        width:
+                            (constraints.maxWidth - 22.4 * (columns - 1)) /
                             columns,
                         child: const _ShortcutsCard(),
                       ),
@@ -74,17 +83,38 @@ class SettingsScreen extends ConsumerWidget {
   }
 }
 
-class _CardTitle extends StatelessWidget {
-  const _CardTitle(this.text);
-  final String text;
+/// One mutually-exclusive option rendered as a key: raised when idle, pressed
+/// in (recessed) with a lit lamp when selected. Still a real [RadioListTile]
+/// underneath, so the surrounding [RadioGroup] drives selection, keyboard and
+/// semantics exactly as before.
+class _RadioKey<T> extends StatelessWidget {
+  const _RadioKey({
+    required this.value,
+    required this.selected,
+    required this.label,
+  });
+
+  final T value;
+  final bool selected;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16.8),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.titleMedium,
+      padding: const EdgeInsets.only(bottom: 6),
+      child: DecoratedBox(
+        decoration: panelDecoration(
+          context,
+          depth: selected ? PanelDepth.recessed : PanelDepth.raised,
+        ),
+        child: RadioListTile<T>(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+          dense: true,
+          visualDensity: VisualDensity.compact,
+          title: Text(label),
+          value: value,
+          selected: selected,
+        ),
       ),
     );
   }
@@ -98,79 +128,90 @@ class _AppearanceCard extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16.8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const _CardTitle('Appearance'),
-            const NocturneSectionLabel('THEME', padding: EdgeInsets.only(bottom: 8)),
-            RadioGroup<ThemeMode>(
-              groupValue: settings.themeMode,
-              onChanged: (mode) => notifier.setThemeMode(mode!),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  RadioListTile<ThemeMode>(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    title: Text('Match system'),
-                    value: ThemeMode.system,
-                  ),
-                  RadioListTile<ThemeMode>(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    title: Text('Light'),
-                    value: ThemeMode.light,
-                  ),
-                  RadioListTile<ThemeMode>(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    title: Text('Dark'),
-                    value: ThemeMode.dark,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16.8),
-            Text('Accent color', style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 8.4),
-            Wrap(
-              spacing: 10,
-              runSpacing: 12,
+    return PanelCard(
+      title: 'Appearance',
+      padding: const EdgeInsets.all(16.8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const NocturneSectionLabel(
+            'THEME',
+            padding: EdgeInsets.only(bottom: 8),
+          ),
+          RadioGroup<ThemeMode>(
+            groupValue: settings.themeMode,
+            onChanged: (mode) => notifier.setThemeMode(mode!),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (var i = 0; i < accentPalette.length; i++)
-                  _AccentSwatch(
-                    color: accentPalette[i],
-                    selected:
-                        settings.customAccentValue == null &&
-                        settings.accentIndex == i,
-                    onTap: () => notifier.setAccentIndex(i),
-                  ),
-                _CustomAccentSwatch(
-                  selected: settings.customAccentValue != null,
-                  color: settings.customAccentValue != null
-                      ? Color(settings.customAccentValue!)
-                      : null,
-                  onPicked: notifier.setCustomAccentColor,
+                _RadioKey<ThemeMode>(
+                  label: 'Match system',
+                  value: ThemeMode.system,
+                  selected: settings.themeMode == ThemeMode.system,
+                ),
+                _RadioKey<ThemeMode>(
+                  label: 'Light',
+                  value: ThemeMode.light,
+                  selected: settings.themeMode == ThemeMode.light,
+                ),
+                _RadioKey<ThemeMode>(
+                  label: 'Dark',
+                  value: ThemeMode.dark,
+                  selected: settings.themeMode == ThemeMode.dark,
                 ),
               ],
             ),
-            const SizedBox(height: 16.8),
-            const NocturneSectionLabel('MOTION', padding: EdgeInsets.only(bottom: 8)),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Reduce motion'),
-              subtitle: const Text(
-                'Quick fades instead of sliding/scaling animations',
+          ),
+          const SizedBox(height: 16.8),
+          Text('Accent color', style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 8.4),
+          Wrap(
+            spacing: 10,
+            runSpacing: 12,
+            children: [
+              for (var i = 0; i < accentPalette.length; i++)
+                _AccentSwatch(
+                  color: accentPalette[i],
+                  selected:
+                      settings.customAccentValue == null &&
+                      settings.accentIndex == i,
+                  onTap: () => notifier.setAccentIndex(i),
+                ),
+              _CustomAccentSwatch(
+                selected: settings.customAccentValue != null,
+                color: settings.customAccentValue != null
+                    ? Color(settings.customAccentValue!)
+                    : null,
+                onPicked: notifier.setCustomAccentColor,
               ),
-              value: settings.reduceMotion,
-              onChanged: notifier.setReduceMotion,
-            ),
-          ],
-        ),
+            ],
+          ),
+          const SizedBox(height: 16.8),
+          const NocturneSectionLabel(
+            'MOTION',
+            padding: EdgeInsets.only(bottom: 8),
+          ),
+          Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Reduce motion'),
+                    SizedBox(height: 2),
+                    _Hint('Quick fades instead of sliding/scaling animations'),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              WobbleCheckbox(
+                value: settings.reduceMotion,
+                reduceMotion: settings.reduceMotion,
+                onChanged: (v) => notifier.setReduceMotion(v ?? false),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -189,22 +230,61 @@ class _AccentSwatch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return _SwatchWell(
+      selected: selected,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
       child: Container(
-        width: 32,
-        height: 32,
         decoration: BoxDecoration(
-          color: color,
           shape: BoxShape.circle,
-          border: selected
-              ? Border.all(color: Theme.of(context).colorScheme.onSurface, width: 2)
-              : null,
+          gradient: RadialGradient(
+            center: const Alignment(-0.35, -0.4),
+            colors: [Color.lerp(color, Colors.white, 0.35)!, color],
+          ),
         ),
         child: selected
             ? Icon(Icons.check, color: _onSwatch(color), size: 14)
             : null,
+      ),
+    );
+  }
+}
+
+/// A swatch socketed in a recessed ring; the selected one gets an accent-lit
+/// ring (plus its check mark, so it never depends on colour alone).
+class _SwatchWell extends StatelessWidget {
+  const _SwatchWell({
+    required this.selected,
+    required this.onTap,
+    required this.child,
+  });
+
+  final bool selected;
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: 36,
+        height: 36,
+        padding: const EdgeInsets.all(4),
+        decoration:
+            panelDecoration(
+              context,
+              depth: PanelDepth.recessed,
+              radius: 18,
+            ).copyWith(
+              border: Border.all(
+                color: selected
+                    ? Theme.of(context).colorScheme.onSurface
+                    : context.nocturne.edge,
+                width: selected ? 2 : 1,
+              ),
+            ),
+        child: child,
       ),
     );
   }
@@ -230,15 +310,16 @@ class _CustomAccentSwatch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return _SwatchWell(
+      selected: selected,
       onTap: () async {
-        final picked = await showCustomColorDialog(context, color ?? Colors.purple);
+        final picked = await showCustomColorDialog(
+          context,
+          color ?? Colors.purple,
+        );
         if (picked != null) onPicked(picked);
       },
-      borderRadius: BorderRadius.circular(16),
       child: Container(
-        width: 32,
-        height: 32,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: color == null
@@ -254,9 +335,6 @@ class _CustomAccentSwatch extends StatelessWidget {
                 )
               : null,
           color: color,
-          border: selected
-              ? Border.all(color: Theme.of(context).colorScheme.onSurface, width: 2)
-              : Border.all(color: Theme.of(context).dividerColor),
         ),
         child: selected && color != null
             ? Icon(Icons.check, color: _onSwatch(color!), size: 14)
@@ -274,55 +352,54 @@ class _TaskDefaultsCard extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16.8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const _CardTitle('Task defaults'),
-            Text('Default priority', style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 8.4),
-            NocturneSegmented<TaskPriority>(
-              options: TaskPriority.values,
-              value: settings.defaultPriority,
-              labelBuilder: (p) => p.label,
-              onChanged: notifier.setDefaultPriority,
+    return PanelCard(
+      title: 'Task defaults',
+      padding: const EdgeInsets.all(16.8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Default priority',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8.4),
+          NocturneSegmented<TaskPriority>(
+            options: TaskPriority.values,
+            value: settings.defaultPriority,
+            labelBuilder: (p) => p.label,
+            onChanged: notifier.setDefaultPriority,
+          ),
+          const SizedBox(height: 16.8),
+          Text('Date format', style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 8),
+          RadioGroup<DateFormatOption>(
+            groupValue: settings.dateFormat,
+            onChanged: (v) => notifier.setDateFormat(v!),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final option in DateFormatOption.values)
+                  _RadioKey<DateFormatOption>(
+                    label: option.label,
+                    value: option,
+                    selected: settings.dateFormat == option,
+                  ),
+              ],
             ),
-            const SizedBox(height: 16.8),
-            Text('Date format', style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 4),
-            RadioGroup<DateFormatOption>(
-              groupValue: settings.dateFormat,
-              onChanged: (v) => notifier.setDateFormat(v!),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final option in DateFormatOption.values)
-                    RadioListTile<DateFormatOption>(
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                      title: Text(option.label),
-                      value: option,
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16.8),
-            Text(
-              'Default landing screen',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 8.4),
-            NocturneSegmented<LandingScreenOption>(
-              options: LandingScreenOption.values,
-              value: settings.defaultLanding,
-              labelBuilder: (o) => o.label,
-              onChanged: notifier.setDefaultLanding,
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 16.8),
+          Text(
+            'Default landing screen',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 8.4),
+          NocturneSegmented<LandingScreenOption>(
+            options: LandingScreenOption.values,
+            value: settings.defaultLanding,
+            labelBuilder: (o) => o.label,
+            onChanged: notifier.setDefaultLanding,
+          ),
+        ],
       ),
     );
   }
@@ -333,54 +410,51 @@ class _BackupCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16.8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const _CardTitle('Backup & danger zone'),
-            const NocturneSectionLabel(
-              'BACKUP & RESTORE',
-              padding: EdgeInsets.only(bottom: 8),
-            ),
-            NocturneButton(
-              label: 'Export backup',
-              icon: Icons.upload_file_outlined,
-              onPressed: () => _exportBackup(context, ref),
-            ),
-            const SizedBox(height: 8),
-            NocturneButton(
-              label: 'Import backup',
-              icon: Icons.download_outlined,
-              onPressed: () => _importBackup(context, ref),
-            ),
-            if (kDebugMode) ...[
-              const SizedBox(height: 16.8),
-              const NocturneSectionLabel(
-                'TESTING',
-                padding: EdgeInsets.only(bottom: 8),
-              ),
-              NocturneButton(
-                label: 'Load test data',
-                icon: Icons.science_outlined,
-                onPressed: () => _confirmLoadTestData(context, ref),
-              ),
-            ],
+    return PanelCard(
+      title: 'Backup & danger zone',
+      padding: const EdgeInsets.all(16.8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const NocturneSectionLabel(
+            'BACKUP & RESTORE',
+            padding: EdgeInsets.only(bottom: 8),
+          ),
+          NocturneButton(
+            label: 'Export backup',
+            icon: Icons.upload_file_outlined,
+            onPressed: () => _exportBackup(context, ref),
+          ),
+          const SizedBox(height: 8),
+          NocturneButton(
+            label: 'Import backup',
+            icon: Icons.download_outlined,
+            onPressed: () => _importBackup(context, ref),
+          ),
+          if (kDebugMode) ...[
             const SizedBox(height: 16.8),
             const NocturneSectionLabel(
-              'DANGER ZONE',
+              'TESTING',
               padding: EdgeInsets.only(bottom: 8),
             ),
             NocturneButton(
-              label: 'Wipe all data',
-              icon: Icons.delete_outline,
-              color: NocturneStatus.dangerBorder,
-              onPressed: () => _confirmWipe(context, ref),
+              label: 'Load test data',
+              icon: Icons.science_outlined,
+              onPressed: () => _confirmLoadTestData(context, ref),
             ),
           ],
-        ),
+          const SizedBox(height: 16.8),
+          const NocturneSectionLabel(
+            'DANGER ZONE',
+            padding: EdgeInsets.only(bottom: 8),
+          ),
+          NocturneButton(
+            label: 'Wipe all data',
+            icon: Icons.delete_outline,
+            color: NocturneStatus.dangerBorder,
+            onPressed: () => _confirmWipe(context, ref),
+          ),
+        ],
       ),
     );
   }
@@ -432,7 +506,9 @@ class _BackupCard extends ConsumerWidget {
 
     final bytes = result.files.single.bytes;
     if (bytes == null) {
-      if (context.mounted) _showImportError(context, "Couldn't read that file.");
+      if (context.mounted) {
+        _showImportError(context, "Couldn't read that file.");
+      }
       return;
     }
 
@@ -470,9 +546,8 @@ class _BackupCard extends ConsumerWidget {
     ref.read(taskTemplatesProvider.notifier).restoreAll(data.taskTemplates);
 
     if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Backup imported.')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Backup imported.')));
     }
   }
 
@@ -503,9 +578,8 @@ class _BackupCard extends ConsumerWidget {
     ref.read(tasksProvider.notifier).restoreAll(data.tasks);
 
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Test data loaded.')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Test data loaded.')));
     }
   }
 
@@ -542,47 +616,60 @@ class _ShortcutsCard extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16.8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const _CardTitle('Keyboard shortcuts'),
-            for (final action in ShortcutAction.values)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Expanded(
+    return PanelCard(
+      title: 'Keyboard shortcuts',
+      padding: const EdgeInsets.all(16.8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final action in ShortcutAction.values)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      action.label,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                  DecoratedBox(
+                    decoration: panelDecoration(
+                      context,
+                      depth: PanelDepth.recessed,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       child: Text(
-                        action.label,
-                        style: Theme.of(context).textTheme.bodyMedium,
+                        settings.shortcutFor(action).displayLabel,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
                       ),
                     ),
-                    Text(
-                      settings.shortcutFor(action).displayLabel,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    if (settings.shortcutOverrides.containsKey(action))
-                      IconButton(
-                        tooltip: 'Reset to default',
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.restore, size: 16),
-                        onPressed: () => notifier.resetShortcutBinding(action),
-                      )
-                    else
-                      const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: () => _rebind(context, ref, action),
-                      child: const Text('Change'),
-                    ),
-                  ],
-                ),
+                  ),
+                  if (settings.shortcutOverrides.containsKey(action))
+                    IconButton(
+                      tooltip: 'Reset to default',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.restore, size: 16),
+                      onPressed: () => notifier.resetShortcutBinding(action),
+                    )
+                  else
+                    const SizedBox(width: 8),
+                  NocturneButton(
+                    label: 'Change',
+                    dense: true,
+                    variant: NocturneButtonVariant.ghost,
+                    onPressed: () => _rebind(context, ref, action),
+                  ),
+                ],
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -699,9 +786,9 @@ class _ShortcutRecorderDialogState extends State<_ShortcutRecorderDialog> {
       return KeyEventResult.handled;
     }
 
-    Navigator.of(
-      context,
-    ).pop(ShortcutBinding(key: key, cmdOrCtrl: cmdOrCtrl, shift: shift, alt: alt));
+    Navigator.of(context).pop(
+      ShortcutBinding(key: key, cmdOrCtrl: cmdOrCtrl, shift: shift, alt: alt),
+    );
     return KeyEventResult.handled;
   }
 
@@ -718,7 +805,18 @@ class _ShortcutRecorderDialogState extends State<_ShortcutRecorderDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Hold a modifier (Ctrl/Cmd or Alt) and press a key.'),
+              DecoratedBox(
+                decoration: panelDecoration(
+                  context,
+                  depth: PanelDepth.recessed,
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(10),
+                  child: Text(
+                    'Hold a modifier (Ctrl/Cmd or Alt) and press a key.',
+                  ),
+                ),
+              ),
               if (_error != null) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -731,11 +829,26 @@ class _ShortcutRecorderDialogState extends State<_ShortcutRecorderDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        NocturneButton(
+          label: 'Cancel',
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
         ),
       ],
+    );
+  }
+}
+
+/// Dim helper text under a control label.
+class _Hint extends StatelessWidget {
+  const _Hint(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: TextStyle(fontSize: 13, color: context.nocturne.neutral400),
     );
   }
 }

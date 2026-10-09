@@ -5,6 +5,7 @@ import '../models/task.dart';
 import '../providers/settings_provider.dart';
 import '../theme/nocturne_theme.dart';
 import 'nocturne/nocturne_widgets.dart';
+import 'panel/panel.dart';
 import 'text_prompt_dialog.dart';
 
 /// The Hero tags a [ProjectCard]'s header shares with the thin bar header of
@@ -144,7 +145,11 @@ class _ProjectCardState extends State<ProjectCard> {
               type: MaterialType.transparency,
               child: Text(
                 widget.project.name,
-                style: theme.textTheme.titleMedium,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontFamily: kPanelFont,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 20,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -205,13 +210,9 @@ class _ProjectCardState extends State<ProjectCard> {
           child: ListTile(
             contentPadding: EdgeInsets.zero,
             leading: Icon(
-              widget.project.favorite
-                  ? Icons.star
-                  : Icons.star_border,
+              widget.project.favorite ? Icons.star : Icons.star_border,
             ),
-            title: Text(
-              widget.project.favorite ? 'Unfavorite' : 'Favorite',
-            ),
+            title: Text(widget.project.favorite ? 'Unfavorite' : 'Favorite'),
           ),
         ),
         PopupMenuItem(
@@ -260,60 +261,70 @@ class _ProjectCardState extends State<ProjectCard> {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: widget.onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _header(context, showActions: _hovering),
-              if (totalCount > 0) ...[
-                const SizedBox(height: 10),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(2),
-                  child: LinearProgressIndicator(
+        child: DecoratedBox(
+          // The project's own colour, as a tinted edge on the plate.
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(
+                color: accentPalette[widget.project.colorIndex],
+                width: 4,
+              ),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _header(context, showActions: _hovering),
+                if (totalCount > 0) ...[
+                  const SizedBox(height: 10),
+                  GaugeBar(
                     value: progress,
-                    minHeight: 4,
-                    backgroundColor: tokens.neutral800,
                     color: accentPalette[widget.project.colorIndex],
+                    segments: 16,
+                    height: 8,
                   ),
-                ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$doneCount/$totalCount done',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: tokens.neutral400,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 4),
-                Text(
-                  '$doneCount/$totalCount done',
-                  style: theme.textTheme.bodySmall?.copyWith(color: tokens.neutral400),
-                ),
-              ],
-              const SizedBox(height: 4),
-              const Divider(height: 1),
-              const SizedBox(height: 8),
-              Expanded(
-                child: preview.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No tasks yet',
-                          style: theme.textTheme.bodySmall,
-                          textAlign: TextAlign.center,
-                        ),
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          for (final task in preview)
-                            _TaskPreviewRow(task: task),
-                          if (extra > 0)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text(
-                                '+$extra more',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.hintColor,
+                const Divider(height: 1),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: preview.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No tasks yet',
+                            style: theme.textTheme.bodySmall,
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (final task in preview)
+                              _TaskPreviewRow(task: task),
+                            if (extra > 0)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  '+$extra more',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.hintColor,
+                                  ),
                                 ),
                               ),
-                            ),
-                        ],
-                      ),
-              ),
-            ],
+                          ],
+                        ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -321,48 +332,49 @@ class _ProjectCardState extends State<ProjectCard> {
   }
 
   Widget _buildCompact(BuildContext context) {
-    final theme = Theme.of(context);
-    return Material(
-      color: theme.colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        onTap: widget.onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Hero(
-                    tag: projectIconHeroTag(widget.project.id),
-                    child: Material(
-                      type: MaterialType.transparency,
-                      child: Icon(
-                        Icons.folder_outlined,
-                        size: 18,
-                        color: accentPalette[widget.project.colorIndex],
+    return DecoratedBox(
+      decoration: panelDecoration(context),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(NocturneRadius.md),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Hero(
+                      tag: projectIconHeroTag(widget.project.id),
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: Icon(
+                          Icons.folder_outlined,
+                          size: 18,
+                          color: accentPalette[widget.project.colorIndex],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Hero(
-                    tag: projectNameHeroTag(widget.project.id),
-                    flightShuttleBuilder: projectNameHeroFlightShuttleBuilder(
-                      widget.reduceMotion,
+                    const SizedBox(width: 8),
+                    Hero(
+                      tag: projectNameHeroTag(widget.project.id),
+                      flightShuttleBuilder: projectNameHeroFlightShuttleBuilder(
+                        widget.reduceMotion,
+                      ),
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: Text(widget.project.name),
+                      ),
                     ),
-                    child: Material(
-                      type: MaterialType.transparency,
-                      child: Text(widget.project.name),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 2),
-              _actionsMenu(context, visible: _hovering || _menuOpen),
-            ],
+                  ],
+                ),
+                const SizedBox(width: 2),
+                _actionsMenu(context, visible: _hovering || _menuOpen),
+              ],
+            ),
           ),
         ),
       ),
@@ -393,21 +405,13 @@ class _TaskPreviewRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
-          Icon(
-            task.isChecked
-                ? Icons.check_circle
-                : Icons.radio_button_unchecked,
-            size: 14,
-            color: task.isChecked ? Colors.green : theme.colorScheme.outline,
-          ),
+          IndicatorLamp(on: task.isChecked, size: 9),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
               task.title,
               style: theme.textTheme.bodySmall?.copyWith(
-                decoration: task.isChecked
-                    ? TextDecoration.lineThrough
-                    : null,
+                decoration: task.isChecked ? TextDecoration.lineThrough : null,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

@@ -13,6 +13,7 @@ import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/create_task_sheet.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
+import '../widgets/panel/panel.dart';
 
 /// How long the Taskmaster drag-preview ghost's `AnimatedPositioned` takes
 /// to tween to a new position/width — shared with `_CalendarCrossingPillState`
@@ -63,7 +64,8 @@ bool _isSameDay(DateTime a, DateTime b) =>
 /// `date.add(Duration(days: n))` only adds exactly 24*n hours, so stepping
 /// across the October DST fall-back (a 25-hour day) lands an hour short of
 /// midnight on the intended day and reads as the day before it instead.
-DateTime _addDays(DateTime d, int days) => DateTime(d.year, d.month, d.day + days);
+DateTime _addDays(DateTime d, int days) =>
+    DateTime(d.year, d.month, d.day + days);
 
 DateTime _weekStartOf(DateTime d) => _addDays(d, -(d.weekday - 1));
 
@@ -161,7 +163,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       _edgeAdvanceTarget = null;
       return;
     }
-    if (_edgeAdvanceTarget != null && _isSameDay(_edgeAdvanceTarget!, hovered)) {
+    if (_edgeAdvanceTarget != null &&
+        _isSameDay(_edgeAdvanceTarget!, hovered)) {
       return;
     }
     _edgeAdvanceTimer?.cancel();
@@ -233,7 +236,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = context.nocturne;
     final tasks = ref.watch(tasksProvider);
     final projects = ref.watch(projectsProvider);
     final projectsById = {for (final p in projects) p.id: p};
@@ -293,7 +295,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 onPressed: () => _step(1),
               ),
               const SizedBox(width: 4),
-              Text(_headerLabel, style: Theme.of(context).textTheme.headlineSmall),
+              Text(
+                _headerLabel,
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
               const Spacer(),
               Tooltip(
                 message: _taskmasterOn
@@ -325,13 +330,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           Row(
             children: [
               for (final label in _weekdayLabels)
-                Expanded(
-                  child: Text(
-                    label,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: tokens.neutral500),
-                  ),
-                ),
+                Expanded(child: Center(child: StampLabel(label, size: 12))),
             ],
           ),
           const SizedBox(height: 4),
@@ -345,9 +344,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     : _weekStartOf(_anchor);
 
                 DateTime dateAt(Offset local) {
-                  final col = (local.dx / gridSize.width * 7)
-                      .floor()
-                      .clamp(0, 6);
+                  final col = (local.dx / gridSize.width * 7).floor().clamp(
+                    0,
+                    6,
+                  );
                   final row = (local.dy / gridSize.height * rowsCount)
                       .floor()
                       .clamp(0, rowsCount - 1);
@@ -365,9 +365,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   onPanEnd: _taskmasterOn ? (_) => _handleDragEnd() : null,
                   onPanCancel: _taskmasterOn ? _cancelDrag : null,
                   child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: tokens.neutral800),
+                    decoration: panelDecoration(
+                      context,
+                      depth: PanelDepth.recessed,
+                      radius: 12,
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: _view == _CalendarView.month
@@ -382,8 +383,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                                     tasks: visibleTasks,
                                     projectsById: projectsById,
                                     onDayTap: _taskmasterOn
-                                        ? (day) =>
-                                            _createTaskForRange(day, day)
+                                        ? (day) => _createTaskForRange(day, day)
                                         : widget.onDaySelected,
                                     onTaskTap: _handleTaskTap,
                                     showTopBorder: week != 0,
@@ -564,12 +564,16 @@ class _WeekRow extends StatelessWidget {
           final visibleLanes = cap != null
               ? lanes.sublist(0, math.min(cap, lanes.length))
               : lanes;
-          final hiddenLanes =
-              overflow ? lanes.sublist(cap) : const <List<_BarPlacement>>[];
+          final hiddenLanes = overflow
+              ? lanes.sublist(cap)
+              : const <List<_BarPlacement>>[];
           final overflowCounts = List<int>.generate(
             7,
             (day) => hiddenLanes
-                .where((lane) => lane.any((p) => p.colStart <= day && p.colEnd >= day))
+                .where(
+                  (lane) =>
+                      lane.any((p) => p.colStart <= day && p.colEnd >= day),
+                )
                 .length,
           );
 
@@ -586,11 +590,14 @@ class _WeekRow extends StatelessWidget {
                     for (var i = 0; i < 7; i++)
                       Expanded(
                         child: _DayCellBackground(
-                          inCurrentMonth: !dimOutOfRangeDays ||
+                          inCurrentMonth:
+                              !dimOutOfRangeDays ||
                               _addDays(rowStart, i).month == month.month,
                           isWeekend: i == 5 || i == 6,
+                          isToday: _isSameDay(_addDays(rowStart, i), today),
                           showDivider: i < 6,
-                          isDragSelected: dragRange != null &&
+                          isDragSelected:
+                              dragRange != null &&
                               !_addDays(rowStart, i).isBefore(dragRange!.$1) &&
                               !_addDays(rowStart, i).isAfter(dragRange!.$2),
                         ),
@@ -609,7 +616,8 @@ class _WeekRow extends StatelessWidget {
                           Expanded(
                             child: _DayNumber(
                               date: _addDays(rowStart, i),
-                              active: !dimOutOfRangeDays ||
+                              active:
+                                  !dimOutOfRangeDays ||
                                   _addDays(rowStart, i).month == month.month,
                               isToday: _isSameDay(_addDays(rowStart, i), today),
                               onTap: () => onDayTap(_addDays(rowStart, i)),
@@ -656,16 +664,13 @@ class _WeekRow extends StatelessWidget {
                   curve: Curves.easeOut,
                   left: dragSpan.colStart * colWidth + 2,
                   width:
-                      (dragSpan.colEnd - dragSpan.colStart + 1) * colWidth -
-                      4,
+                      (dragSpan.colEnd - dragSpan.colStart + 1) * colWidth - 4,
                   // Lane 0 sits just under the day-number row; each lane
                   // below it adds its own height, so the preview lines up
                   // with whichever lane it actually claimed above.
                   top: _rowTopInset + (ghostLane ?? 0) * _laneHeight,
                   height: 27,
-                  child: IgnorePointer(
-                    child: _buildGhost(dragSpan, colWidth),
-                  ),
+                  child: IgnorePointer(child: _buildGhost(dragSpan, colWidth)),
                 ),
             ],
           );
@@ -692,9 +697,9 @@ int _maxLanesForHeight(double availableHeight, int totalLanes) {
   // more" chip instead of a lane, so this is always < totalLanes.
   final withChip =
       (availableHeight -
-              _rowTopInset -
-              _overflowChipHeight -
-              _rowBottomPadding) /
+          _rowTopInset -
+          _overflowChipHeight -
+          _rowBottomPadding) /
       _laneHeight;
   return withChip.floor().clamp(0, totalLanes - 1);
 }
@@ -705,12 +710,14 @@ class _DayCellBackground extends StatelessWidget {
   const _DayCellBackground({
     required this.inCurrentMonth,
     required this.isWeekend,
+    this.isToday = false,
     required this.showDivider,
     this.isDragSelected = false,
   });
 
   final bool inCurrentMonth;
   final bool isWeekend;
+  final bool isToday;
   final bool showDivider;
   final bool isDragSelected;
 
@@ -753,9 +760,11 @@ class _DayCellBackground extends StatelessWidget {
     // top of the weekend stripes instead of being drawn underneath them.
     return DecoratedBox(
       decoration: BoxDecoration(
-        border: showDivider
-            ? Border(right: BorderSide(color: tokens.divider))
-            : null,
+        border: isToday
+            ? Border.all(color: accent.withValues(alpha: 0.85), width: 1.5)
+            : (showDivider
+                  ? Border(right: BorderSide(color: tokens.divider))
+                  : null),
       ),
       position: DecorationPosition.foreground,
       child: SizedBox.expand(
@@ -765,7 +774,9 @@ class _DayCellBackground extends StatelessWidget {
             fill,
             if (isDragSelected)
               DecoratedBox(
-                decoration: BoxDecoration(color: accent.withValues(alpha: 0.22)),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.22),
+                ),
               ),
           ],
         ),
@@ -792,7 +803,11 @@ class _DiagonalStripesPainter extends CustomPainter {
       ..strokeWidth = _strokeWidth;
     final span = size.width + size.height;
     for (double x = -size.height; x < span; x += _spacing) {
-      canvas.drawLine(Offset(x, size.height), Offset(x + size.height, 0), paint);
+      canvas.drawLine(
+        Offset(x, size.height),
+        Offset(x + size.height, 0),
+        paint,
+      );
     }
   }
 
@@ -832,14 +847,25 @@ class _DayNumber extends StatelessWidget {
             decoration: BoxDecoration(
               color: isToday ? accent : null,
               shape: BoxShape.circle,
+              boxShadow: isToday
+                  ? [
+                      BoxShadow(
+                        color: accent.withValues(alpha: 0.55),
+                        blurRadius: 6,
+                      ),
+                    ]
+                  : null,
             ),
             child: Text(
               '${date.day}',
               style: TextStyle(
-                fontSize: 12,
-                fontWeight: isToday ? FontWeight.w600 : FontWeight.w400,
+                fontFamily: kPanelFont,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
                 color: isToday
-                    ? Colors.white
+                    ? (accent.computeLuminance() > 0.5
+                          ? Colors.black
+                          : Colors.white)
                     : (active ? tokens.neutral200 : tokens.neutral600),
               ),
             ),
@@ -1005,7 +1031,8 @@ class _OverflowRow extends StatelessWidget {
                             child: Text(
                               '+${counts[i]} more',
                               style: TextStyle(
-                                fontSize: 11,
+                                fontFamily: kPanelFont,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w600,
                                 color: tokens.neutral500,
                               ),
@@ -1064,7 +1091,12 @@ void _showDayTasksDialog(
                     Expanded(
                       child: Text(
                         '${_monthNames[day.month - 1]} ${day.day}, ${day.year}',
-                        style: Theme.of(dialogContext).textTheme.titleMedium,
+                        style: Theme.of(dialogContext).textTheme.titleMedium
+                            ?.copyWith(
+                              fontFamily: kPanelFont,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 20,
+                            ),
                       ),
                     ),
                     IconButton(
@@ -1151,7 +1183,12 @@ class _TaskBarState extends State<_TaskBar> {
   @override
   Widget build(BuildContext context) {
     final task = widget.placement.task;
-    final style = _resolveTaskBarStyle(context, task, widget.project, widget.today);
+    final style = _resolveTaskBarStyle(
+      context,
+      task,
+      widget.project,
+      widget.today,
+    );
 
     final radius = BorderRadius.horizontal(
       left: widget.roundLeft ? const Radius.circular(13) : Radius.zero,
@@ -1239,13 +1276,20 @@ _TaskBarStyle _resolveTaskBarStyle(
   // as barely-there against it. Pushed up so the bar still reads as a
   // distinct colored block, not just colored text, without going so opaque
   // it fights the full-strength text/icons drawn on top of it.
-  final bg = Color.alphaBlend(statusColor.withValues(alpha: 0.28), tokens.surface);
-  final originColor =
-      project != null ? accentPalette[project.colorIndex] : tokens.neutral500;
+  final bg = Color.alphaBlend(
+    statusColor.withValues(alpha: tokens.isDark ? 0.28 : 0.22),
+    tokens.surface,
+  );
+  // Darkened on enamel so project-coloured legends stay readable on the tint.
+  final originColor = project != null
+      ? (tokens.isDark
+            ? accentPalette[project.colorIndex]
+            : Color.lerp(accentPalette[project.colorIndex], Colors.black, 0.4)!)
+      : tokens.neutral500;
 
   return _TaskBarStyle(
     bg: bg,
-    fg: statusColor,
+    fg: task.isChecked ? tokens.neutral500 : tokens.text,
     border: statusColor.withValues(alpha: 0.85),
     originColor: originColor,
     originLabel: project != null ? project.name : 'Unfiled',
@@ -1318,7 +1362,11 @@ Widget _taskBarContentRow({
       ),
       if (task.hasSubtasks) ...[
         const SizedBox(width: 4),
-        Icon(Icons.checklist, size: 13, color: style.fg.withValues(alpha: 0.85)),
+        Icon(
+          Icons.checklist,
+          size: 13,
+          color: style.fg.withValues(alpha: 0.85),
+        ),
       ],
       if (taskmasterOn && hovering) ...[
         const SizedBox(width: 4),
@@ -1442,16 +1490,15 @@ class _CrossingPillBorder extends OutlinedBorder {
     // either end to be capped by, so it's just the thin shape by itself,
     // capped the same way the weekday pill normally would be at a true end.
     if (weekdayCols <= 0) {
-      return Path()
-        ..addRRect(
-          RRect.fromRectAndCorners(
-            Rect.fromLTRB(rect.left, thinTop, rect.right, thinBottom),
-            topLeft: roundLeft ? Radius.circular(thinCapR) : Radius.zero,
-            bottomLeft: roundLeft ? Radius.circular(thinCapR) : Radius.zero,
-            topRight: roundRight ? Radius.circular(thinCapR) : Radius.zero,
-            bottomRight: roundRight ? Radius.circular(thinCapR) : Radius.zero,
-          ),
-        );
+      return Path()..addRRect(
+        RRect.fromRectAndCorners(
+          Rect.fromLTRB(rect.left, thinTop, rect.right, thinBottom),
+          topLeft: roundLeft ? Radius.circular(thinCapR) : Radius.zero,
+          bottomLeft: roundLeft ? Radius.circular(thinCapR) : Radius.zero,
+          topRight: roundRight ? Radius.circular(thinCapR) : Radius.zero,
+          bottomRight: roundRight ? Radius.circular(thinCapR) : Radius.zero,
+        ),
+      );
     }
 
     // The weekday/weekend boundary's absolute position, independent of the
@@ -1511,14 +1558,13 @@ class _CrossingPillBorder extends OutlinedBorder {
       path = Path.combine(
         PathOperation.union,
         path,
-        Path()
-          ..addRRect(
-            RRect.fromRectAndCorners(
-              Rect.fromLTRB(trailLeft, thinTop, rect.right, thinBottom),
-              topRight: roundRight ? Radius.circular(thinCapR) : Radius.zero,
-              bottomRight: roundRight ? Radius.circular(thinCapR) : Radius.zero,
-            ),
+        Path()..addRRect(
+          RRect.fromRectAndCorners(
+            Rect.fromLTRB(trailLeft, thinTop, rect.right, thinBottom),
+            topRight: roundRight ? Radius.circular(thinCapR) : Radius.zero,
+            bottomRight: roundRight ? Radius.circular(thinCapR) : Radius.zero,
           ),
+        ),
       );
     }
 
@@ -1530,7 +1576,11 @@ class _CrossingPillBorder extends OutlinedBorder {
         // The left edge is a continuation cut off by the row boundary, not
         // a real end, so it stays flat — only the pill's own real ends
         // (handled above) ever get a cap.
-        Path()..addRRect(RRect.fromRectAndCorners(Rect.fromLTRB(rect.left, thinTop, leadRight, thinBottom))),
+        Path()..addRRect(
+          RRect.fromRectAndCorners(
+            Rect.fromLTRB(rect.left, thinTop, leadRight, thinBottom),
+          ),
+        ),
       );
     }
 
@@ -1538,7 +1588,8 @@ class _CrossingPillBorder extends OutlinedBorder {
   }
 
   @override
-  Path getOuterPath(Rect rect, {TextDirection? textDirection}) => _buildPath(rect);
+  Path getOuterPath(Rect rect, {TextDirection? textDirection}) =>
+      _buildPath(rect);
 
   @override
   Path getInnerPath(Rect rect, {TextDirection? textDirection}) =>
@@ -1662,13 +1713,22 @@ class _CalendarCrossingPillState extends State<_CalendarCrossingPill> {
               'New task',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: accent),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: accent,
+              ),
             ),
           ),
         ],
       );
     } else {
-      final style = _resolveTaskBarStyle(context, widget.task!, widget.project, widget.today!);
+      final style = _resolveTaskBarStyle(
+        context,
+        widget.task!,
+        widget.project,
+        widget.today!,
+      );
       bg = style.bg;
       border = style.border;
       sideWidth = 1;
@@ -1760,7 +1820,8 @@ class _CalendarCrossingPillState extends State<_CalendarCrossingPill> {
         tween: Tween(begin: 0.85, end: 1),
         duration: const Duration(milliseconds: 150),
         curve: Curves.easeOut,
-        builder: (context, scale, child) => Opacity(opacity: scale, child: child),
+        builder: (context, scale, child) =>
+            Opacity(opacity: scale, child: child),
         child: pill,
       );
     }

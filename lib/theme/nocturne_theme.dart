@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-/// Nocturne design tokens, ported from the design handoff's `styles.css`.
-/// Values are the literal px figures from the CSS custom properties — CSS
-/// px and Flutter's logical pixels are both device-independent units at the
-/// same nominal density, so they carry over directly.
+/// Design tokens. The class names still say "Nocturne" (about 40 call sites
+/// use them); the look is the industrial control-panel system described in
+/// `docs/DESIGN.md` — graphite (dark) and enamel (light) finishes of one
+/// design.
 class NocturneSpace {
   static const s1 = 2.8;
   static const s2 = 5.6;
@@ -14,15 +14,13 @@ class NocturneSpace {
 }
 
 class NocturneRadius {
-  static const sm = 4.0;
-  static const md = 8.0;
-  static const lg = 14.0;
+  static const sm = 3.0;
+  static const md = 6.0;
+  static const lg = 10.0;
 }
 
-/// Dark-ground color roles (Nocturne's native theme). A light counterpart is
-/// derived from the same neutral ramp for [AppSettings]'s Light option,
-/// which the design handoff didn't specify explicitly — see
-/// [NocturneColors.light].
+/// Color roles for both finishes. Token names are stable; see
+/// [NocturneColors.dark] and [NocturneColors.light].
 class NocturneColors {
   const NocturneColors({
     required this.bg,
@@ -38,6 +36,11 @@ class NocturneColors {
     required this.neutral700,
     required this.neutral800,
     required this.neutral900,
+    required this.well,
+    required this.hi,
+    required this.lo,
+    required this.edge,
+    required this.isDark,
   });
 
   final Color bg;
@@ -54,40 +57,61 @@ class NocturneColors {
   final Color neutral800;
   final Color neutral900;
 
+  /// Recessed surface (inputs, readouts, switch housings).
+  final Color well;
+
+  /// Bevel highlight (light from the top-left) and bevel shadow.
+  final Color hi;
+  final Color lo;
+
+  /// Hairline around raised plates.
+  final Color edge;
+  final bool isDark;
+
+  /// "Graphite": powder-coated steel, warm off-white engraving.
   static const dark = NocturneColors(
-    bg: Color(0xFF161826),
-    surface: Color(0xFF232532),
-    text: Color(0xFFE9E9ED),
-    divider: Color(0x29E9E9ED), // ~16% of --color-text
-    neutral100: Color(0xFFF3F5FE),
-    neutral200: Color(0xFFE4E7F5),
-    neutral300: Color(0xFFCFD3E5),
-    neutral400: Color(0xFFB2B6CA),
-    neutral500: Color(0xFF9397AB),
-    neutral600: Color(0xFF75798C),
-    neutral700: Color(0xFF595D6C),
-    neutral800: Color(0xFF3F424D),
-    neutral900: Color(0xFF292B31),
+    bg: Color(0xFF1B1D1F),
+    surface: Color(0xFF2A2D30),
+    text: Color(0xFFE8E6DF),
+    divider: Color(0x40E8E6DF),
+    neutral100: Color(0xFFF2F0E9),
+    neutral200: Color(0xFFDAD8D1),
+    neutral300: Color(0xFFC2C1BB),
+    neutral400: Color(0xFFAAABA6),
+    neutral500: Color(0xFF9A9C97),
+    neutral600: Color(0xFF7C7F7A),
+    neutral700: Color(0xFF5A5E5E),
+    neutral800: Color(0xFF3A3E42),
+    neutral900: Color(0xFF232628),
+    well: Color(0xFF141618),
+    hi: Color(0xFF4A4F55),
+    lo: Color(0xFF0B0C0D),
+    edge: Color(0xFF3A3E42),
+    isDark: true,
   );
 
-  /// The handoff is dark-only ("Nocturne is a quiet dark interface"); this
-  /// light variant applies the same neutral ramp and role relationships
-  /// inverted onto a light ground, since Settings still offers a Light
-  /// option carried over from the app's pre-redesign theme support.
+  /// "Enamel": pale aluminium plates, graphite engraving. Same geometry,
+  /// bevels and lamps as [dark] — only the material differs. Neutral ramp
+  /// runs dark→light with the number, as before.
   static const light = NocturneColors(
-    bg: Color(0xFFF3F5FE),
-    surface: Color(0xFFFFFFFF),
-    text: Color(0xFF292B31),
-    divider: Color(0x29292B31),
-    neutral100: Color(0xFF292B31),
-    neutral200: Color(0xFF3F424D),
-    neutral300: Color(0xFF595D6C),
-    neutral400: Color(0xFF75798C),
-    neutral500: Color(0xFF9397AB),
-    neutral600: Color(0xFFB2B6CA),
-    neutral700: Color(0xFFCFD3E5),
-    neutral800: Color(0xFFE4E7F5),
-    neutral900: Color(0xFFF3F5FE),
+    bg: Color(0xFFD4D6D1),
+    surface: Color(0xFFE6E7E3),
+    text: Color(0xFF1F2224),
+    divider: Color(0x4D1F2224),
+    neutral100: Color(0xFF191B1D),
+    neutral200: Color(0xFF2B2F31),
+    neutral300: Color(0xFF383C40),
+    neutral400: Color(0xFF42474B),
+    neutral500: Color(0xFF4F5458),
+    neutral600: Color(0xFF70767A),
+    neutral700: Color(0xFF9A9FA2),
+    neutral800: Color(0xFFB9BCB8),
+    neutral900: Color(0xFFC6C9C4),
+    well: Color(0xFFBFC2BC),
+    hi: Color(0xFFFFFFFF),
+    lo: Color(0xFF8A8E8A),
+    edge: Color(0xFFA9ADA8),
+    isDark: false,
   );
 }
 
@@ -118,7 +142,10 @@ const List<Color> nocturneAccentPalette = [
   Color(0xFFA08468),
 ];
 
-const _fontFamily = 'Inter';
+const _fontFamily = 'Barlow';
+
+/// Engraved-label / heading family. Only SemiBold (600) is bundled.
+const kPanelFont = 'BarlowCondensed';
 
 /// Builds the app's [ThemeData] for [brightness], tinted by [accent] (either
 /// a preset from [nocturneAccentPalette] or a user's custom color).
@@ -129,6 +156,11 @@ ThemeData buildNocturneTheme({
   final tokens = brightness == Brightness.dark
       ? NocturneColors.dark
       : NocturneColors.light;
+  // Accent used as *text* (links, text buttons): darkened on enamel so it
+  // keeps 4.5:1 against the pale plates; the accent itself is unchanged.
+  final accentText = brightness == Brightness.dark
+      ? accent
+      : Color.lerp(accent, Colors.black, 0.45)!;
   final onAccent = accent.computeLuminance() > 0.5
       ? Colors.black
       : Colors.white;
@@ -145,15 +177,15 @@ ThemeData buildNocturneTheme({
     onSurface: tokens.text,
   );
 
-  // Headings never go past the design system's 500 weight — even though
-  // Material's default TextTheme assigns bolder weights to larger styles.
+  // Headings use Barlow Condensed SemiBold (the one bundled weight); body
+  // text never goes past Barlow Medium.
   TextStyle heading(double size) => TextStyle(
     fontFamily: _fontFamily,
-    fontWeight: FontWeight.w500,
+    fontWeight: FontWeight.w600,
     fontSize: size,
     color: tokens.text,
-    letterSpacing: -0.2,
-  );
+    letterSpacing: 0.3,
+  ).copyWith(fontFamily: kPanelFont);
   TextStyle body(double size, {FontWeight weight = FontWeight.w400}) =>
       TextStyle(
         fontFamily: _fontFamily,
@@ -172,51 +204,59 @@ ThemeData buildNocturneTheme({
     dividerColor: tokens.divider,
     hintColor: tokens.neutral400,
     textTheme: TextTheme(
-      displaySmall: heading(32),
-      headlineMedium: heading(25),
-      headlineSmall: heading(20),
-      titleLarge: heading(19),
-      titleMedium: heading(17),
-      titleSmall: body(14, weight: FontWeight.w500),
-      bodyLarge: body(15),
-      bodyMedium: body(14),
-      bodySmall: body(13),
-      labelLarge: body(13, weight: FontWeight.w500),
-      labelSmall: body(11),
+      displaySmall: heading(36),
+      headlineMedium: heading(29),
+      headlineSmall: heading(24),
+      titleLarge: heading(22),
+      titleMedium: body(18, weight: FontWeight.w500),
+      titleSmall: body(15, weight: FontWeight.w500),
+      bodyLarge: body(16),
+      bodyMedium: body(15),
+      bodySmall: body(13.5),
+      labelLarge: body(14, weight: FontWeight.w500),
+      labelSmall: body(12),
     ),
     appBarTheme: AppBarTheme(
       backgroundColor: tokens.bg,
       foregroundColor: tokens.text,
       elevation: 0,
-      titleTextStyle: heading(19),
+      titleTextStyle: heading(22),
     ),
+    // A raised plate: bevel via a hairline edge plus a short, hard shadow
+    // (light from the top-left). Screens wanting the full gradient plate
+    // use PanelCard.
     cardTheme: CardThemeData(
       color: tokens.surface,
-      elevation: 0,
+      elevation: 2,
+      shadowColor: tokens.lo,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(NocturneRadius.md),
-        side: BorderSide(color: tokens.neutral800, width: 1),
+        side: BorderSide(color: tokens.edge, width: 1),
       ),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: tokens.surface,
+      elevation: 8,
+      shadowColor: tokens.lo,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(NocturneRadius.lg),
+        side: BorderSide(color: tokens.edge),
       ),
-      titleTextStyle: heading(20),
+      titleTextStyle: heading(24),
     ),
+    // Inputs are recessed wells.
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: tokens.surface,
+      fillColor: tokens.well,
       hintStyle: TextStyle(color: tokens.neutral400),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(NocturneRadius.md),
-        borderSide: BorderSide(color: tokens.divider),
+        borderSide: BorderSide(color: tokens.edge),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(NocturneRadius.md),
-        borderSide: BorderSide(color: tokens.divider),
+        borderSide: BorderSide(color: tokens.edge),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(NocturneRadius.md),
@@ -226,8 +266,9 @@ ThemeData buildNocturneTheme({
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: accent,
-        side: BorderSide(color: accent),
+        foregroundColor: tokens.text,
+        backgroundColor: tokens.surface,
+        side: BorderSide(color: tokens.edge),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(NocturneRadius.md),
         ),
@@ -239,7 +280,7 @@ ThemeData buildNocturneTheme({
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: accent,
+        foregroundColor: accentText,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(NocturneRadius.md),
         ),
@@ -249,13 +290,35 @@ ThemeData buildNocturneTheme({
       style: FilledButton.styleFrom(
         backgroundColor: accent,
         foregroundColor: onAccent,
+        elevation: 2,
+        shadowColor: tokens.lo,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(NocturneRadius.md),
         ),
       ),
     ),
+    switchTheme: SwitchThemeData(
+      trackColor: WidgetStateProperty.resolveWith(
+        (states) =>
+            states.contains(WidgetState.selected) ? accent : tokens.well,
+      ),
+      trackOutlineColor: WidgetStatePropertyAll(tokens.edge),
+      thumbColor: WidgetStatePropertyAll(
+        tokens.isDark ? tokens.neutral200 : tokens.surface,
+      ),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: tokens.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(NocturneRadius.md),
+        side: BorderSide(color: tokens.edge),
+      ),
+    ),
     iconTheme: IconThemeData(color: tokens.neutral300),
-    listTileTheme: ListTileThemeData(iconColor: tokens.neutral300),
+    listTileTheme: ListTileThemeData(
+      iconColor: tokens.neutral300,
+      selectedColor: accentText,
+    ),
     dividerTheme: DividerThemeData(color: tokens.divider, thickness: 1),
     extensions: [NocturneThemeExtension(tokens: tokens, accent: accent)],
   );

@@ -4,9 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/projects_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
-import '../theme/nocturne_theme.dart';
 import '../widgets/create_task_sheet.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
+import '../widgets/panel/panel.dart';
 import '../widgets/project_name_lookup.dart';
 import '../widgets/smart_view_task_row.dart';
 
@@ -44,20 +44,20 @@ class DayScreen extends ConsumerWidget {
     final projects = ref.watch(projectsProvider);
     final reduceMotion = ref.watch(settingsProvider).reduceMotion;
 
-    final dayTasks = tasks
-        .where(
-          (t) =>
-              t.dueDate != null &&
-              t.dueDate!.year == date.year &&
-              t.dueDate!.month == date.month &&
-              t.dueDate!.day == date.day,
-        )
-        .toList()
-      ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
+    final dayTasks =
+        tasks
+            .where(
+              (t) =>
+                  t.dueDate != null &&
+                  t.dueDate!.year == date.year &&
+                  t.dueDate!.month == date.month &&
+                  t.dueDate!.day == date.day,
+            )
+            .toList()
+          ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
 
     final projectNames = buildProjectNameLookup(projects);
     final label = '${_monthNames[date.month - 1]} ${date.day}, ${date.year}';
-    final tokens = context.nocturne;
 
     // See today_screen.dart's build method for why the task list is a
     // DecoratedSliver/SliverList rather than a Column-in-a-Card — a single
@@ -90,8 +90,11 @@ class DayScreen extends ConsumerWidget {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16.8, 16.8, 16.8, 16.8),
             sliver: SliverToBoxAdapter(
-              child: Card(
-                margin: EdgeInsets.zero,
+              child: DecoratedBox(
+                decoration: panelDecoration(
+                  context,
+                  depth: PanelDepth.recessed,
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(22.4),
                   child: Center(
@@ -108,11 +111,7 @@ class DayScreen extends ConsumerWidget {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16.8, 16.8, 16.8, 16.8),
             sliver: DecoratedSliver(
-              decoration: BoxDecoration(
-                color: tokens.surface,
-                borderRadius: BorderRadius.circular(NocturneRadius.md),
-                border: Border.all(color: tokens.neutral800),
-              ),
+              decoration: panelDecoration(context, depth: PanelDepth.flat),
               sliver: SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 11.2),
                 sliver: SliverList.builder(
