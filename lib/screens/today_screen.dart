@@ -8,7 +8,7 @@ import '../theme/nocturne_theme.dart';
 import '../widgets/panel/panel.dart';
 import '../widgets/project_name_lookup.dart';
 import '../widgets/smart_view_task_row.dart';
-import 'empty_state.dart';
+import '../widgets/task_filter_bar.dart';
 
 /// Page gutter: 16 compact, 24 wider, and the content is centred in a column
 /// of at most [maxWidth] on large windows (lists are not stretched).
@@ -23,7 +23,7 @@ bool _isSameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
 
 /// Every unchecked task due today, across every project (and unfiled).
-class TodayScreen extends ConsumerWidget {
+class TodayScreen extends ConsumerStatefulWidget {
   const TodayScreen({super.key, required this.onOpenTask});
 
   /// Opens a tapped task's home — its project, scrolled to and
@@ -33,8 +33,17 @@ class TodayScreen extends ConsumerWidget {
   onOpenTask;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final tasks = ref.watch(tasksProvider);
+  ConsumerState<TodayScreen> createState() => _TodayScreenState();
+}
+
+class _TodayScreenState extends ConsumerState<TodayScreen> {
+  TaskFilter _filter = const TaskFilter();
+
+  @override
+  Widget build(BuildContext context) {
+    final onOpenTask = widget.onOpenTask;
+    final userId = ref.watch(taskFilterOptionsProvider).userId;
+    final tasks = _filter.apply(ref.watch(tasksProvider), userId);
     final projects = ref.watch(projectsProvider);
     final reduceMotion = ref.watch(settingsProvider).reduceMotion;
     final now = DateTime.now();
@@ -46,9 +55,14 @@ class TodayScreen extends ConsumerWidget {
           ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
 
     if (todayTasks.isEmpty) {
-      return const EmptyState(
-        icon: Icons.wb_sunny_outlined,
-        message: 'Nothing due today.',
+      return LayoutBuilder(
+        builder: (context, c) => FilteredEmptyState(
+          icon: Icons.wb_sunny_outlined,
+          message: 'Nothing due today.',
+          filter: _filter,
+          onChanged: (f) => setState(() => _filter = f),
+          gutter: screenGutter(c.maxWidth),
+        ),
       );
     }
 
@@ -75,6 +89,16 @@ class TodayScreen extends ConsumerWidget {
                 child: Text(
                   'Today',
                   style: Theme.of(context).textTheme.headlineSmall,
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(gutter, 0, gutter, 0),
+              sliver: SliverToBoxAdapter(
+                child: TaskFilterBar(
+                  padding: const EdgeInsets.only(top: NocturneSpace.s3),
+                  filter: _filter,
+                  onChanged: (f) => setState(() => _filter = f),
                 ),
               ),
             ),

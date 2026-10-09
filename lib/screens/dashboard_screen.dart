@@ -13,6 +13,7 @@ import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
 import '../widgets/panel/panel.dart';
+import '../widgets/task_filter_bar.dart';
 
 /// True for an unchecked task with no due date, or one overdue — it needs
 /// attention now rather than being scheduled for later. Also used by the
@@ -121,7 +122,7 @@ const _kDashboardMaxWidth = 2000.0;
 
 /// The Dashboard: a header, then the shared [ProjectsOverview] scoped to
 /// every active (non-archived) project and unfiled tasks.
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({
     super.key,
     required this.onOpenProject,
@@ -137,9 +138,19 @@ class DashboardScreen extends ConsumerWidget {
   onOpenTask;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  TaskFilter _filter = const TaskFilter();
+
+  @override
+  Widget build(BuildContext context) {
+    final onOpenProject = widget.onOpenProject;
+    final onOpenTask = widget.onOpenTask;
     final projects = ref.watch(projectsProvider);
-    final tasks = ref.watch(tasksProvider);
+    final userId = ref.watch(taskFilterOptionsProvider).userId;
+    final tasks = _filter.apply(ref.watch(tasksProvider), userId);
     final now = DateTime.now();
 
     final activeProjects = projects.where((p) => !p.archived).toList()
@@ -168,6 +179,11 @@ class DashboardScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const _DashboardHeader(title: 'Dashboard'),
+                  TaskFilterBar(
+                    filter: _filter,
+                    onChanged: (f) => setState(() => _filter = f),
+                    padding: const EdgeInsets.only(top: NocturneSpace.s3),
+                  ),
                   const SizedBox(height: NocturneSpace.s4),
                   Expanded(
                     child: SingleChildScrollView(
