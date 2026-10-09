@@ -36,92 +36,111 @@ class AdminScreen extends ConsumerWidget {
     final peopleAsync = ref.watch(departmentMembersProvider);
     final isOperator = ref.watch(isOperatorProvider).valueOrNull ?? false;
 
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Admin', style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 4),
-          Text(
-            'Create departments and accounts for the company.',
-            style: TextStyle(color: tokens.neutral500),
-          ),
-          const SizedBox(height: 24),
-          Expanded(
-            child: SingleChildScrollView(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final gutter = constraints.maxWidth < NocturneBreakpoints.compact
+            ? NocturneSpace.s4
+            : NocturneSpace.s6;
+        return Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1080),
+            child: Padding(
+              padding: EdgeInsets.all(gutter),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionHeader(
-                    title: 'Departments',
-                    actionLabel: 'New department',
-                    onAction: () => _createDepartment(
-                      context,
-                      ref,
-                      isOperator: isOperator,
-                      hasItDepartment:
-                          departmentsAsync.valueOrNull?.any((d) => d.isIt) ??
-                          false,
+                  Text(
+                    'Admin',
+                    style: Theme.of(context).textTheme.displaySmall,
+                  ),
+                  const SizedBox(height: NocturneSpace.s1),
+                  Text(
+                    'Create departments and accounts for the company.',
+                    style: TextStyle(color: tokens.neutral500),
+                  ),
+                  const SizedBox(height: NocturneSpace.s6),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _SectionHeader(
+                            title: 'Departments',
+                            actionLabel: 'New department',
+                            onAction: () => _createDepartment(
+                              context,
+                              ref,
+                              isOperator: isOperator,
+                              hasItDepartment:
+                                  departmentsAsync.valueOrNull?.any(
+                                    (d) => d.isIt,
+                                  ) ??
+                                  false,
+                            ),
+                          ),
+                          const SizedBox(height: NocturneSpace.s2),
+                          departmentsAsync.when(
+                            loading: () => const Padding(
+                              padding: EdgeInsets.all(NocturneSpace.s2),
+                              child: LinearProgressIndicator(),
+                            ),
+                            error: (error, _) => PanelNotice(
+                              'Could not load departments: $error',
+                              isError: true,
+                            ),
+                            data: (departments) => _DepartmentList(
+                              departments: departments,
+                              isOperator: isOperator,
+                              onDelete: (department) =>
+                                  _deleteDepartment(context, ref, department),
+                            ),
+                          ),
+                          const SizedBox(height: NocturneSpace.s8),
+                          _SectionHeader(
+                            title: 'People',
+                            actionLabel: 'New account',
+                            onAction: () => _createAccount(
+                              context,
+                              ref,
+                              departmentsAsync.valueOrNull ?? const [],
+                              isOperator: isOperator,
+                            ),
+                          ),
+                          const SizedBox(height: NocturneSpace.s2),
+                          peopleAsync.when(
+                            loading: () => const Padding(
+                              padding: EdgeInsets.all(NocturneSpace.s2),
+                              child: LinearProgressIndicator(),
+                            ),
+                            error: (error, _) => PanelNotice(
+                              'Could not load people: $error',
+                              isError: true,
+                            ),
+                            data: (people) => _PeopleList(
+                              people: people,
+                              departments:
+                                  departmentsAsync.valueOrNull ?? const [],
+                              isOperator: isOperator,
+                              currentUserId: supabase.auth.currentUser?.id,
+                              onDelete: (person) =>
+                                  _deleteAccount(context, ref, person),
+                            ),
+                          ),
+                          if (isOperator) ...[
+                            const SizedBox(height: NocturneSpace.s8),
+                            const _DevPanel(),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  departmentsAsync.when(
-                    loading: () => const Padding(
-                      padding: EdgeInsets.all(8),
-                      child: LinearProgressIndicator(),
-                    ),
-                    error: (error, _) => PanelNotice(
-                      'Could not load departments: $error',
-                      isError: true,
-                    ),
-                    data: (departments) => _DepartmentList(
-                      departments: departments,
-                      isOperator: isOperator,
-                      onDelete: (department) =>
-                          _deleteDepartment(context, ref, department),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  _SectionHeader(
-                    title: 'People',
-                    actionLabel: 'New account',
-                    onAction: () => _createAccount(
-                      context,
-                      ref,
-                      departmentsAsync.valueOrNull ?? const [],
-                      isOperator: isOperator,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  peopleAsync.when(
-                    loading: () => const Padding(
-                      padding: EdgeInsets.all(8),
-                      child: LinearProgressIndicator(),
-                    ),
-                    error: (error, _) => PanelNotice(
-                      'Could not load people: $error',
-                      isError: true,
-                    ),
-                    data: (people) => _PeopleList(
-                      people: people,
-                      departments: departmentsAsync.valueOrNull ?? const [],
-                      isOperator: isOperator,
-                      currentUserId: supabase.auth.currentUser?.id,
-                      onDelete: (person) =>
-                          _deleteAccount(context, ref, person),
-                    ),
-                  ),
-                  if (isOperator) ...[
-                    const SizedBox(height: 32),
-                    const _DevPanel(),
-                  ],
                 ],
               ),
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -482,9 +501,15 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        StampLabel(title, size: 15),
+        Expanded(
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: NocturneSpace.s2),
         NocturneButton(
           label: actionLabel,
           icon: Icons.add,
@@ -495,6 +520,10 @@ class _SectionHeader extends StatelessWidget {
     );
   }
 }
+
+/// Width reserved for a row's delete button so plates stay in a column when a
+/// row has none.
+const double _kActionWidth = 40;
 
 class _DepartmentList extends StatelessWidget {
   const _DepartmentList({
@@ -511,11 +540,11 @@ class _DepartmentList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (departments.isEmpty) return const PanelNotice('No departments yet.');
     return PanelCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      padding: EdgeInsets.zero,
       child: Column(
         children: [
           for (var i = 0; i < departments.length; i++) ...[
-            if (i > 0) const Divider(height: 1),
+            if (i > 0) const Divider(),
             _row(context, departments[i]),
           ],
         ],
@@ -524,28 +553,38 @@ class _DepartmentList extends StatelessWidget {
   }
 
   Widget _row(BuildContext context, Department department) {
-    final tokens = context.nocturne;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Icon(Icons.apartment_outlined, color: tokens.neutral400),
-          const SizedBox(width: 12),
-          Expanded(child: Text(department.name)),
-          if (department.isOperator)
-            const DepartmentPlate(name: 'Operator', isOperator: true)
-          else if (department.isIt)
-            const DepartmentPlate(name: 'IT', isIt: true),
-          // The Operator department can never be removed; only an Operator
-          // can remove the IT department — same asymmetry as creating one.
-          if (!department.isOperator && (isOperator || !department.isAdminTier))
-            IconButton(
-              icon: const Icon(Icons.delete_outline, size: 20),
-              onPressed: () => onDelete(department),
-            )
-          else
-            const SizedBox(width: 48),
-        ],
+      padding: const EdgeInsets.only(
+        left: NocturneSpace.s3,
+        right: NocturneSpace.s1,
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: Row(
+          children: [
+            // Hue dot (ordinary) or glyph (Operator / IT) + name.
+            Flexible(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: DepartmentPlate(
+                  name: department.name,
+                  isOperator: department.isOperator,
+                  isIt: department.isIt,
+                ),
+              ),
+            ),
+            // The Operator department can never be removed; only an Operator
+            // can remove the IT department — same asymmetry as creating one.
+            if (!department.isOperator &&
+                (isOperator || !department.isAdminTier))
+              IconButton(
+                icon: const Icon(Icons.delete_outline, size: 18),
+                onPressed: () => onDelete(department),
+              )
+            else
+              const SizedBox(width: _kActionWidth),
+          ],
+        ),
       ),
     );
   }
@@ -569,71 +608,163 @@ class _PeopleList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (people.isEmpty) return const PanelNotice('No one else yet.');
-    return PanelCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      child: Column(
-        children: [
-          for (var i = 0; i < people.length; i++) ...[
-            if (i > 0) const Divider(height: 1),
-            _row(context, people[i]),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Table columns when there is room; stacked rows when narrow.
+        final table = constraints.maxWidth >= 600;
+        return PanelCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              if (table) _header(context),
+              for (var i = 0; i < people.length; i++) ...[
+                if (table || i > 0) const Divider(),
+                table
+                    ? _tableRow(context, people[i])
+                    : _stackedRow(context, people[i]),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _header(BuildContext context) {
+    return ColoredBox(
+      color: context.nocturne.raised,
+      child: const Padding(
+        padding: EdgeInsets.fromLTRB(
+          NocturneSpace.s3,
+          NocturneSpace.s2,
+          NocturneSpace.s1,
+          NocturneSpace.s2,
+        ),
+        child: Row(
+          children: [
+            SizedBox(width: 28 + NocturneSpace.s3),
+            Expanded(child: StampLabel('Name')),
+            SizedBox(width: 96, child: StampLabel('Role')),
+            SizedBox(width: 200, child: StampLabel('Department')),
+            SizedBox(width: _kActionWidth),
           ],
-        ],
+        ),
       ),
     );
   }
 
-  Widget _row(BuildContext context, Profile person) {
+  Department? _departmentOf(Profile person) =>
+      departments.where((d) => d.id == person.departmentId).firstOrNull;
+
+  Widget _avatar(Profile person) => AvatarWell(
+    initial: person.displayName.isEmpty
+        ? '?'
+        : person.displayName[0].toUpperCase(),
+  );
+
+  Widget _name(BuildContext context, Profile person) {
     final tokens = context.nocturne;
-    final department = departments
-        .where((d) => d.id == person.departmentId)
-        .firstOrNull;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          person.displayName,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodyLarge,
+        ),
+        Text(
+          '@${person.username}',
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 12, color: tokens.neutral500),
+        ),
+      ],
+    );
+  }
+
+  Widget _plate(Department department) => DepartmentPlate(
+    name: department.name,
+    isOperator: department.isOperator,
+    isIt: department.isIt,
+  );
+
+  Widget _action(Profile person) {
+    if (_canDelete(person)) {
+      return IconButton(
+        icon: const Icon(Icons.delete_outline, size: 18),
+        onPressed: () => onDelete(person),
+      );
+    }
+    // Keeps the columns aligned when there is no delete icon.
+    return const SizedBox(width: _kActionWidth);
+  }
+
+  Widget _tableRow(BuildContext context, Profile person) {
+    final department = _departmentOf(person);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.only(
+        left: NocturneSpace.s3,
+        right: NocturneSpace.s1,
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Row(
+          children: [
+            _avatar(person),
+            const SizedBox(width: NocturneSpace.s3),
+            Expanded(child: _name(context, person)),
+            SizedBox(
+              width: 96,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: RolePlate(isManager: person.isManager),
+              ),
+            ),
+            SizedBox(
+              width: 200,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: department == null ? null : _plate(department),
+              ),
+            ),
+            _action(person),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _stackedRow(BuildContext context, Profile person) {
+    final department = _departmentOf(person);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        NocturneSpace.s3,
+        NocturneSpace.s2,
+        NocturneSpace.s1,
+        NocturneSpace.s2,
+      ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AvatarWell(
-            initial: person.displayName.isEmpty
-                ? '?'
-                : person.displayName[0].toUpperCase(),
-          ),
-          const SizedBox(width: 12),
+          _avatar(person),
+          const SizedBox(width: NocturneSpace.s3),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(person.displayName),
-                Text(
-                  '@${person.username}',
-                  style: TextStyle(fontSize: 13, color: tokens.neutral500),
+                _name(context, person),
+                const SizedBox(height: NocturneSpace.s1),
+                Wrap(
+                  spacing: NocturneSpace.s2,
+                  runSpacing: NocturneSpace.s1,
+                  children: [
+                    RolePlate(isManager: person.isManager),
+                    if (department != null) _plate(department),
+                  ],
                 ),
               ],
             ),
           ),
-          Flexible(
-            child: Wrap(
-              alignment: WrapAlignment.end,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 6,
-              runSpacing: 4,
-              children: [
-                RolePlate(isManager: person.isManager),
-                if (department != null)
-                  DepartmentPlate(
-                    name: department.name,
-                    isOperator: department.isOperator,
-                    isIt: department.isIt,
-                  ),
-              ],
-            ),
-          ),
-          if (_canDelete(person))
-            IconButton(
-              icon: const Icon(Icons.delete_outline, size: 20),
-              onPressed: () => onDelete(person),
-            )
-          else
-            // Keeps the plates in a column when there is no delete icon.
-            const SizedBox(width: 48),
+          _action(person),
         ],
       ),
     );
@@ -642,9 +773,7 @@ class _PeopleList extends StatelessWidget {
   bool _canDelete(Profile person) {
     if (person.id == currentUserId) return false;
     if (person.username.toLowerCase() == 'dev') return false;
-    final department = departments
-        .where((d) => d.id == person.departmentId)
-        .firstOrNull;
+    final department = _departmentOf(person);
     // Only an Operator can remove someone from the Operator/IT department —
     // same asymmetry as creating an account there.
     if (department?.isAdminTier ?? false) return isOperator;
@@ -712,9 +841,9 @@ class _DevPanel extends ConsumerWidget {
           _DevRow(label: 'Latest migration', value: latestMigration),
           _DevRow(label: 'Accounts', value: '${people.length}'),
           _DevRow(label: 'Departments', value: '${departments.length}'),
-          const SizedBox(height: 14),
+          const SizedBox(height: NocturneSpace.s4),
           const StampLabel('Accounts by department'),
-          const SizedBox(height: 6),
+          const SizedBox(height: NocturneSpace.s1),
           _Readout(
             child: departments.isEmpty
                 ? Text('None.', style: TextStyle(color: tokens.neutral500))
@@ -733,9 +862,9 @@ class _DevPanel extends ConsumerWidget {
                     ],
                   ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: NocturneSpace.s4),
           const StampLabel('Recent sync errors'),
-          const SizedBox(height: 6),
+          const SizedBox(height: NocturneSpace.s1),
           _Readout(
             child: syncLog.entries.isEmpty
                 ? Text('None.', style: TextStyle(color: tokens.neutral500))
@@ -760,14 +889,10 @@ class _DevPanel extends ConsumerWidget {
   }
 }
 
-/// Tabular figures so digits line up like a seven-segment readout.
-TextStyle _readoutStyle(NocturneColors tokens) => TextStyle(
-  fontSize: 14,
-  color: tokens.neutral200,
-  fontFeatures: const [FontFeature.tabularFigures()],
-);
+TextStyle _readoutStyle(NocturneColors tokens) =>
+    TextStyle(fontSize: 13, color: tokens.neutral200);
 
-/// A recessed window the service-panel values are read through.
+/// A field-style box the diagnostic values are shown in.
 class _Readout extends StatelessWidget {
   const _Readout({required this.child});
 
@@ -780,7 +905,10 @@ class _Readout extends StatelessWidget {
       child: DecoratedBox(
         decoration: panelDecoration(context, depth: PanelDepth.recessed),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: const EdgeInsets.symmetric(
+            horizontal: NocturneSpace.s3,
+            vertical: NocturneSpace.s2,
+          ),
           child: child,
         ),
       ),
@@ -797,24 +925,38 @@ class _DevRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.nocturne;
+    final readout = _Readout(
+      child: SelectableText(value, style: _readoutStyle(tokens)),
+    );
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 160,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 7),
-              child: StampLabel(label, size: 12),
-            ),
-          ),
-          Expanded(
-            child: _Readout(
-              child: SelectableText(value, style: _readoutStyle(tokens)),
-            ),
-          ),
-        ],
+      padding: const EdgeInsets.symmetric(vertical: NocturneSpace.s1),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Label above the value when there is no room beside it.
+          if (constraints.maxWidth < 420) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                StampLabel(label),
+                const SizedBox(height: NocturneSpace.s1),
+                readout,
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 160,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: NocturneSpace.s2),
+                  child: StampLabel(label),
+                ),
+              ),
+              Expanded(child: readout),
+            ],
+          );
+        },
       ),
     );
   }

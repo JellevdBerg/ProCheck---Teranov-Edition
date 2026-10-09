@@ -87,9 +87,9 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
                 onChanged: _updateFromSpectrum,
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: NocturneSpace.s3),
             _HueSlider(hue: _hsv.hue, onChanged: _updateHue),
-            const SizedBox(height: 14),
+            const SizedBox(height: NocturneSpace.s3),
             Row(
               children: [
                 Container(
@@ -98,17 +98,17 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
                   decoration: BoxDecoration(
                     color: color,
                     shape: BoxShape.circle,
-                    border: Border.all(color: tokens.edge, width: 2),
+                    border: Border.all(color: tokens.borderStrong),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: NocturneSpace.s2),
                 Expanded(
                   child: TextField(
                     controller: _hexController,
                     focusNode: _hexFocusNode,
                     decoration: const InputDecoration(
                       labelText: 'Hex',
-                      hintText: '#9184D9',
+                      hintText: '#3F5BE8',
                       isDense: true,
                     ),
                     onSubmitted: _updateFromHex,
@@ -264,21 +264,23 @@ class _PickerDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Flat: a white ring with a hairline dark outer edge so it reads on any
+    // fill, light or dark (no shadow).
     return IgnorePointer(
       child: Container(
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: color,
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 2.5),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x40000000),
-              blurRadius: 3,
-              offset: Offset(0, 1),
-            ),
-          ],
+          border: Border.all(color: const Color(0x66000000)),
+        ),
+        child: Container(
+          margin: const EdgeInsets.all(1),
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+          ),
         ),
       ),
     );
