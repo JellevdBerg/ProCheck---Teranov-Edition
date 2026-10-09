@@ -16,6 +16,7 @@ import '../../screens/login_screen.dart';
 import '../../theme/nocturne_theme.dart';
 import '../app_logo.dart';
 import '../blurred_dialog.dart';
+import '../panel/panel.dart';
 import '../project_name_lookup.dart';
 import 'mini_calendar.dart';
 
@@ -66,14 +67,19 @@ class AppSidebar extends ConsumerWidget {
 
     final now = DateTime.now();
     final todayCount = tasks
-        .where((t) => !t.isChecked && t.dueDate != null && _isSameDay(t.dueDate!, now))
+        .where(
+          (t) =>
+              !t.isChecked && t.dueDate != null && _isSameDay(t.dueDate!, now),
+        )
         .length;
     final upcomingCount = tasks
         .where(
           (t) =>
               !t.isChecked &&
               t.dueDate != null &&
-              t.dueDate!.isAfter(DateTime(now.year, now.month, now.day, 23, 59)),
+              t.dueDate!.isAfter(
+                DateTime(now.year, now.month, now.day, 23, 59),
+              ),
         )
         .length;
     final activeProjects = projects.where((p) => !p.archived).toList();
@@ -92,9 +98,15 @@ class AppSidebar extends ConsumerWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       width: expanded ? 232 : 68,
+      // Brushed-metal rail: a faint left-to-right sheen over the chassis.
       decoration: BoxDecoration(
-        color: tokens.neutral900,
-        border: Border(right: BorderSide(color: tokens.neutral800)),
+        gradient: LinearGradient(
+          colors: [
+            Color.lerp(tokens.bg, tokens.hi, tokens.isDark ? 0.18 : 0.5)!,
+            tokens.bg,
+          ],
+        ),
+        border: Border(right: BorderSide(color: tokens.edge)),
       ),
       child: Column(
         children: [
@@ -113,7 +125,10 @@ class AppSidebar extends ConsumerWidget {
                 icon: Icons.logout,
                 label: profile?.displayName ?? 'Sign out',
                 expanded: expanded,
-                background: tokens.neutral800,
+                keycap: true,
+                trailing: expanded && profile != null
+                    ? _RolePlate(manager: profile.isManager)
+                    : null,
                 // Showing the user's own name next to a logout icon reads
                 // to some people as a profile/account button rather than
                 // a sign-out one — confirm first so a curious tap doesn't
@@ -306,7 +321,10 @@ class AppSidebar extends ConsumerWidget {
   static bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
-  static Future<void> _confirmSignOut(BuildContext context, WidgetRef ref) async {
+  static Future<void> _confirmSignOut(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     final confirmed = await showBlurredDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -403,9 +421,10 @@ class _Header extends StatelessWidget {
             child: Text(
               'ProCheck',
               style: TextStyle(
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w500,
-                fontSize: 16,
+                fontFamily: kPanelFont,
+                fontWeight: FontWeight.w600,
+                fontSize: 19,
+                letterSpacing: 1.2,
                 color: tokens.text,
               ),
             ),
@@ -510,8 +529,11 @@ class _SidebarSearch extends ConsumerWidget {
           alignment: Alignment.topLeft,
           child: Material(
             elevation: 6,
-            color: tokens.neutral800,
-            borderRadius: BorderRadius.circular(8),
+            color: tokens.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(NocturneRadius.md),
+              side: BorderSide(color: tokens.edge),
+            ),
             clipBehavior: Clip.antiAlias,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 280, maxWidth: 212),
@@ -549,7 +571,10 @@ class _SidebarSearch extends ConsumerWidget {
                         projectNameFor(projectNames, task.projectId),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 11, color: tokens.neutral500),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: tokens.neutral500,
+                        ),
                       ),
                       onTap: () => onSelected(result),
                     ),
@@ -584,15 +609,38 @@ class _SmallSectionLabel extends StatelessWidget {
   final String text;
 
   @override
+  Widget build(BuildContext context) => StampLabel(text, size: 12);
+}
+
+/// Engraved MEMBER / MANAGER plate. A manager's carries a double rule so the
+/// distinction doesn't rest on text alone.
+class _RolePlate extends StatelessWidget {
+  const _RolePlate({required this.manager});
+  final bool manager;
+
+  @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: TextStyle(
-        fontSize: 11,
-        letterSpacing: 0.06,
-        color: context.nocturne.neutral500,
+    final edge = context.nocturne.edge;
+    Widget plate = DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: edge),
+        borderRadius: BorderRadius.circular(NocturneRadius.sm),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+        child: StampLabel(manager ? 'Manager' : 'Member', size: 10.5),
       ),
     );
+    if (manager) {
+      plate = DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(color: edge),
+          borderRadius: BorderRadius.circular(NocturneRadius.sm + 1),
+        ),
+        child: Padding(padding: const EdgeInsets.all(1.5), child: plate),
+      );
+    }
+    return plate;
   }
 }
 
@@ -605,7 +653,8 @@ class _NavRow extends StatelessWidget {
     this.active = false,
     this.accent,
     this.iconColor,
-    this.background,
+    this.keycap = false,
+    this.trailing,
     required this.onTap,
     this.onSecondaryTapDown,
   });
@@ -617,64 +666,103 @@ class _NavRow extends StatelessWidget {
   final bool active;
   final Color? accent;
   final Color? iconColor;
-  final Color? background;
+
+  /// Draws the row as a raised keycap (the sign-out row).
+  final bool keycap;
+  final Widget? trailing;
   final VoidCallback onTap;
   final void Function(TapDownDetails details)? onSecondaryTapDown;
 
   @override
   Widget build(BuildContext context) {
     final tokens = context.nocturne;
-    final activeBg = active && accent != null
-        ? Color.alphaBlend(accent!.withValues(alpha: 0.22), tokens.neutral900)
-        : background;
+    final lit = active && accent != null;
+    final radius = BorderRadius.circular(NocturneRadius.md);
+    // Active = a key pressed into the rail and lit with the accent.
+    final decoration = lit
+        ? panelDecoration(
+            context,
+            depth: PanelDepth.recessed,
+            fill: Color.lerp(tokens.well, accent, tokens.isDark ? 0.22 : 0.3),
+          ).copyWith(border: Border.all(color: accent!.withValues(alpha: 0.7)))
+        : keycap
+        ? panelDecoration(context)
+        : null;
 
     return GestureDetector(
       onSecondaryTapDown: onSecondaryTapDown,
-      child: Material(
-        color: activeBg ?? Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            decoration: active && accent != null
-                ? BoxDecoration(
-                    border: Border(
-                      left: BorderSide(color: accent!, width: 2),
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                  )
-                : null,
-            padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 14),
-            child: Row(
-              mainAxisAlignment: expanded
-                  ? MainAxisAlignment.start
-                  : MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  size: 17,
-                  color: iconColor ?? (active ? accent : tokens.neutral300),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 1.5),
+        child: DecoratedBox(
+          decoration: decoration ?? const BoxDecoration(),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: radius,
+              hoverColor: context.nocturneHoverColor,
+              splashColor: context.nocturneSplashColor,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 8,
+                  horizontal: 12,
                 ),
-                if (expanded) ...[
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      label,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: tokens.neutral200,
+                child: Row(
+                  mainAxisAlignment: expanded
+                      ? MainAxisAlignment.start
+                      : MainAxisAlignment.center,
+                  children: [
+                    if (lit && expanded) ...[
+                      IndicatorLamp(on: true, color: accent!, size: 7),
+                      const SizedBox(width: 7),
+                    ],
+                    Icon(
+                      icon,
+                      size: 18,
+                      color: iconColor ?? (lit ? accent : tokens.neutral300),
+                    ),
+                    if (expanded) ...[
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          label,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: lit ? FontWeight.w500 : null,
+                            color: lit ? tokens.text : tokens.neutral200,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  if (count != null && count! > 0)
-                    Text(
-                      '$count',
-                      style: TextStyle(fontSize: 12, color: tokens.neutral400),
-                    ),
-                ],
-              ],
+                      ?trailing,
+                      if (count != null && count! > 0)
+                        DecoratedBox(
+                          decoration: panelDecoration(
+                            context,
+                            depth: PanelDepth.recessed,
+                            radius: NocturneRadius.sm,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 1,
+                            ),
+                            child: Text(
+                              '$count',
+                              style: TextStyle(
+                                fontFamily: kPanelFont,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                                letterSpacing: 0.6,
+                                color: tokens.text,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ],
+                ),
+              ),
             ),
           ),
         ),

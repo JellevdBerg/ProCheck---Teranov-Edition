@@ -16,6 +16,7 @@ import 'attachments_editor.dart';
 import 'due_date_calendar_dialog.dart';
 import 'nocturne/nocturne_widgets.dart';
 import 'notes_field.dart';
+import 'panel/panel.dart';
 import 'wobble_checkbox.dart';
 
 /// A single task row: a checkbox + title that expands in place to reveal
@@ -189,8 +190,7 @@ class _TaskTileState extends ConsumerState<TaskTile> {
             children: [
               // ignore: use_null_aware_elements (hive_generator pins analyzer <7, which can't parse `?element`)
               if (priorityTag != null) priorityTag,
-              if (task.priority != TaskPriority.none)
-                const SizedBox(width: 6),
+              if (task.priority != TaskPriority.none) const SizedBox(width: 6),
               if (task.dueDate != null) ...[
                 NocturneTag(
                   label: formatDueLabel(task, settings.dateFormat),
@@ -199,7 +199,8 @@ class _TaskTileState extends ConsumerState<TaskTile> {
                   // Neutral, not the Appearance accent — matches the rest of
                   // the row's text/icons, same overdue-red rule as the
                   // detail view's own due-date field (_DueDateRow below).
-                  color: task.dueDate!.isBefore(DateTime.now()) && !task.isChecked
+                  color:
+                      task.dueDate!.isBefore(DateTime.now()) && !task.isChecked
                       ? Theme.of(context).colorScheme.error
                       : Theme.of(context).hintColor,
                 ),
@@ -521,24 +522,30 @@ class _DueDateRow extends ConsumerWidget {
                   ),
                   child: const Text('Set due date'),
                 )
-              : Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(NocturneRadius.md),
-                    hoverColor: context.nocturneHoverColor,
-                    splashColor: context.nocturneSplashColor,
-                    highlightColor: context.nocturneSplashColor,
-                    onTap: () => _pickDueDate(context, ref),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      child: Text(
-                        'Due ${formatDueLabel(task, dateFormat)}',
-                        style: TextStyle(
-                          color: isOverdue ? theme.colorScheme.error : null,
-                          fontWeight: isOverdue ? FontWeight.w600 : null,
+              : DecoratedBox(
+                  decoration: panelDecoration(
+                    context,
+                    depth: PanelDepth.recessed,
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(NocturneRadius.md),
+                      hoverColor: context.nocturneHoverColor,
+                      splashColor: context.nocturneSplashColor,
+                      highlightColor: context.nocturneSplashColor,
+                      onTap: () => _pickDueDate(context, ref),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        child: Text(
+                          'Due ${formatDueLabel(task, dateFormat)}',
+                          style: TextStyle(
+                            color: isOverdue ? theme.colorScheme.error : null,
+                            fontWeight: isOverdue ? FontWeight.w600 : null,
+                          ),
                         ),
                       ),
                     ),
@@ -638,29 +645,55 @@ class _AssigneeAndEstimateRow extends ConsumerWidget {
         Icon(Icons.person_outline, size: 18, color: theme.hintColor),
         const SizedBox(width: 8),
         if (canAssign)
-          DropdownButton<String?>(
-            value: task.assigneeId,
-            hint: const Text('Unassigned'),
-            underline: const SizedBox.shrink(),
-            items: [
-              const DropdownMenuItem<String?>(
-                value: null,
-                child: Text('Unassigned'),
+          DecoratedBox(
+            decoration: panelDecoration(context),
+            child: Padding(
+              padding: const EdgeInsets.only(left: 6, right: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _AssigneeBadge(name: _assigneeName(task.assigneeId, members)),
+                  const SizedBox(width: 6),
+                  DropdownButton<String?>(
+                    value: task.assigneeId,
+                    hint: const Text('Unassigned'),
+                    underline: const SizedBox.shrink(),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Unassigned'),
+                      ),
+                      for (final member in members)
+                        DropdownMenuItem<String?>(
+                          value: member.id,
+                          child: Text(member.displayName),
+                        ),
+                    ],
+                    onChanged: (assigneeId) => ref
+                        .read(tasksProvider.notifier)
+                        .assignTask(task.id, assigneeId),
+                  ),
+                ],
               ),
-              for (final member in members)
-                DropdownMenuItem<String?>(
-                  value: member.id,
-                  child: Text(member.displayName),
-                ),
-            ],
-            onChanged: (assigneeId) => ref
-                .read(tasksProvider.notifier)
-                .assignTask(task.id, assigneeId),
+            ),
           )
         else
-          Text(
-            _assigneeLabel(task.assigneeId, members),
-            style: TextStyle(color: theme.hintColor),
+          DecoratedBox(
+            decoration: panelDecoration(context, depth: PanelDepth.recessed),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _AssigneeBadge(name: _assigneeName(task.assigneeId, members)),
+                  const SizedBox(width: 6),
+                  Text(
+                    _assigneeLabel(task.assigneeId, members),
+                    style: TextStyle(color: theme.hintColor),
+                  ),
+                ],
+              ),
+            ),
           ),
         const SizedBox(width: 20),
         Icon(Icons.timer_outlined, size: 18, color: theme.hintColor),
@@ -671,11 +704,7 @@ class _AssigneeAndEstimateRow extends ConsumerWidget {
             key: ValueKey('estimate-${task.id}-${task.estimatedMinutes}'),
             initialValue: task.estimatedMinutes?.toString() ?? '',
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              isDense: true,
-              hintText: 'min',
-              border: OutlineInputBorder(),
-            ),
+            decoration: const InputDecoration(isDense: true, hintText: 'min'),
             onFieldSubmitted: (value) {
               final minutes = int.tryParse(value.trim());
               ref
@@ -688,12 +717,60 @@ class _AssigneeAndEstimateRow extends ConsumerWidget {
     );
   }
 
+  String? _assigneeName(String? assigneeId, List<Profile> members) {
+    for (final member in members) {
+      if (member.id == assigneeId) return member.displayName;
+    }
+    return null;
+  }
+
   String _assigneeLabel(String? assigneeId, List<Profile> members) {
     if (assigneeId == null) return 'Unassigned';
     for (final member in members) {
       if (member.id == assigneeId) return member.displayName;
     }
     return 'Unassigned';
+  }
+}
+
+/// Initials in a recessed round well; empty (no initials) when unassigned.
+class _AssigneeBadge extends StatelessWidget {
+  const _AssigneeBadge({required this.name});
+
+  final String? name;
+
+  @override
+  Widget build(BuildContext context) {
+    final parts = (name ?? '')
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
+    final initials = parts.isEmpty
+        ? ''
+        : parts.take(2).map((w) => w[0]).join().toUpperCase();
+    return Container(
+      width: 24,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: panelDecoration(
+        context,
+        depth: PanelDepth.recessed,
+        radius: 12,
+      ),
+      child: initials.isEmpty
+          ? null
+          : Text(
+              initials,
+              style: TextStyle(
+                fontFamily: kPanelFont,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+                letterSpacing: 0.4,
+                color: context.nocturne.text,
+              ),
+            ),
+    );
   }
 }
 
@@ -712,13 +789,12 @@ class _SubtasksSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(tasksProvider.notifier);
     final reduceMotion = ref.watch(settingsProvider).reduceMotion;
-    final theme = Theme.of(context);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (task.subtasks.isNotEmpty) ...[
-          Text('Subtasks', style: theme.textTheme.labelLarge),
+          const StampLabel('Subtasks'),
+          const SizedBox(height: 6),
           for (final subtask in task.subtasks)
             ListTile(
               dense: true,
@@ -751,7 +827,6 @@ class _SubtasksSection extends ConsumerWidget {
                 decoration: const InputDecoration(
                   hintText: 'Add a subtask',
                   isDense: true,
-                  border: OutlineInputBorder(),
                 ),
                 onSubmitted: (_) => onAddSubtask(),
               ),
