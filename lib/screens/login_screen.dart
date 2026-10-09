@@ -71,25 +71,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Scaffold(
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32),
+          padding: const EdgeInsets.all(16),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
             child: PanelCard(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(32),
               child: Form(
                 key: _formKey,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Center(child: AppLogo(size: 64)),
+                    const Center(child: AppLogo(size: 48)),
                     const SizedBox(height: 16),
                     Text(
                       'ProCheck — Teranov Edition',
                       textAlign: TextAlign.center,
-                      style: theme.textTheme.headlineSmall,
+                      style: theme.textTheme.titleLarge,
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Sign in to continue',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 24),
                     TextFormField(
                       controller: _usernameController,
                       decoration: const InputDecoration(labelText: 'Username'),
