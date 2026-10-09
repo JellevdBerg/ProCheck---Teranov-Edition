@@ -17,15 +17,6 @@ import 'package:procheck/screens/upcoming_screen.dart';
 import 'package:procheck/theme/nocturne_theme.dart';
 import 'package:procheck/widgets/due_date_calendar_dialog.dart';
 
-/// Pumps the calendar/dashboard/smart-view screens at phone-to-ultrawide
-/// widths in both themes with realistic seeded data. Overflow and layout
-/// errors surface as exceptions, which `takeException` must report as null.
-/// SmartViewTaskRow (lib/widgets/smart_view_task_row.dart, outside this
-/// change) overflows its Row at 360px when a task has a priority tag and a due
-/// tag. Remove this once that row is restyled for narrow widths.
-bool _rowOverflowsAt360(String screen, double width) =>
-    width == 360 && const {'today', 'upcoming', 'day'}.contains(screen);
-
 void noop3(String? a, String b, BuildContext c) {}
 
 void main() {
@@ -119,7 +110,7 @@ void main() {
           await tester.pumpAndSettle();
 
           expect(tester.takeException(), isNull);
-        }, skip: _rowOverflowsAt360(entry.key, width));
+        });
       }
     }
   }
