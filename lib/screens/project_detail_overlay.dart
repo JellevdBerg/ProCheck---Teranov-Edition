@@ -11,6 +11,7 @@ import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/create_task_sheet.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
+import '../widgets/panel/panel.dart';
 import '../widgets/pop_out_removal.dart';
 import '../widgets/task_tile.dart';
 import '../widgets/text_prompt_dialog.dart';
@@ -166,9 +167,7 @@ class _ProjectDetailOverlayState extends ConsumerState<ProjectDetailOverlay> {
                     : Card(
                         margin: EdgeInsets.zero,
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 11.2,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 11.2),
                           child: ReorderableListView.builder(
                             buildDefaultDragHandles: false,
                             shrinkWrap: true,
@@ -185,8 +184,7 @@ class _ProjectDetailOverlayState extends ConsumerState<ProjectDetailOverlay> {
                             },
                             itemBuilder: (context, index) {
                               final task = tasks[index];
-                              final highlighted =
-                                  task.id == _highlightedTaskId;
+                              final highlighted = task.id == _highlightedTaskId;
                               return PopOutRemoval(
                                 key: _taskKeys.putIfAbsent(
                                   task.id,
@@ -204,7 +202,9 @@ class _ProjectDetailOverlayState extends ConsumerState<ProjectDetailOverlay> {
                                       ),
                                       decoration: BoxDecoration(
                                         color: highlighted
-                                            ? accentColor.withValues(alpha: 0.16)
+                                            ? accentColor.withValues(
+                                                alpha: 0.16,
+                                              )
                                             : Colors.transparent,
                                         borderRadius: BorderRadius.circular(
                                           NocturneRadius.md,
@@ -300,11 +300,7 @@ class _Header extends ConsumerWidget {
             tooltip: 'Back',
             onPressed: onClose,
           ),
-          Icon(
-            Icons.folder,
-            size: 26,
-            color: accentColor,
-          ),
+          Icon(Icons.folder, size: 26, color: accentColor),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -323,14 +319,11 @@ class _Header extends ConsumerWidget {
                 const SizedBox(height: 4),
                 SizedBox(
                   width: 200,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 4,
-                      backgroundColor: tokens.neutral800,
-                      color: accentColor,
-                    ),
+                  child: GaugeBar(
+                    value: progress,
+                    color: accentColor,
+                    segments: 16,
+                    height: 8,
                   ),
                 ),
               ],
@@ -356,9 +349,7 @@ class _Header extends ConsumerWidget {
           ),
           IconButton(
             icon: Icon(
-              project.archived
-                  ? Icons.restore
-                  : Icons.archive_outlined,
+              project.archived ? Icons.restore : Icons.archive_outlined,
             ),
             tooltip: project.archived ? 'Unarchive project' : 'Archive project',
             onPressed: () {
@@ -422,16 +413,29 @@ class _ActivityCard extends StatelessWidget {
               'ACTIVITY',
               padding: EdgeInsets.only(bottom: 4),
             ),
-            if (entries.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  'No activity yet.',
-                  style: TextStyle(fontSize: 12, color: tokens.neutral500),
-                ),
-              )
-            else
-              for (final entry in entries.take(20)) _ActivityRow(entry: entry),
+            DecoratedBox(
+              decoration: panelDecoration(context, depth: PanelDepth.recessed),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: entries.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(
+                          'No activity yet.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: tokens.neutral500,
+                          ),
+                        ),
+                      )
+                    : Column(
+                        children: [
+                          for (final entry in entries.take(20))
+                            _ActivityRow(entry: entry),
+                        ],
+                      ),
+              ),
+            ),
           ],
         ),
       ),
@@ -451,10 +455,7 @@ class _ActivityRow extends StatelessWidget {
     final (icon, color) = switch (entry.kind) {
       ActivityKind.projectCreated => (Icons.create_new_folder_outlined, accent),
       ActivityKind.taskAdded => (Icons.add_circle_outline, accent),
-      ActivityKind.taskCompleted => (
-        Icons.check_circle,
-        NocturneStatus.done,
-      ),
+      ActivityKind.taskCompleted => (Icons.check_circle, NocturneStatus.done),
       ActivityKind.taskEdited => (Icons.edit_outlined, accent),
     };
 
@@ -525,41 +526,56 @@ class _CommentsCardState extends ConsumerState<_CommentsCard> {
               padding: EdgeInsets.only(bottom: 4),
             ),
             Expanded(
-              child: comments.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No comments yet.',
-                        style: TextStyle(fontSize: 12, color: tokens.neutral500),
-                      ),
-                    )
-                  : ListView(
-                      children: [
-                        for (final comment in comments)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  comment.text,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: tokens.neutral200,
-                                  ),
-                                ),
-                                Text(
-                                  '${comment.author} · ${_relativeTime(comment.timestamp)}',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: tokens.neutral500,
-                                  ),
-                                ),
-                              ],
+              child: DecoratedBox(
+                decoration: panelDecoration(
+                  context,
+                  depth: PanelDepth.recessed,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: comments.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No comments yet.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: tokens.neutral500,
                             ),
                           ),
-                      ],
-                    ),
+                        )
+                      : ListView(
+                          children: [
+                            for (final comment in comments)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      comment.text,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: tokens.neutral200,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${comment.author} · ${_relativeTime(comment.timestamp)}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: tokens.neutral500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                ),
+              ),
             ),
+            const SizedBox(height: 8),
             TextField(
               controller: _controller,
               minLines: 2,
@@ -584,7 +600,9 @@ class _CommentsCardState extends ConsumerState<_CommentsCard> {
   void _post() {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
-    ref.read(projectsProvider.notifier).addComment(widget.project.id, 'You', text);
+    ref
+        .read(projectsProvider.notifier)
+        .addComment(widget.project.id, 'You', text);
     _controller.clear();
   }
 }
