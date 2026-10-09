@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/supabase_config.dart';
@@ -146,6 +147,7 @@ class _TaskTileState extends ConsumerState<TaskTile> {
     final notifier = ref.read(tasksProvider.notifier);
     final settings = ref.watch(settingsProvider);
     final reduceMotion = settings.reduceMotion;
+    final compact = settings.compactRows;
 
     // Once expanded, the notes panel already shows the full text, so the
     // collapsed preview line would just be a duplicate.
@@ -157,100 +159,109 @@ class _TaskTileState extends ConsumerState<TaskTile> {
 
     return Column(
       children: [
-        ListTile(
-          dense: true,
-          visualDensity: VisualDensity.compact,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(NocturneRadius.sm),
-          ),
-          hoverColor: context.nocturneHoverColor,
-          splashColor: context.nocturneSplashColor,
-          contentPadding: const EdgeInsets.only(
-            left: NocturneSpace.s3,
-            right: NocturneSpace.s1,
-          ),
-          minVerticalPadding: NocturneSpace.s1,
-          horizontalTitleGap: NocturneSpace.s2,
-          minLeadingWidth: 28,
-          onTap: () => _setExpanded(!_effectiveExpanded),
-          leading: WobbleCheckbox(
-            value: task.isChecked,
-            reduceMotion: reduceMotion,
-            onChanged: (_) => notifier.toggleTask(task.id),
-          ),
-          title: LayoutBuilder(
-            builder: (context, constraints) {
-              final title = Text(
-                task.title,
-                style: TextStyle(
-                  color: task.isChecked ? tokens.neutral500 : tokens.text,
-                  decoration: task.isChecked
-                      ? TextDecoration.lineThrough
-                      : null,
-                ),
-              );
-              final hasMeta =
-                  task.dueDate != null ||
-                  task.priority != TaskPriority.none ||
-                  task.hasSubtasks ||
-                  task.assigneeId != null;
-              // Inline and right-aligned when there is room, otherwise the
-              // meta wraps onto its own line under the title.
-              if (constraints.maxWidth >= 480) {
-                return Row(
+        TaskRowFocus(
+          onToggle: () => notifier.toggleTask(task.id),
+          child: ListTile(
+            dense: true,
+            visualDensity: compact
+                ? const VisualDensity(horizontal: -4, vertical: -4)
+                : VisualDensity.compact,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(NocturneRadius.sm),
+            ),
+            hoverColor: context.nocturneHoverColor,
+            splashColor: context.nocturneSplashColor,
+            contentPadding: const EdgeInsets.only(
+              left: NocturneSpace.s3,
+              right: NocturneSpace.s1,
+            ),
+            minVerticalPadding: compact ? 0 : NocturneSpace.s1,
+            horizontalTitleGap: NocturneSpace.s2,
+            minLeadingWidth: 28,
+            onTap: () => _setExpanded(!_effectiveExpanded),
+            leading: WobbleCheckbox(
+              value: task.isChecked,
+              reduceMotion: reduceMotion,
+              onChanged: (_) => notifier.toggleTask(task.id),
+            ),
+            title: LayoutBuilder(
+              builder: (context, constraints) {
+                final title = Text(
+                  task.title,
+                  style: TextStyle(
+                    color: task.isChecked ? tokens.neutral500 : tokens.text,
+                    decoration: task.isChecked
+                        ? TextDecoration.lineThrough
+                        : null,
+                  ),
+                );
+                final hasMeta =
+                    task.dueDate != null ||
+                    task.priority != TaskPriority.none ||
+                    task.hasSubtasks ||
+                    task.assigneeId != null;
+                // Inline and right-aligned when there is room, otherwise the
+                // meta wraps onto its own line under the title.
+                if (constraints.maxWidth >= 480) {
+                  return Row(
+                    children: [
+                      Expanded(child: title),
+                      if (hasMeta) ...[
+                        const SizedBox(width: NocturneSpace.s2),
+                        Flexible(child: TaskMeta(task: task)),
+                      ],
+                    ],
+                  );
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: title),
+                    title,
                     if (hasMeta) ...[
-                      const SizedBox(width: NocturneSpace.s2),
-                      Flexible(child: TaskMeta(task: task)),
+                      const SizedBox(height: NocturneSpace.s1),
+                      TaskMeta(task: task),
                     ],
                   ],
                 );
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  title,
-                  if (hasMeta) ...[
-                    const SizedBox(height: NocturneSpace.s1),
-                    TaskMeta(task: task),
-                  ],
-                ],
-              );
-            },
-          ),
-          subtitle: notesPreview == null
-              ? null
-              : Text(
-                  notesPreview,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              },
+            ),
+            subtitle: notesPreview == null
+                ? null
+                : Text(
+                    notesPreview,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  tooltip: 'Delete task',
+                  visualDensity: compact
+                      ? const VisualDensity(horizontal: -4, vertical: -4)
+                      : VisualDensity.compact,
+                  onPressed: () {
+                    widget.onExplicitDelete?.call();
+                    widget.onDelete();
+                  },
                 ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.delete_outline),
-                tooltip: 'Delete task',
-                visualDensity: VisualDensity.compact,
-                onPressed: () {
-                  widget.onExplicitDelete?.call();
-                  widget.onDelete();
-                },
-              ),
-              Icon(_effectiveExpanded ? Icons.expand_less : Icons.expand_more),
-              if (widget.reorderIndex != null)
-                ReorderableDragStartListener(
-                  index: widget.reorderIndex!,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: NocturneSpace.s1),
-                    child: Icon(
-                      Icons.drag_indicator,
-                      color: Theme.of(context).hintColor,
+                Icon(
+                  _effectiveExpanded ? Icons.expand_less : Icons.expand_more,
+                ),
+                if (widget.reorderIndex != null)
+                  ReorderableDragStartListener(
+                    index: widget.reorderIndex!,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: NocturneSpace.s1),
+                      child: Icon(
+                        Icons.drag_indicator,
+                        color: Theme.of(context).hintColor,
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
         AnimatedSize(
@@ -263,6 +274,73 @@ class _TaskTileState extends ConsumerState<TaskTile> {
         ),
         const Divider(height: 1),
       ],
+    );
+  }
+}
+
+/// Keyboard check-off for a task row: Up/Down move a 2px accent outline
+/// between sibling rows, Space runs [onToggle] (the checkbox's own handler).
+/// Only acts while this row itself holds primary focus, so typing in a text
+/// field (even one nested in an expanded row) is never intercepted.
+class TaskRowFocus extends StatefulWidget {
+  const TaskRowFocus({super.key, required this.child, required this.onToggle});
+
+  final Widget child;
+  final VoidCallback onToggle;
+
+  @override
+  State<TaskRowFocus> createState() => _TaskRowFocusState();
+}
+
+class _TaskRowFocusState extends State<TaskRowFocus> {
+  static const _label = 'task-row';
+  final _node = FocusNode(debugLabel: _label);
+
+  @override
+  void dispose() {
+    _node.dispose();
+    super.dispose();
+  }
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is KeyUpEvent || !node.hasPrimaryFocus) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.space) {
+      if (event is KeyDownEvent) widget.onToggle();
+      return KeyEventResult.handled;
+    }
+    final step = key == LogicalKeyboardKey.arrowDown
+        ? 1
+        : key == LogicalKeyboardKey.arrowUp
+        ? -1
+        : 0;
+    if (step == 0) return KeyEventResult.ignored;
+    final rows = FocusScope.of(context).traversalDescendants
+        .where((n) => n.debugLabel == _label && n.canRequestFocus)
+        .toList();
+    final i = rows.indexOf(node) + step;
+    if (i >= 0 && i < rows.length) rows[i].requestFocus();
+    return KeyEventResult.handled;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      focusNode: _node,
+      onKeyEvent: _onKey,
+      onFocusChange: (_) => setState(() {}),
+      child: DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(NocturneRadius.sm),
+          border: _node.hasPrimaryFocus
+              ? Border.all(color: context.nocturneAccent, width: 2)
+              : null,
+        ),
+        child: widget.child,
+      ),
     );
   }
 }
@@ -777,6 +855,12 @@ class _AssigneeAndEstimateRow extends ConsumerWidget {
         const <String, DirectoryEntry>{};
 
     final assignee = _assigneeName(task.assigneeId, members, directory);
+    final myId = profile?.id;
+    final ownerName = task.ownerId.isEmpty
+        ? null
+        : task.ownerId == myId
+        ? 'You'
+        : directory[task.ownerId]?.displayName;
     final avatar = AvatarWell(
       initial: _initials(assignee),
       size: 24,
@@ -847,7 +931,13 @@ class _AssigneeAndEstimateRow extends ConsumerWidget {
                       const SizedBox(width: 6),
                       Flexible(
                         child: Text(
-                          _assigneeLabel(task.assigneeId, members, directory),
+                          task.assigneeId != null && task.assigneeId == myId
+                              ? 'You'
+                              : _assigneeLabel(
+                                  task.assigneeId,
+                                  members,
+                                  directory,
+                                ),
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(color: theme.hintColor),
                         ),
@@ -858,6 +948,20 @@ class _AssigneeAndEstimateRow extends ConsumerWidget {
               ),
           ],
         ),
+        if (ownerName != null)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Owner', style: TextStyle(color: theme.hintColor)),
+              const SizedBox(width: NocturneSpace.s2),
+              AvatarWell(
+                initial: _initials(ownerName == 'You' ? null : ownerName),
+                size: 24,
+              ),
+              const SizedBox(width: 6),
+              Text(ownerName),
+            ],
+          ),
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [

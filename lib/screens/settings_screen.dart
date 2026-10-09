@@ -302,6 +302,14 @@ class _AppearanceCard extends ConsumerWidget {
             onChanged: (v) => notifier.setReduceMotion(v ?? false),
           ),
         ),
+        _SettingRow(
+          label: 'Compact rows',
+          help: 'Fit more tasks on screen',
+          control: Switch(
+            value: settings.compactRows,
+            onChanged: notifier.setCompactRows,
+          ),
+        ),
       ],
     );
   }

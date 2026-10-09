@@ -67,6 +67,7 @@ class AppSettings {
     required this.themeMode,
     required this.accentIndex,
     required this.reduceMotion,
+    this.compactRows = false,
     this.customAccentValue,
     this.defaultPriorityIndex = 0,
     this.dateFormat = DateFormatOption.mdy,
@@ -79,6 +80,9 @@ class AppSettings {
   final ThemeMode themeMode;
   final int accentIndex;
   final bool reduceMotion;
+
+  /// Dense ~32px task rows instead of the comfortable default.
+  final bool compactRows;
 
   /// When set, overrides [accentIndex] — a user-picked custom color from
   /// Settings > Appearance rather than one of the [accentPalette] presets.
@@ -111,6 +115,7 @@ class AppSettings {
     ThemeMode? themeMode,
     int? accentIndex,
     bool? reduceMotion,
+    bool? compactRows,
     int? customAccentValue,
     bool clearCustomAccent = false,
     int? defaultPriorityIndex,
@@ -124,6 +129,7 @@ class AppSettings {
       themeMode: themeMode ?? this.themeMode,
       accentIndex: accentIndex ?? this.accentIndex,
       reduceMotion: reduceMotion ?? this.reduceMotion,
+      compactRows: compactRows ?? this.compactRows,
       customAccentValue: clearCustomAccent
           ? null
           : (customAccentValue ?? this.customAccentValue),
@@ -183,6 +189,7 @@ class AppSettings {
     'themeMode': themeMode.index,
     'accentIndex': accentIndex,
     'reduceMotion': reduceMotion,
+    'compactRows': compactRows,
     'customAccentValue': customAccentValue,
     'defaultPriorityIndex': defaultPriorityIndex,
     'dateFormat': dateFormat.index,
@@ -199,6 +206,7 @@ class AppSettings {
           .values[(json['themeMode'] as int?) ?? ThemeMode.system.index],
       accentIndex: accentIndex.clamp(0, accentPalette.length - 1),
       reduceMotion: json['reduceMotion'] as bool? ?? false,
+      compactRows: json['compactRows'] as bool? ?? false,
       customAccentValue: json['customAccentValue'] as int?,
       defaultPriorityIndex: json['defaultPriorityIndex'] as int? ?? 0,
       dateFormat: DateFormatOption.fromIndex(json['dateFormat'] as int?),
@@ -235,6 +243,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
       themeMode: ThemeMode.values[themeModeIndex],
       accentIndex: accentIndex.clamp(0, accentPalette.length - 1),
       reduceMotion: reduceMotion,
+      compactRows: _box.get('compactRows', defaultValue: false) as bool,
       customAccentValue: _box.get('customAccentValue') as int?,
       defaultPriorityIndex:
           _box.get('defaultPriorityIndex', defaultValue: 0) as int,
@@ -293,6 +302,11 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   void setReduceMotion(bool value) {
     state = state.copyWith(reduceMotion: value);
     unawaited(_box.put('reduceMotion', value));
+  }
+
+  void setCompactRows(bool value) {
+    state = state.copyWith(compactRows: value);
+    unawaited(_box.put('compactRows', value));
   }
 
   void setDefaultPriority(TaskPriority priority) {
@@ -364,6 +378,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     unawaited(_box.put('themeMode', settings.themeMode.index));
     unawaited(_box.put('accentIndex', settings.accentIndex));
     unawaited(_box.put('reduceMotion', settings.reduceMotion));
+    unawaited(_box.put('compactRows', settings.compactRows));
     if (settings.customAccentValue != null) {
       unawaited(_box.put('customAccentValue', settings.customAccentValue));
     } else {
