@@ -3,11 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/task.dart';
 import '../models/task_priority.dart';
-import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
-import 'nocturne/nocturne_widgets.dart';
-import 'task_tile.dart' show formatDueDate;
+import 'task_tile.dart' show TaskMeta;
 import 'wobble_checkbox.dart';
 
 /// A read-mostly task row for the Today/Upcoming/Day smart views: checkbox,
@@ -33,12 +31,11 @@ class SmartViewTaskRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = context.nocturne;
-    final dateFormat = ref.watch(settingsProvider).dateFormat;
-    final priorityTag = NocturneTag.forPriority(task.priority);
-    final isOverdue =
-        task.dueDate != null &&
-        !task.isChecked &&
-        task.dueDate!.isBefore(DateTime.now());
+    final hasMeta =
+        task.dueDate != null ||
+        task.priority != TaskPriority.none ||
+        task.hasSubtasks ||
+        task.assigneeId != null;
     final titleAndProject = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -46,14 +43,19 @@ class SmartViewTaskRow extends ConsumerWidget {
         Text(
           task.title,
           style: TextStyle(
-            fontSize: 14,
+            fontSize: 13,
+            height: 20 / 13,
             color: task.isChecked ? tokens.neutral500 : tokens.text,
             decoration: task.isChecked ? TextDecoration.lineThrough : null,
           ),
         ),
         Text(
           projectName,
-          style: TextStyle(fontSize: 12, color: tokens.neutral400),
+          style: TextStyle(
+            fontSize: 12,
+            height: 16 / 12,
+            color: tokens.neutral400,
+          ),
         ),
       ],
     );
@@ -66,40 +68,51 @@ class SmartViewTaskRow extends ConsumerWidget {
       builder: (rowContext) => Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(NocturneRadius.md),
+          borderRadius: BorderRadius.circular(NocturneRadius.sm),
           mouseCursor: SystemMouseCursors.click,
           hoverColor: context.nocturneHoverColor,
           splashColor: context.nocturneSplashColor,
           highlightColor: context.nocturneSplashColor,
           onTap: () => onOpenTask(task.projectId, task.id, rowContext),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Row(
-              children: [
-                WobbleCheckbox(
+            padding: const EdgeInsets.symmetric(
+              horizontal: NocturneSpace.s3,
+              vertical: NocturneSpace.s1,
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final checkbox = WobbleCheckbox(
                   value: task.isChecked,
                   reduceMotion: reduceMotion,
                   onChanged: (_) =>
                       ref.read(tasksProvider.notifier).toggleTask(task.id),
-                ),
-                const SizedBox(width: 8),
-                Expanded(child: titleAndProject),
-                // ignore: use_null_aware_elements (hive_generator pins analyzer <7, which can't parse `?element`)
-                if (priorityTag != null) priorityTag,
-                if (task.priority != TaskPriority.none)
-                  const SizedBox(width: 6),
-                if (task.dueDate != null)
-                  NocturneTag(
-                    label: formatDueDate(task.dueDate!, dateFormat),
-                    icon: Icons.access_time,
-                    outline: true,
-                    // Neutral, not the Appearance accent — matches the
-                    // Projects folder's own due-date styling.
-                    color: isOverdue
-                        ? Theme.of(context).colorScheme.error
-                        : Theme.of(context).hintColor,
-                  ),
-              ],
+                );
+                // Meta sits at the right when there is room; otherwise it
+                // drops under the title so nothing is squeezed or clipped.
+                final inline = constraints.maxWidth >= 480;
+                return Row(
+                  children: [
+                    checkbox,
+                    const SizedBox(width: NocturneSpace.s2),
+                    Expanded(
+                      child: inline || !hasMeta
+                          ? titleAndProject
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                titleAndProject,
+                                const SizedBox(height: NocturneSpace.s1),
+                                TaskMeta(task: task),
+                              ],
+                            ),
+                    ),
+                    if (inline && hasMeta) ...[
+                      const SizedBox(width: NocturneSpace.s2),
+                      Flexible(child: TaskMeta(task: task)),
+                    ],
+                  ],
+                );
+              },
             ),
           ),
         ),

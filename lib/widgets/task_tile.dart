@@ -17,6 +17,7 @@ import 'due_date_calendar_dialog.dart';
 import 'nocturne/nocturne_widgets.dart';
 import 'notes_field.dart';
 import 'panel/panel.dart';
+import 'people_plates.dart';
 import 'wobble_checkbox.dart';
 
 /// A single task row: a checkbox + title that expands in place to reveal
@@ -147,68 +148,91 @@ class _TaskTileState extends ConsumerState<TaskTile> {
     final reduceMotion = settings.reduceMotion;
 
     // Once expanded, the notes panel already shows the full text, so the
-    // collapsed preview line would just be a duplicate. Due date shows as
-    // its own tag (below) rather than duplicated into this text line.
-    final subtitleParts = <String>[
-      if (!_effectiveExpanded && (task.notes ?? '').trim().isNotEmpty)
-        task.notes!.trim(),
-      if (task.hasSubtasks)
-        '${task.completedSubtaskCount}/${task.subtasks.length} subtasks',
-    ];
-    final priorityTag = NocturneTag.forPriority(task.priority);
+    // collapsed preview line would just be a duplicate.
+    final notesPreview =
+        !_effectiveExpanded && (task.notes ?? '').trim().isNotEmpty
+        ? task.notes!.trim()
+        : null;
+    final tokens = context.nocturne;
 
     return Column(
       children: [
         ListTile(
+          dense: true,
+          visualDensity: VisualDensity.compact,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(NocturneRadius.md),
+            borderRadius: BorderRadius.circular(NocturneRadius.sm),
           ),
           hoverColor: context.nocturneHoverColor,
           splashColor: context.nocturneSplashColor,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+          contentPadding: const EdgeInsets.only(
+            left: NocturneSpace.s3,
+            right: NocturneSpace.s1,
+          ),
+          minVerticalPadding: NocturneSpace.s1,
+          horizontalTitleGap: NocturneSpace.s2,
+          minLeadingWidth: 28,
           onTap: () => _setExpanded(!_effectiveExpanded),
           leading: WobbleCheckbox(
             value: task.isChecked,
             reduceMotion: reduceMotion,
             onChanged: (_) => notifier.toggleTask(task.id),
           ),
-          title: Text(
-            task.title,
-            style: task.isChecked
-                ? const TextStyle(decoration: TextDecoration.lineThrough)
-                : null,
+          title: LayoutBuilder(
+            builder: (context, constraints) {
+              final title = Text(
+                task.title,
+                style: TextStyle(
+                  color: task.isChecked ? tokens.neutral500 : tokens.text,
+                  decoration: task.isChecked
+                      ? TextDecoration.lineThrough
+                      : null,
+                ),
+              );
+              final hasMeta =
+                  task.dueDate != null ||
+                  task.priority != TaskPriority.none ||
+                  task.hasSubtasks ||
+                  task.assigneeId != null;
+              // Inline and right-aligned when there is room, otherwise the
+              // meta wraps onto its own line under the title.
+              if (constraints.maxWidth >= 480) {
+                return Row(
+                  children: [
+                    Expanded(child: title),
+                    if (hasMeta) ...[
+                      const SizedBox(width: NocturneSpace.s2),
+                      Flexible(child: TaskMeta(task: task)),
+                    ],
+                  ],
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  title,
+                  if (hasMeta) ...[
+                    const SizedBox(height: NocturneSpace.s1),
+                    TaskMeta(task: task),
+                  ],
+                ],
+              );
+            },
           ),
-          subtitle: subtitleParts.isEmpty
+          subtitle: notesPreview == null
               ? null
               : Text(
-                  subtitleParts.join(' · '),
+                  notesPreview,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ignore: use_null_aware_elements (hive_generator pins analyzer <7, which can't parse `?element`)
-              if (priorityTag != null) priorityTag,
-              if (task.priority != TaskPriority.none) const SizedBox(width: 6),
-              if (task.dueDate != null) ...[
-                NocturneTag(
-                  label: formatDueLabel(task, settings.dateFormat),
-                  icon: Icons.access_time,
-                  outline: true,
-                  // Neutral, not the Appearance accent — matches the rest of
-                  // the row's text/icons, same overdue-red rule as the
-                  // detail view's own due-date field (_DueDateRow below).
-                  color:
-                      task.dueDate!.isBefore(DateTime.now()) && !task.isChecked
-                      ? Theme.of(context).colorScheme.error
-                      : Theme.of(context).hintColor,
-                ),
-                const SizedBox(width: 6),
-              ],
               IconButton(
                 icon: const Icon(Icons.delete_outline),
                 tooltip: 'Delete task',
+                visualDensity: VisualDensity.compact,
                 onPressed: () {
                   widget.onExplicitDelete?.call();
                   widget.onDelete();
@@ -219,7 +243,7 @@ class _TaskTileState extends ConsumerState<TaskTile> {
                 ReorderableDragStartListener(
                   index: widget.reorderIndex!,
                   child: Padding(
-                    padding: const EdgeInsets.only(left: 4),
+                    padding: const EdgeInsets.only(left: NocturneSpace.s1),
                     child: Icon(
                       Icons.drag_indicator,
                       color: Theme.of(context).hintColor,
@@ -241,6 +265,110 @@ class _TaskTileState extends ConsumerState<TaskTile> {
       ],
     );
   }
+}
+
+/// Red when overdue, amber when due within 48h, otherwise null (neutral).
+/// Checked tasks never show urgency.
+Color? dueTone(Task task, NocturneColors tokens) {
+  final due = task.dueDate;
+  if (due == null || task.isChecked) return null;
+  final now = DateTime.now();
+  if (due.isBefore(now)) return tokens.danger;
+  if (due.difference(now) < const Duration(hours: 48)) return tokens.warn;
+  return null;
+}
+
+/// The compact meta cluster shared by task rows: priority tag, due chip,
+/// subtask count and (once Supabase is configured) the assignee avatar.
+class TaskMeta extends ConsumerWidget {
+  const TaskMeta({super.key, required this.task});
+
+  final Task task;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = context.nocturne;
+    final dateFormat = ref.watch(settingsProvider).dateFormat;
+    final priorityTag = NocturneTag.forPriority(task.priority);
+    final tone = dueTone(task, tokens);
+    return Wrap(
+      spacing: NocturneSpace.s2,
+      runSpacing: NocturneSpace.s1,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      alignment: WrapAlignment.end,
+      children: [
+        // ignore: use_null_aware_elements (hive_generator pins analyzer <7, which can't parse `?element`)
+        if (priorityTag != null) priorityTag,
+        if (task.dueDate != null)
+          NocturneTag(
+            label: formatDueLabel(task, dateFormat),
+            icon: Icons.access_time,
+            color: tone,
+            outline: tone == null,
+          ),
+        if (task.hasSubtasks)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.checklist, size: 14, color: tokens.neutral500),
+              const SizedBox(width: NocturneSpace.s1),
+              Text(
+                '${task.completedSubtaskCount}/${task.subtasks.length} subtasks',
+                style: TextStyle(fontSize: 12, color: tokens.neutral400),
+              ),
+            ],
+          ),
+        if (isSupabaseConfigured && task.assigneeId != null)
+          _RowAssignee(assigneeId: task.assigneeId!),
+      ],
+    );
+  }
+}
+
+class _RowAssignee extends ConsumerWidget {
+  const _RowAssignee({required this.assigneeId});
+
+  final String assigneeId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final members =
+        ref.watch(departmentMembersProvider).valueOrNull ?? const <Profile>[];
+    final directory =
+        ref.watch(profileDirectoryProvider).valueOrNull ??
+        const <String, DirectoryEntry>{};
+    final name = _assigneeName(assigneeId, members, directory);
+    return Tooltip(
+      message: name ?? 'Unassigned',
+      child: AvatarWell(
+        initial: _initials(name),
+        size: 20,
+        dashed: name == null,
+      ),
+    );
+  }
+}
+
+String? _assigneeName(
+  String? assigneeId,
+  List<Profile> members,
+  Map<String, DirectoryEntry> directory,
+) {
+  for (final member in members) {
+    if (member.id == assigneeId) return member.displayName;
+  }
+  return directory[assigneeId]?.displayName;
+}
+
+String _initials(String? name) {
+  final parts = (name ?? '')
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((w) => w.isNotEmpty)
+      .toList();
+  return parts.isEmpty
+      ? ''
+      : parts.take(2).map((w) => w[0]).join().toUpperCase();
 }
 
 // A due date/time carries no separate "has a time" flag — setting a time
@@ -354,10 +482,12 @@ class ExpandedTaskDetail extends ConsumerWidget {
 
           final topRow = Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: Row(
+            child: Wrap(
+              spacing: NocturneSpace.s4,
+              runSpacing: NocturneSpace.s2,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Expanded(child: _DueDateRow(task: task)),
-                const SizedBox(width: 16),
+                _DueDateRow(task: task),
                 _PriorityRow(task: task),
               ],
             ),
@@ -502,14 +632,15 @@ class _DueDateRow extends ConsumerWidget {
     final dateFormat = ref.watch(settingsProvider).dateFormat;
 
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
           Icons.alarm_outlined,
           size: 18,
-          color: isOverdue ? theme.colorScheme.error : theme.hintColor,
+          color: isOverdue ? context.nocturne.danger : theme.hintColor,
         ),
         const SizedBox(width: 8),
-        Expanded(
+        Flexible(
           child: dueDate == null
               ? TextButton(
                   onPressed: () => _pickDueDate(context, ref),
@@ -543,7 +674,7 @@ class _DueDateRow extends ConsumerWidget {
                         child: Text(
                           'Due ${formatDueLabel(task, dateFormat)}',
                           style: TextStyle(
-                            color: isOverdue ? theme.colorScheme.error : null,
+                            color: isOverdue ? context.nocturne.danger : null,
                             fontWeight: isOverdue ? FontWeight.w600 : null,
                           ),
                         ),
@@ -645,96 +776,115 @@ class _AssigneeAndEstimateRow extends ConsumerWidget {
         ref.watch(profileDirectoryProvider).valueOrNull ??
         const <String, DirectoryEntry>{};
 
-    return Row(
+    final assignee = _assigneeName(task.assigneeId, members, directory);
+    final avatar = AvatarWell(
+      initial: _initials(assignee),
+      size: 24,
+      dashed: assignee == null,
+    );
+
+    return Wrap(
+      spacing: NocturneSpace.s4,
+      runSpacing: NocturneSpace.s2,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Icon(Icons.person_outline, size: 18, color: theme.hintColor),
-        const SizedBox(width: 8),
-        if (canAssign)
-          DecoratedBox(
-            decoration: panelDecoration(context),
-            child: Padding(
-              padding: const EdgeInsets.only(left: 6, right: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _AssigneeBadge(
-                    name: _assigneeName(task.assigneeId, members, directory),
-                  ),
-                  const SizedBox(width: 6),
-                  DropdownButton<String?>(
-                    value: task.assigneeId,
-                    hint: const Text('Unassigned'),
-                    underline: const SizedBox.shrink(),
-                    items: [
-                      const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('Unassigned'),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.person_outline, size: 18, color: theme.hintColor),
+            const SizedBox(width: NocturneSpace.s2),
+            if (canAssign)
+              DecoratedBox(
+                decoration: panelDecoration(
+                  context,
+                  depth: PanelDepth.recessed,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 6, right: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      avatar,
+                      const SizedBox(width: 6),
+                      DropdownButton<String?>(
+                        value: task.assigneeId,
+                        hint: const Text('Unassigned'),
+                        underline: const SizedBox.shrink(),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Unassigned'),
+                          ),
+                          for (final member in members)
+                            DropdownMenuItem<String?>(
+                              value: member.id,
+                              child: Text(member.displayName),
+                            ),
+                        ],
+                        onChanged: (assigneeId) => ref
+                            .read(tasksProvider.notifier)
+                            .assignTask(task.id, assigneeId),
                       ),
-                      for (final member in members)
-                        DropdownMenuItem<String?>(
-                          value: member.id,
-                          child: Text(member.displayName),
-                        ),
                     ],
-                    onChanged: (assigneeId) => ref
-                        .read(tasksProvider.notifier)
-                        .assignTask(task.id, assigneeId),
                   ),
-                ],
+                ),
+              )
+            else
+              DecoratedBox(
+                decoration: panelDecoration(
+                  context,
+                  depth: PanelDepth.recessed,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 4,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      avatar,
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          _assigneeLabel(task.assigneeId, members, directory),
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: theme.hintColor),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.timer_outlined, size: 18, color: theme.hintColor),
+            const SizedBox(width: NocturneSpace.s2),
+            SizedBox(
+              width: 72,
+              child: TextFormField(
+                key: ValueKey('estimate-${task.id}-${task.estimatedMinutes}'),
+                initialValue: task.estimatedMinutes?.toString() ?? '',
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  hintText: 'min',
+                ),
+                onFieldSubmitted: (value) {
+                  final minutes = int.tryParse(value.trim());
+                  ref
+                      .read(tasksProvider.notifier)
+                      .setTaskEstimate(task.id, minutes);
+                },
               ),
             ),
-          )
-        else
-          DecoratedBox(
-            decoration: panelDecoration(context, depth: PanelDepth.recessed),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _AssigneeBadge(
-                    name: _assigneeName(task.assigneeId, members, directory),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    _assigneeLabel(task.assigneeId, members, directory),
-                    style: TextStyle(color: theme.hintColor),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        const SizedBox(width: 20),
-        Icon(Icons.timer_outlined, size: 18, color: theme.hintColor),
-        const SizedBox(width: 8),
-        SizedBox(
-          width: 72,
-          child: TextFormField(
-            key: ValueKey('estimate-${task.id}-${task.estimatedMinutes}'),
-            initialValue: task.estimatedMinutes?.toString() ?? '',
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(isDense: true, hintText: 'min'),
-            onFieldSubmitted: (value) {
-              final minutes = int.tryParse(value.trim());
-              ref
-                  .read(tasksProvider.notifier)
-                  .setTaskEstimate(task.id, minutes);
-            },
-          ),
+          ],
         ),
       ],
     );
-  }
-
-  String? _assigneeName(
-    String? assigneeId,
-    List<Profile> members,
-    Map<String, DirectoryEntry> directory,
-  ) {
-    for (final member in members) {
-      if (member.id == assigneeId) return member.displayName;
-    }
-    return directory[assigneeId]?.displayName;
   }
 
   String _assigneeLabel(
@@ -747,47 +897,6 @@ class _AssigneeAndEstimateRow extends ConsumerWidget {
       if (member.id == assigneeId) return member.displayName;
     }
     return directory[assigneeId]?.displayName ?? 'Unassigned';
-  }
-}
-
-/// Initials in a recessed round well; empty (no initials) when unassigned.
-class _AssigneeBadge extends StatelessWidget {
-  const _AssigneeBadge({required this.name});
-
-  final String? name;
-
-  @override
-  Widget build(BuildContext context) {
-    final parts = (name ?? '')
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((w) => w.isNotEmpty)
-        .toList();
-    final initials = parts.isEmpty
-        ? ''
-        : parts.take(2).map((w) => w[0]).join().toUpperCase();
-    return Container(
-      width: 24,
-      height: 24,
-      alignment: Alignment.center,
-      decoration: panelDecoration(
-        context,
-        depth: PanelDepth.recessed,
-        radius: 12,
-      ),
-      child: initials.isEmpty
-          ? null
-          : Text(
-              initials,
-              style: TextStyle(
-                fontFamily: kPanelFont,
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
-                letterSpacing: 0.4,
-                color: context.nocturne.text,
-              ),
-            ),
-    );
   }
 }
 

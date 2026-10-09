@@ -154,23 +154,36 @@ class _ProjectDetailOverlayState extends ConsumerState<ProjectDetailOverlay> {
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final showSidePanel = constraints.maxWidth >= 640;
-              final taskList = Padding(
-                padding: const EdgeInsets.all(16.8),
-                child: tasks.isEmpty
-                    ? Center(
+              final twoPane =
+                  constraints.maxWidth >= NocturneBreakpoints.medium;
+              final gutter = constraints.maxWidth < NocturneBreakpoints.compact
+                  ? NocturneSpace.s4
+                  : NocturneSpace.s6;
+
+              Widget taskList({required bool scrolls}) => tasks.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: NocturneSpace.s6,
+                        ),
                         child: Text(
                           'No tasks in this project yet.',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
-                      )
-                    : Card(
-                        margin: EdgeInsets.zero,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 11.2),
+                      ),
+                    )
+                  : Align(
+                      alignment: Alignment.topLeft,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1040),
+                        child: Card(
+                          margin: EdgeInsets.zero,
                           child: ReorderableListView.builder(
                             buildDefaultDragHandles: false,
                             shrinkWrap: true,
+                            physics: scrolls
+                                ? null
+                                : const NeverScrollableScrollPhysics(),
                             itemCount: tasks.length,
                             onReorderItem: (oldIndex, newIndex) {
                               final reordered = [...tasks];
@@ -207,7 +220,7 @@ class _ProjectDetailOverlayState extends ConsumerState<ProjectDetailOverlay> {
                                               )
                                             : Colors.transparent,
                                         borderRadius: BorderRadius.circular(
-                                          NocturneRadius.md,
+                                          NocturneRadius.sm,
                                         ),
                                       ),
                                       child: TaskTile(
@@ -228,32 +241,48 @@ class _ProjectDetailOverlayState extends ConsumerState<ProjectDetailOverlay> {
                           ),
                         ),
                       ),
-              );
+                    );
 
-              if (!showSidePanel) {
-                return taskList;
-              }
+              final sideCards = <Widget>[
+                _ActivityCard(project: project),
+                const SizedBox(height: NocturneSpace.s4),
+                _CommentsCard(project: project),
+              ];
 
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: taskList),
-                  Container(
-                    width: 280,
-                    decoration: BoxDecoration(
-                      border: Border(
-                        left: BorderSide(color: context.nocturne.neutral800),
+              // Wide: tasks on the left, activity + comments on the right.
+              if (twoPane) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.all(gutter),
+                        child: taskList(scrolls: true),
                       ),
                     ),
-                    padding: const EdgeInsets.all(16.8),
-                    child: Column(
-                      children: [
-                        _ActivityCard(project: project),
-                        const SizedBox(height: 16.8),
-                        Expanded(child: _CommentsCard(project: project)),
-                      ],
+                    Container(
+                      width: 360,
+                      decoration: BoxDecoration(
+                        border: Border(
+                          left: BorderSide(color: context.nocturne.edge),
+                        ),
+                      ),
+                      child: ListView(
+                        padding: EdgeInsets.all(gutter),
+                        children: sideCards,
+                      ),
                     ),
-                  ),
+                  ],
+                );
+              }
+
+              // Narrower: one column — tasks, then activity, then comments.
+              return ListView(
+                padding: EdgeInsets.all(gutter),
+                children: [
+                  taskList(scrolls: false),
+                  const SizedBox(height: NocturneSpace.s4),
+                  ...sideCards,
                 ],
               );
             },
@@ -284,110 +313,136 @@ class _Header extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = context.nocturne;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16.8, vertical: 11.2),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: tokens.neutral800)),
-        gradient: LinearGradient(
-          colors: [accentColor.withValues(alpha: 0.14), Colors.transparent],
-          stops: const [0.0, 0.6],
+
+    final identity = Row(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: onClose,
         ),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            icon: Icon(Icons.arrow_back),
-            tooltip: 'Back',
-            onPressed: onClose,
+        Icon(Icons.folder, size: 24, color: accentColor),
+        const SizedBox(width: NocturneSpace.s3),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                project.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              Text(
+                '$doneCount/$totalCount tasks done',
+                style: TextStyle(fontSize: 12, color: tokens.neutral400),
+              ),
+              const SizedBox(height: NocturneSpace.s1),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 240),
+                child: GaugeBar(value: progress, color: accentColor, height: 4),
+              ),
+            ],
           ),
-          Icon(Icons.folder, size: 26, color: accentColor),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  project.name,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '$doneCount/$totalCount tasks done',
-                  style: TextStyle(fontSize: 12, color: tokens.neutral400),
-                ),
-                const SizedBox(height: 4),
-                SizedBox(
-                  width: 200,
-                  child: GaugeBar(
-                    value: progress,
-                    color: accentColor,
-                    segments: 16,
-                    height: 8,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: Icon(Icons.edit_outlined),
-            tooltip: 'Edit project',
-            onPressed: () async {
-              final result = await showProjectPromptDialog(
-                context,
-                title: 'Edit project',
-                initialValue: project.name,
-                initialColorIndex: project.colorIndex,
-              );
-              if (result != null) {
-                final (name, colorIndex) = result;
-                final notifier = ref.read(projectsProvider.notifier);
-                notifier.renameProject(project.id, name);
-                notifier.setProjectColor(project.id, colorIndex);
-              }
-            },
-          ),
-          IconButton(
-            icon: Icon(
-              project.archived ? Icons.restore : Icons.archive_outlined,
-            ),
-            tooltip: project.archived ? 'Unarchive project' : 'Archive project',
-            onPressed: () {
+        ),
+      ],
+    );
+
+    final actions = Wrap(
+      spacing: NocturneSpace.s1,
+      runSpacing: NocturneSpace.s1,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.edit_outlined),
+          tooltip: 'Edit project',
+          onPressed: () async {
+            final result = await showProjectPromptDialog(
+              context,
+              title: 'Edit project',
+              initialValue: project.name,
+              initialColorIndex: project.colorIndex,
+            );
+            if (result != null) {
+              final (name, colorIndex) = result;
               final notifier = ref.read(projectsProvider.notifier);
-              if (project.archived) {
-                notifier.unarchiveProject(project.id);
-              } else {
-                notifier.archiveProject(project.id);
-                onClose();
-              }
-            },
-          ),
-          IconButton(
-            icon: Icon(Icons.delete_outline),
-            tooltip: 'Delete project',
-            onPressed: () async {
-              final confirmed = await showConfirmDialog(
-                context,
-                title: 'Delete project?',
-                message:
-                    'Tasks and subtasks inside "${project.name}" will be deleted too. This cannot be undone.',
-              );
-              if (confirmed) {
-                ref.read(projectsProvider.notifier).deleteProject(project.id);
-                onClose();
-              }
-            },
-          ),
-          const SizedBox(width: 4),
-          NocturneButton(
-            label: 'New task',
-            icon: Icons.add,
-            variant: NocturneButtonVariant.primary,
-            color: accentColor,
-            onPressed: () =>
-                showCreateTaskSheet(context, initialProjectId: project.id),
-          ),
-        ],
+              notifier.renameProject(project.id, name);
+              notifier.setProjectColor(project.id, colorIndex);
+            }
+          },
+        ),
+        IconButton(
+          icon: Icon(project.archived ? Icons.restore : Icons.archive_outlined),
+          tooltip: project.archived ? 'Unarchive project' : 'Archive project',
+          onPressed: () {
+            final notifier = ref.read(projectsProvider.notifier);
+            if (project.archived) {
+              notifier.unarchiveProject(project.id);
+            } else {
+              notifier.archiveProject(project.id);
+              onClose();
+            }
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.delete_outline),
+          tooltip: 'Delete project',
+          onPressed: () async {
+            final confirmed = await showConfirmDialog(
+              context,
+              title: 'Delete project?',
+              message:
+                  'Tasks and subtasks inside "${project.name}" will be deleted too. This cannot be undone.',
+            );
+            if (confirmed) {
+              ref.read(projectsProvider.notifier).deleteProject(project.id);
+              onClose();
+            }
+          },
+        ),
+        const SizedBox(width: NocturneSpace.s1),
+        NocturneButton(
+          label: 'New task',
+          icon: Icons.add,
+          variant: NocturneButtonVariant.primary,
+          color: accentColor,
+          onPressed: () =>
+              showCreateTaskSheet(context, initialProjectId: project.id),
+        ),
+      ],
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: NocturneSpace.s4,
+        vertical: NocturneSpace.s2,
+      ),
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        border: Border(bottom: BorderSide(color: tokens.edge)),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Wide: identity and actions share one row. Narrow: the actions
+          // drop to their own row (same buttons, nothing hidden).
+          if (constraints.maxWidth >= NocturneBreakpoints.compact) {
+            return Row(
+              children: [
+                Expanded(child: identity),
+                const SizedBox(width: NocturneSpace.s3),
+                actions,
+              ],
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              identity,
+              Align(alignment: Alignment.centerRight, child: actions),
+            ],
+          );
+        },
       ),
     );
   }
@@ -405,37 +460,18 @@ class _ActivityCard extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 11.2, vertical: 8.4),
+        padding: const EdgeInsets.all(NocturneSpace.s3),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const NocturneSectionLabel(
-              'ACTIVITY',
-              padding: EdgeInsets.only(bottom: 4),
-            ),
-            DecoratedBox(
-              decoration: panelDecoration(context, depth: PanelDepth.recessed),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: entries.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Text(
-                          'No activity yet.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: tokens.neutral500,
-                          ),
-                        ),
-                      )
-                    : Column(
-                        children: [
-                          for (final entry in entries.take(20))
-                            _ActivityRow(entry: entry),
-                        ],
-                      ),
-              ),
-            ),
+            const NocturneSectionLabel('Activity'),
+            if (entries.isEmpty)
+              Text(
+                'No activity yet.',
+                style: TextStyle(fontSize: 12, color: tokens.neutral500),
+              )
+            else
+              for (final entry in entries.take(20)) _ActivityRow(entry: entry),
           ],
         ),
       ),
@@ -455,12 +491,12 @@ class _ActivityRow extends StatelessWidget {
     final (icon, color) = switch (entry.kind) {
       ActivityKind.projectCreated => (Icons.create_new_folder_outlined, accent),
       ActivityKind.taskAdded => (Icons.add_circle_outline, accent),
-      ActivityKind.taskCompleted => (Icons.check_circle, NocturneStatus.done),
+      ActivityKind.taskCompleted => (Icons.check_circle, tokens.done),
       ActivityKind.taskEdited => (Icons.edit_outlined, accent),
     };
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: NocturneSpace.s1),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -468,7 +504,7 @@ class _ActivityRow extends StatelessWidget {
             padding: const EdgeInsets.only(top: 2),
             child: Icon(icon, size: 14, color: color),
           ),
-          const SizedBox(width: 9),
+          const SizedBox(width: NocturneSpace.s2),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -517,72 +553,50 @@ class _CommentsCardState extends ConsumerState<_CommentsCard> {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 11.2, vertical: 8.4),
+        padding: const EdgeInsets.all(NocturneSpace.s3),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const NocturneSectionLabel(
-              'COMMENTS',
-              padding: EdgeInsets.only(bottom: 4),
-            ),
-            Expanded(
-              child: DecoratedBox(
-                decoration: panelDecoration(
-                  context,
-                  depth: PanelDepth.recessed,
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: comments.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No comments yet.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: tokens.neutral500,
-                            ),
-                          ),
-                        )
-                      : ListView(
-                          children: [
-                            for (final comment in comments)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 6,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      comment.text,
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        color: tokens.neutral200,
-                                      ),
-                                    ),
-                                    Text(
-                                      '${comment.author} · ${_relativeTime(comment.timestamp)}',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: tokens.neutral500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
+            const NocturneSectionLabel('Comments'),
+            if (comments.isEmpty)
+              Text(
+                'No comments yet.',
+                style: TextStyle(fontSize: 12, color: tokens.neutral500),
+              )
+            else
+              for (final comment in comments)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: NocturneSpace.s1,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        comment.text,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: tokens.neutral200,
                         ),
+                      ),
+                      Text(
+                        '${comment.author} · ${_relativeTime(comment.timestamp)}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: tokens.neutral500,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 8),
+            const SizedBox(height: NocturneSpace.s2),
             TextField(
               controller: _controller,
               minLines: 2,
               maxLines: 2,
               decoration: const InputDecoration(hintText: 'Add a comment'),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: NocturneSpace.s2),
             Align(
               alignment: Alignment.centerLeft,
               child: NocturneButton(
