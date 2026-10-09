@@ -12,6 +12,7 @@ import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
+import '../widgets/panel/panel.dart';
 
 /// True for an unchecked task with no due date, or one overdue — it needs
 /// attention now rather than being scheduled for later. Also used by the
@@ -143,7 +144,9 @@ class DashboardScreen extends ConsumerWidget {
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     final activeProjectIds = activeProjects.map((p) => p.id).toSet();
     final relevantTasks = tasks
-        .where((t) => t.projectId == null || activeProjectIds.contains(t.projectId))
+        .where(
+          (t) => t.projectId == null || activeProjectIds.contains(t.projectId),
+        )
         .toList();
 
     return Padding(
@@ -211,10 +214,20 @@ class _DashboardHeader extends StatelessWidget {
       children: [
         Text(title, style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 2),
-        Text(dateLabel, style: TextStyle(fontSize: 13, color: tokens.neutral400)),
+        Text(
+          dateLabel,
+          style: TextStyle(fontSize: 13, color: tokens.neutral400),
+        ),
       ],
     );
   }
+}
+
+/// Text-weight version of a lamp/status hue: on the light finish the pale
+/// hues are pulled toward the text colour so they stay readable.
+Color _legible(BuildContext context, Color color) {
+  final t = context.nocturne;
+  return t.isDark ? color : Color.lerp(color, t.text, 0.5)!;
 }
 
 /// A small in-card header — icon plus a short label — used instead of a
@@ -231,18 +244,26 @@ class _CardHeader extends StatelessWidget {
     final tokens = context.nocturne;
     return Row(
       children: [
-        Icon(icon, size: 14, color: tokens.neutral400),
+        Icon(icon, size: 14, color: tokens.neutral500),
         const SizedBox(width: 6),
         Flexible(
+          // Engraved like StampLabel but keeps the label's own casing.
           child: Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 0.06,
-              color: tokens.neutral400,
+              fontFamily: kPanelFont,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
+              color: tokens.neutral500,
+              shadows: [
+                Shadow(
+                  color: tokens.hi.withValues(alpha: 0.6),
+                  offset: const Offset(0, 1),
+                ),
+              ],
             ),
           ),
         ),
@@ -284,7 +305,8 @@ class ProjectsOverview extends StatelessWidget {
     final overdueTasks =
         tasks
             .where(
-              (t) => !t.isChecked && t.dueDate != null && !t.dueDate!.isAfter(now),
+              (t) =>
+                  !t.isChecked && t.dueDate != null && !t.dueDate!.isAfter(now),
             )
             .toList()
           ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
@@ -309,7 +331,12 @@ class ProjectsOverview extends StatelessWidget {
     final overdueBucket = overdueTasks.length;
 
     final completedToday = tasks
-        .where((t) => t.isChecked && t.completedAt != null && _isSameDay(t.completedAt!, now))
+        .where(
+          (t) =>
+              t.isChecked &&
+              t.completedAt != null &&
+              _isSameDay(t.completedAt!, now),
+        )
         .length;
 
     final overallProgress = tasks.isEmpty
@@ -423,6 +450,7 @@ class _StatRow extends StatelessWidget {
         value: '${overallProgress.round()}%',
         label: 'Overall progress',
         valueColor: context.nocturneAccent,
+        gauge: GaugeBar(value: overallProgress / 100, height: 8),
       ),
     ];
 
@@ -430,7 +458,8 @@ class _StatRow extends StatelessWidget {
       builder: (context, constraints) {
         const spacing = 11.2;
         final columns = (constraints.maxWidth / 180).floor().clamp(1, 4);
-        final cardWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+        final cardWidth =
+            (constraints.maxWidth - spacing * (columns - 1)) / columns;
         return Wrap(
           spacing: spacing,
           runSpacing: spacing,
@@ -450,11 +479,15 @@ class _StatCard extends StatelessWidget {
     this.valueColor,
     this.labelColor,
     this.onTap,
+    this.gauge,
   });
 
   final String value;
   final String label;
   final Color? valueColor;
+
+  /// Optional segmented gauge shown under the readout.
+  final Widget? gauge;
 
   /// Tints the label itself, not just the number above it — left null for
   /// the neutral default.
@@ -478,16 +511,51 @@ class _StatCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            value,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: valueColor),
+          // The big readout, set into a recessed window.
+          DecoratedBox(
+            decoration: panelDecoration(
+              context,
+              depth: PanelDepth.recessed,
+              radius: NocturneRadius.sm,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              child: SizedBox(
+                width: double.infinity,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      fontFamily: kPanelFont,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 34,
+                      height: 1.1,
+                      letterSpacing: 1,
+                      color: valueColor == null
+                          ? null
+                          : _legible(context, valueColor!),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
-          const SizedBox(height: 4),
+          // Cards without a gauge reserve its height so the row stays even.
+          const SizedBox(height: 8),
+          gauge ?? const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text(
             label,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 12, color: labelColor ?? tokens.neutral400),
+            style: TextStyle(
+              fontSize: 12,
+              color: labelColor == null
+                  ? tokens.neutral400
+                  : _legible(context, labelColor!),
+            ),
           ),
         ],
       ),
@@ -563,19 +631,27 @@ class _AttentionCardState extends State<_AttentionCard> {
     final hiddenCount = tasks.length - visibleTasks.length;
     final tokens = context.nocturne;
     final tint = _flashing
-        ? Color.alphaBlend(context.nocturneAccent.withValues(alpha: 0.18), tokens.surface)
+        ? Color.alphaBlend(
+            context.nocturneAccent.withValues(alpha: 0.18),
+            tokens.surface,
+          )
         : null;
 
     return Card(
       margin: EdgeInsets.zero,
       color: tint,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(NocturneRadius.md)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(NocturneRadius.md),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16.8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _CardHeader(icon: Icons.notifications_none, label: 'Today & Needs Attention'),
+            const _CardHeader(
+              icon: Icons.notifications_none,
+              label: 'Today & Needs Attention',
+            ),
             if (tasks.isEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
@@ -637,9 +713,11 @@ class _AttentionRow extends StatelessWidget {
   String get _statusLabel {
     final due = task.dueDate!;
     if (_isOverdue) {
-      final days = DateTime(now.year, now.month, now.day)
-          .difference(DateTime(due.year, due.month, due.day))
-          .inDays;
+      final days = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).difference(DateTime(due.year, due.month, due.day)).inDays;
       return days <= 0 ? 'Overdue' : 'Overdue · ${days}d';
     }
     final hour12 = due.hour % 12 == 0 ? 12 : due.hour % 12;
@@ -652,16 +730,14 @@ class _AttentionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nocturne;
     final project = this.project;
-    final statusColor = _isOverdue ? NocturnePriority.high : NocturnePriority.med;
+    final statusColor = _isOverdue
+        ? NocturnePriority.high
+        : NocturnePriority.med;
     final content = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
       child: Row(
         children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
-          ),
+          IndicatorLamp(on: true, color: statusColor, size: 9),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -685,7 +761,11 @@ class _AttentionRow extends StatelessWidget {
           const SizedBox(width: 12),
           Text(
             _statusLabel,
-            style: TextStyle(fontSize: 12, color: statusColor, fontWeight: FontWeight.w500),
+            style: TextStyle(
+              fontSize: 12,
+              color: _legible(context, statusColor),
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),
@@ -769,15 +849,18 @@ class _ProjectsTableCardState extends State<ProjectsTableCard> {
     final column = _sortColumn;
     if (column == null) return widget.summaries;
     final sorted = [...widget.summaries]
-      ..sort((a, b) => switch (column) {
-        _ProjectSortColumn.name =>
-          a.project.name.toLowerCase().compareTo(b.project.name.toLowerCase()),
-        _ProjectSortColumn.tasks => a.open.compareTo(b.open),
-        _ProjectSortColumn.progress =>
-          (a.progress ?? -1).compareTo(b.progress ?? -1),
-        _ProjectSortColumn.status =>
-          _statusRank(a).compareTo(_statusRank(b)),
-      });
+      ..sort(
+        (a, b) => switch (column) {
+          _ProjectSortColumn.name => a.project.name.toLowerCase().compareTo(
+            b.project.name.toLowerCase(),
+          ),
+          _ProjectSortColumn.tasks => a.open.compareTo(b.open),
+          _ProjectSortColumn.progress => (a.progress ?? -1).compareTo(
+            b.progress ?? -1,
+          ),
+          _ProjectSortColumn.status => _statusRank(a).compareTo(_statusRank(b)),
+        },
+      );
     return _ascending ? sorted : sorted.reversed.toList();
   }
 
@@ -897,10 +980,11 @@ class _SortableHeaderCell extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          fontSize: 11,
+          fontFamily: kPanelFont,
+          fontSize: 12,
           color: color,
-          letterSpacing: 0.06,
-          fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+          letterSpacing: 1.2,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -923,7 +1007,9 @@ class _SortableHeaderCell extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: Row(
-            mainAxisAlignment: alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+            mainAxisAlignment: alignEnd
+                ? MainAxisAlignment.end
+                : MainAxisAlignment.start,
             children: [labelText, const SizedBox(width: 3), icon],
           ),
         ),
@@ -980,26 +1066,31 @@ class _ProjectsTableRow extends StatelessWidget {
           Expanded(
             flex: 3,
             child: progress == null
-                ? Text('–', style: TextStyle(fontSize: 12, color: tokens.neutral500))
+                ? Text(
+                    '–',
+                    style: TextStyle(fontSize: 12, color: tokens.neutral500),
+                  )
                 : Row(
                     children: [
                       Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(3),
-                          child: LinearProgressIndicator(
-                            value: progress,
-                            minHeight: 6,
-                            backgroundColor: tokens.neutral800,
-                            color: color,
-                          ),
+                        child: GaugeBar(
+                          value: progress,
+                          color: color,
+                          segments: 12,
+                          height: 6,
                         ),
                       ),
                       const SizedBox(width: 8),
                       SizedBox(
-                        width: 34,
+                        width: 38,
                         child: Text(
                           '${(progress * 100).round()}%',
-                          style: const TextStyle(fontSize: 12),
+                          style: const TextStyle(
+                            fontFamily: kPanelFont,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
                     ],
@@ -1007,7 +1098,10 @@ class _ProjectsTableRow extends StatelessWidget {
           ),
           Expanded(
             flex: 2,
-            child: Align(alignment: Alignment.centerRight, child: _statusTag(tokens)),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: _statusTag(tokens),
+            ),
           ),
           if (trailing != null) ...[
             const SizedBox(width: 8),
@@ -1035,7 +1129,10 @@ class _ProjectsTableRow extends StatelessWidget {
 
   Widget _statusTag(NocturneColors tokens) {
     if (summary.total == 0) {
-      return Text('No tasks', style: TextStyle(fontSize: 12, color: tokens.neutral500));
+      return Text(
+        'No tasks',
+        style: TextStyle(fontSize: 12, color: tokens.neutral500),
+      );
     }
     if (summary.hasOverdue) {
       return const NocturneTag(label: 'OVERDUE', color: NocturnePriority.high);
@@ -1043,7 +1140,10 @@ class _ProjectsTableRow extends StatelessWidget {
     if (summary.open > 0) {
       return NocturneTag(label: '${summary.open} open');
     }
-    return Text('No tasks', style: TextStyle(fontSize: 12, color: tokens.neutral500));
+    return Text(
+      'No tasks',
+      style: TextStyle(fontSize: 12, color: tokens.neutral500),
+    );
   }
 }
 
@@ -1079,16 +1179,26 @@ class _RecentActivityCard extends StatelessWidget {
                 ),
               )
             else
-              SizedBox(
-                height: (_visibleRows * _ActivityFeedRow.height).clamp(
-                  0,
-                  items.length * _ActivityFeedRow.height,
+              DecoratedBox(
+                decoration: panelDecoration(
+                  context,
+                  depth: PanelDepth.recessed,
                 ),
-                child: Scrollbar(
-                  child: ListView.builder(
-                    itemCount: items.length,
-                    itemExtent: _ActivityFeedRow.height,
-                    itemBuilder: (context, index) => _ActivityFeedRow(item: items[index]),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: SizedBox(
+                    height: (_visibleRows * _ActivityFeedRow.height).clamp(
+                      0,
+                      items.length * _ActivityFeedRow.height,
+                    ),
+                    child: Scrollbar(
+                      child: ListView.builder(
+                        itemCount: items.length,
+                        itemExtent: _ActivityFeedRow.height,
+                        itemBuilder: (context, index) =>
+                            _ActivityFeedRow(item: items[index]),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1125,7 +1235,10 @@ class _ActivityFeedRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(padding: const EdgeInsets.only(top: 2), child: Icon(icon, size: 14, color: color)),
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(icon, size: 14, color: color),
+          ),
           const SizedBox(width: 9),
           Expanded(
             child: Text(
