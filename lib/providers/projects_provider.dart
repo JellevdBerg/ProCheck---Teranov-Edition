@@ -154,21 +154,73 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
     }
   }
 
-  Future<void> _mirrorUpsert(Project project) async {
-    if (!isSupabaseConfigured) return;
-    if (supabase.auth.currentUser == null) return;
+  /// Returns whether the row reached the server (false when skipped or
+  /// failed), so a first-time insert can be followed by its append calls.
+  Future<bool> _mirrorUpsert(
+    Project project, {
+    bool includeAppendOnly = false,
+  }) async {
+    if (!isSupabaseConfigured) return false;
+    if (supabase.auth.currentUser == null) return false;
     // ownerId is blank for a project created before _loadOwnProfile
     // resolves — sending that as a uuid column fails server-side. Treat it
     // as local-only, same as being offline, instead of sending garbage.
-    if (project.ownerId.isEmpty) return;
+    if (project.ownerId.isEmpty) return false;
     try {
-      await supabase.from('projects').upsert(project.toSupabase());
+      await supabase
+          .from('projects')
+          .upsert(project.toSupabase(includeAppendOnly: includeAppendOnly));
+      return true;
     } catch (e) {
       // Best-effort — the local Hive copy is still correct; it just hasn't
       // reached the backend (offline, or an RLS policy refused it).
       _ref
           .read(syncLogProvider.notifier)
           .recordError(source: 'projects', action: 'upsert', error: e);
+      return false;
+    }
+  }
+
+  /// Appends ONE comment/activity entry to the server's copy atomically (see
+  /// `20261009100000_atomic_appends_and_profile_directory.sql`), so two
+  /// people adding entries at once both land. The regular upsert no longer
+  /// carries these columns.
+  ///
+  /// Falls back to the old whole-row upsert (columns included) when the
+  /// function isn't deployed yet, or when the server doesn't have the row
+  /// (e.g. a project created offline) — in the latter case that upsert is the
+  /// insert, so the history still reaches the server. If RLS refuses the
+  /// row, that upsert is refused the same way and logged, as before.
+  Future<void> _appendRemote(
+    String function,
+    String param,
+    String projectId,
+    Map<String, dynamic> entry,
+  ) async {
+    if (!isSupabaseConfigured) return;
+    if (supabase.auth.currentUser == null) return;
+    final project = _box.get(projectId);
+    if (project == null || project.ownerId.isEmpty) return;
+    try {
+      await supabase.rpc(
+        function,
+        params: {'p_project_id': projectId, param: entry},
+      );
+    } catch (e) {
+      final missingFunction = e is PostgrestException && e.code == 'PGRST202';
+      final missingRow =
+          e is PostgrestException &&
+          e.message.contains('project not found or not permitted');
+      if (missingFunction || missingRow) {
+        final latest = _box.get(projectId);
+        if (latest != null) {
+          await _mirrorUpsert(latest, includeAppendOnly: true);
+        }
+        return;
+      }
+      _ref
+          .read(syncLogProvider.notifier)
+          .recordError(source: 'projects', action: function, error: e);
     }
   }
 
@@ -206,15 +258,27 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
       ownerId: _ownerId ?? '',
       departmentId: _departmentId ?? '',
     );
-    project.activityLog.add(
-      ActivityEntry(
-        kindIndex: ActivityKind.projectCreated.index,
-        description: '$authorName created this project',
-        timestamp: DateTime.now(),
-      ),
+    final created = ActivityEntry(
+      kindIndex: ActivityKind.projectCreated.index,
+      description: '$authorName created this project',
+      timestamp: DateTime.now(),
     );
+    project.activityLog.add(created);
     unawaited(_box.put(project.id, project));
-    unawaited(_mirrorUpsert(project));
+    // The insert goes first (without the append-only columns); its "created"
+    // entry then lands through the same atomic append as every later one.
+    unawaited(
+      _mirrorUpsert(project).then((inserted) {
+        if (inserted) {
+          return _appendRemote(
+            'append_project_activity',
+            'p_entry',
+            project.id,
+            created.toJson(),
+          );
+        }
+      }),
+    );
     state = [...state, project];
     _sortState();
     return project;
@@ -291,22 +355,27 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
             : log,
       ),
     );
+    unawaited(
+      _appendRemote('append_project_activity', 'p_entry', id, entry.toJson()),
+    );
   }
 
   void addComment(String id, String author, String text) {
     final project = _box.get(id);
     if (project == null) return;
-    _persist(
-      project.copyWith(
-        comments: [
-          ...project.comments,
-          ProjectComment(
-            id: const Uuid().v4(),
-            author: author,
-            text: text,
-            timestamp: DateTime.now(),
-          ),
-        ],
+    final comment = ProjectComment(
+      id: const Uuid().v4(),
+      author: author,
+      text: text,
+      timestamp: DateTime.now(),
+    );
+    _persist(project.copyWith(comments: [...project.comments, comment]));
+    unawaited(
+      _appendRemote(
+        'append_project_comment',
+        'p_comment',
+        id,
+        comment.toJson(),
       ),
     );
   }
