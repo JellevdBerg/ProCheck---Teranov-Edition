@@ -77,8 +77,19 @@ flutter:
   assets:
     - assets/icon/procheck_logo.png
     - assets/sounds/checkoff_chime.wav
+    - assets/sounds/checkoff_click.wav
 
   fonts:
+    - family: Barlow
+      fonts:
+        - asset: assets/fonts/Barlow-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Barlow-Medium.ttf
+          weight: 500
+    - family: BarlowCondensed
+      fonts:
+        - asset: assets/fonts/BarlowCondensed-SemiBold.ttf
+          weight: 600
     - family: Inter
       fonts:
         - asset: assets/fonts/Inter-Variable.ttf
