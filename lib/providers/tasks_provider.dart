@@ -106,7 +106,7 @@ class TasksNotifier extends StateNotifier<List<Task>>
     }
   }
 
-  void _rollback(Task rejected, Task? previous, PostgrestException e) {
+  void _rollback(Task rejected, Task? previous, PostgrestException e, {bool notify = true}) {
     if (previous != null) {
       unawaited(_box.put(previous.id, previous));
       _replace(previous);
@@ -114,7 +114,38 @@ class TasksNotifier extends StateNotifier<List<Task>>
       unawaited(_box.delete(rejected.id));
       state = state.where((t) => t.id != rejected.id).toList();
     }
-    showSyncFailureToast('Couldn\'t save "${rejected.title}": ${e.message}');
+    if (notify) {
+      showSyncFailureToast('Couldn\'t save "${rejected.title}": ${e.message}');
+    }
+  }
+
+  /// Mirrors several tasks in one upsert call — used by [reorderTasks] so
+  /// dragging N tasks fires one request instead of N.
+  Future<void> _mirrorBatchUpsert(
+    List<Task> tasks,
+    Map<String, Task> previousById,
+  ) async {
+    if (!isSupabaseConfigured) return;
+    if (supabase.auth.currentUser == null) return;
+    final syncable = tasks.where((t) => t.ownerId.isNotEmpty).toList();
+    if (syncable.isEmpty) return;
+    try {
+      await supabase.from('tasks').upsert(
+        syncable.map((t) => t.toSupabase()).toList(),
+      );
+    } on PostgrestException catch (e) {
+      ref
+          .read(syncLogProvider.notifier)
+          .recordError(source: 'tasks', action: 'upsert', error: e);
+      for (final task in syncable) {
+        _rollback(task, previousById[task.id], e, notify: false);
+      }
+      showSyncFailureToast('Couldn\'t save the new order: ${e.message}');
+    } catch (e) {
+      ref
+          .read(syncLogProvider.notifier)
+          .recordError(source: 'tasks', action: 'upsert', error: e);
+    }
   }
 
   Future<void> _mirrorDelete(String taskId) async {
@@ -335,15 +366,17 @@ class TasksNotifier extends StateNotifier<List<Task>>
   void reorderTasks(List<String> orderedIds) {
     final n = orderedIds.length;
     final updatedById = <String, Task>{};
+    final previousById = <String, Task>{};
     for (var i = 0; i < n; i++) {
       final task = _box.get(orderedIds[i]);
       if (task == null) continue;
       final updated = task.copyWith(sortOrder: (n - i).toDouble());
       unawaited(_box.put(updated.id, updated));
-      unawaited(_mirrorUpsert(updated, previous: task));
       updatedById[updated.id] = updated;
+      previousById[updated.id] = task;
     }
     if (updatedById.isEmpty) return;
+    unawaited(_mirrorBatchUpsert(updatedById.values.toList(), previousById));
     state = [for (final t in state) updatedById[t.id] ?? t];
     _sortState();
   }

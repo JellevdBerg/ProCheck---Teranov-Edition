@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/supabase_config.dart';
 import '../models/project.dart';
 import '../providers/auth_provider.dart';
 import '../providers/departments_provider.dart';
@@ -101,7 +100,7 @@ class _CommandPaletteState extends ConsumerState<_CommandPalette> {
     bool matches(String s) => query.isEmpty || s.toLowerCase().contains(query);
 
     // Same gating as AppSidebar.
-    final signedIn = isSupabaseConfigured && supabase.auth.currentUser != null;
+    final signedIn = ref.watch(signedInProvider);
     final isManager =
         signedIn && (ref.watch(currentProfileProvider).valueOrNull?.isManager ?? false);
     final isAdmin =

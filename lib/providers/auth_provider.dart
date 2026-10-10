@@ -12,6 +12,16 @@ final authStateProvider = StreamProvider<AuthState>((ref) {
   return supabase.auth.onAuthStateChange;
 });
 
+/// Whether this build is in multi-user mode AND someone is actually signed
+/// in — the same `isSupabaseConfigured && supabase.auth.currentUser != null`
+/// check that used to be duplicated ad hoc at each call site (AppSidebar,
+/// TaskFilterBar, CommandPalette). Watches [authStateProvider] so it updates
+/// on sign-in/out, same as [currentProfileProvider].
+final signedInProvider = Provider<bool>((ref) {
+  ref.watch(authStateProvider);
+  return isSupabaseConfigured && supabase.auth.currentUser != null;
+});
+
 /// The signed-in user's own `profiles` row, re-fetched whenever the auth
 /// state changes. Null while signed out; the one-time `handle_new_user`
 /// trigger guarantees a profile row exists by the time sign-in succeeds, so
