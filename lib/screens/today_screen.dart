@@ -48,9 +48,17 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
     final reduceMotion = ref.watch(settingsProvider).reduceMotion;
     final now = DateTime.now();
 
+    // Due today, or overdue — previously this screen showed only tasks due
+    // exactly today, so an overdue task (and Upcoming, which starts the day
+    // after today) never surfaced it anywhere except the Dashboard's own
+    // "Needs Attention" panel. Sorting by due date puts overdue ones first.
     final todayTasks =
         tasks
-            .where((t) => t.dueDate != null && _isSameDay(t.dueDate!, now))
+            .where(
+              (t) =>
+                  t.dueDate != null &&
+                  (_isSameDay(t.dueDate!, now) || t.dueDate!.isBefore(now)),
+            )
             .toList()
           ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
 
@@ -86,9 +94,18 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                 0,
               ),
               sliver: SliverToBoxAdapter(
-                child: Text(
-                  'Today',
-                  style: Theme.of(context).textTheme.headlineSmall,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Today',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    Text(
+                      'Due today, or overdue — see Upcoming for what\'s further out.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                 ),
               ),
             ),

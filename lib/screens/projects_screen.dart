@@ -232,7 +232,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                 constraints: const BoxConstraints(maxWidth: double.infinity),
                 child: Row(
                   children: [
-                    const Expanded(child: NocturneSectionLabel('TASKS')),
+                    const Expanded(child: NocturneSectionLabel('PERSONAL')),
                     NocturneButton(
                       label: 'New task',
                   minWidth: 132,
@@ -242,6 +242,16 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                     ),
                   ],
                 ),
+              ),
+            ),
+            // Clarifies this pool's scope now that the company edition
+            // also has project-filed tasks — these are personal errands
+            // with no project, not "every task", muted to read as a
+            // secondary grouping rather than the main list.
+            Text(
+              'Not tied to any project — everyone has their own.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: context.nocturne.neutral500,
               ),
             ),
             const SizedBox(height: 8),

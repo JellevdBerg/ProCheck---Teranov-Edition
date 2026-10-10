@@ -81,9 +81,18 @@ class _UpcomingScreenState extends ConsumerState<UpcomingScreen> {
                 0,
               ),
               sliver: SliverToBoxAdapter(
-                child: Text(
-                  'Upcoming',
-                  style: Theme.of(context).textTheme.headlineSmall,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Upcoming',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    Text(
+                      'Due after today — see Today for what\'s due now or overdue.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                 ),
               ),
             ),
