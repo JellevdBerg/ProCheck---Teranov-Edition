@@ -72,11 +72,15 @@ Supabase's own public email/password flow, which this edition no longer
 uses at all.
 
 Removing the sign-up screen only stops the *app* from calling the public
-sign-up API — the publishable key can still call it directly. So also
-turn off **"Allow new users to sign up"** (Authentication → Providers →
-Email) in the dashboard, to close that off too. `admin_create_profile`
-isn't affected either way — it inserts into `auth.users` directly rather
-than going through that API.
+sign-up API — the publishable key can still call it directly. Turning off
+**"Allow new users to sign up"** (Authentication → Providers → Email) in
+the dashboard closes that off too, but `20261010090000_signup_db_backstop.sql`
+now also enforces this at the database level: `handle_new_user()` rejects
+any `auth.users` insert that isn't marked by `admin_create_profile`, so a
+direct `supabase.auth.signUp()` call fails even if that dashboard toggle
+is accidentally left on. `admin_create_profile` isn't affected either
+way — it inserts into `auth.users` directly rather than going through that
+API.
 
 ### The permanent "Dev" / Operator test account
 
@@ -122,6 +126,28 @@ to list everyone.
 `extensions` schema on this project. Schema-qualified both calls
 (`extensions.crypt(...)`, `extensions.gen_salt(...)`) instead of widening
 the search path.
+
+**Fixed in `20261010090000_signup_db_backstop.sql`:** `admin_create_profile`'s
+duplicate-username check compared a lower-cased candidate against the
+stored `username` column as-is (`username = clean_username`), which missed
+the seeded `Dev` account's original mixed case — `dev` or `DEV` could be
+created alongside it. Now compares `lower(username) = clean_username`.
+
+## Comment authorship, and realtime delete leaks
+
+**Fixed in `20261010091000_comment_author_and_replica_identity.sql`:**
+
+- `append_project_comment` validated the comment's jsonb shape but never
+  checked the client-supplied `author` field against the caller — anyone
+  signed in could attribute a comment to any name. `author` is now always
+  overwritten with `(select display_name from current_profile())` before
+  the row is stored, regardless of what the client sent.
+- `tasks`/`projects` were added to the `supabase_realtime` publication
+  (`20261008091500_realtime.sql`) without `REPLICA IDENTITY FULL`. Without
+  it, a `DELETE`'s replication payload carries only the primary key, so
+  Realtime can't evaluate row-level visibility for the deleted row and
+  broadcasts it to every subscriber regardless of RLS. Both tables now use
+  `REPLICA IDENTITY FULL`.
 
 ## IT department — Operator's near-equal
 
