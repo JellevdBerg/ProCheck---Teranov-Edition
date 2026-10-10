@@ -1653,6 +1653,14 @@ revoke execute on function public.enforce_single_operator() from public, anon, a
 revoke execute on function public.protect_department_role() from public, anon, authenticated;
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
 revoke execute on function public.set_department_from_owner() from public, anon, authenticated;
+-- None of the helpers below (current_profile, is_admin, is_operator,
+-- my_department, is_dept_manager, has_dept_permission, is_it_manager) gets
+-- an explicit `grant ... to authenticated` here or anywhere else in this
+-- file. That's intentional, not an oversight: Supabase grants authenticated
+-- default schema-level EXECUTE outside of any migration, so revoking from
+-- public/anon alone is enough on the real platform. A hand-rolled local
+-- Postgres standing in for Supabase (e.g. for pgTAP tests) needs those
+-- grants added itself — see supabase/tests/README.md.
 revoke execute on function public.protect_task_project_assignment() from public, anon, authenticated;
 revoke execute on function public.admin_create_department(text) from public, anon;
 revoke execute on function public.admin_create_department(text, boolean) from public, anon;
