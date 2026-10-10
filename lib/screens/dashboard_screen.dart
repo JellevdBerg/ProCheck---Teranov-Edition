@@ -1043,7 +1043,7 @@ class _ProjectsTableCardState extends State<ProjectsTableCard> {
                               spacing: NocturneSpace.s2,
                               children: [
                                 header('PROJECT', _ProjectSortColumn.name),
-                                header('TASKS', _ProjectSortColumn.tasks),
+                                header('OPEN', _ProjectSortColumn.tasks),
                                 header('PROGRESS', _ProjectSortColumn.progress),
                                 header('STATUS', _ProjectSortColumn.status),
                               ],
@@ -1059,7 +1059,7 @@ class _ProjectsTableCardState extends State<ProjectsTableCard> {
                                 ),
                                 Expanded(
                                   child: header(
-                                    'TASKS',
+                                    'OPEN',
                                     _ProjectSortColumn.tasks,
                                   ),
                                 ),
@@ -1314,10 +1314,10 @@ class _ProjectsTableRow extends StatelessWidget {
     if (summary.open > 0) {
       return NocturneTag(label: '${summary.open} open');
     }
-    return Text(
-      'No tasks',
-      style: TextStyle(fontSize: 12, color: tokens.neutral500),
-    );
+    // total > 0 and open == 0: every task is done, not "no tasks" — a
+    // distinct status from a project that never had any (see
+    // ProjectSummary docs).
+    return NocturneTag(label: 'Complete', color: NocturnePriority.low);
   }
 }
 
