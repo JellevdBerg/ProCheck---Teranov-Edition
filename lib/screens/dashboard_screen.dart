@@ -10,7 +10,6 @@ import '../models/task.dart';
 import '../models/task_priority.dart';
 import '../providers/projects_provider.dart';
 import '../providers/roles_provider.dart';
-import 'org_chart_screen.dart';
 import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
@@ -129,6 +128,7 @@ class DashboardScreen extends ConsumerStatefulWidget {
     super.key,
     required this.onOpenProject,
     required this.onOpenTask,
+    required this.onOpenOrgChart,
   });
 
   final void Function(String projectId, BuildContext rowContext) onOpenProject;
@@ -138,6 +138,11 @@ class DashboardScreen extends ConsumerStatefulWidget {
   /// projectId means an unfiled task.
   final void Function(String? projectId, String taskId, BuildContext rowContext)
   onOpenTask;
+
+  /// Switches the app shell to the Org Chart destination — kept in the
+  /// persistent sidebar shell (see [AppScreen.orgChart]) rather than a
+  /// separate full-screen route.
+  final VoidCallback onOpenOrgChart;
 
   @override
   ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
@@ -180,7 +185,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const _DashboardHeader(title: 'Dashboard'),
+                  _DashboardHeader(
+                    title: 'Dashboard',
+                    onOpenOrgChart: widget.onOpenOrgChart,
+                  ),
                   TaskFilterBar(
                     filter: _filter,
                     onChanged: (f) => setState(() => _filter = f),
@@ -210,9 +218,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 }
 
 class _DashboardHeader extends ConsumerWidget {
-  const _DashboardHeader({required this.title});
+  const _DashboardHeader({required this.title, required this.onOpenOrgChart});
 
   final String title;
+  final VoidCallback onOpenOrgChart;
 
   static const _weekdays = [
     'Monday',
@@ -263,9 +272,7 @@ class _DashboardHeader extends ConsumerWidget {
         NocturneButton(
           label: 'Organization',
           icon: Icons.account_tree_outlined,
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const OrgChartScreen()),
-          ),
+          onPressed: onOpenOrgChart,
         ),
       ],
     );

@@ -22,6 +22,7 @@ import 'archived_screen.dart';
 import 'calendar_screen.dart';
 import 'dashboard_screen.dart';
 import 'day_screen.dart';
+import 'org_chart_screen.dart';
 import 'project_detail_overlay.dart';
 import 'projects_screen.dart';
 import 'settings_screen.dart';
@@ -512,9 +513,11 @@ class _AppShellState extends ConsumerState<AppShell>
       AppScreen.dashboard => DashboardScreen(
         onOpenProject: _openProjectFromCard,
         onOpenTask: _openTask,
+        onOpenOrgChart: () => _switchScreen(AppScreen.orgChart),
       ),
       AppScreen.team => const TeamScreen(),
       AppScreen.admin => const AdminScreen(),
+      AppScreen.orgChart => const OrgChartScreen(),
     };
   }
 }

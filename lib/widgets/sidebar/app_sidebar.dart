@@ -221,6 +221,15 @@ class AppSidebar extends ConsumerWidget {
                             accent: accent,
                             onTap: () => onScreenSelected(AppScreen.admin),
                           ),
+                          const SizedBox(height: 1),
+                          _NavRow(
+                            icon: Icons.account_tree_outlined,
+                            label: 'Organization',
+                            expanded: expanded,
+                            active: currentScreen == AppScreen.orgChart,
+                            accent: accent,
+                            onTap: () => onScreenSelected(AppScreen.orgChart),
+                          ),
                         ],
                         const SizedBox(height: 1),
                         _NavRow(

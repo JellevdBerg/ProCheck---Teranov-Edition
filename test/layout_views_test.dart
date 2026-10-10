@@ -76,7 +76,11 @@ void main() {
 
   final screens = <String, Widget Function()>{
     'dashboard': () =>
-        DashboardScreen(onOpenProject: (_, _) {}, onOpenTask: noop3),
+        DashboardScreen(
+          onOpenProject: (_, _) {},
+          onOpenTask: noop3,
+          onOpenOrgChart: () {},
+        ),
     'calendar': () => CalendarScreen(onDaySelected: (_) {}, onOpenTask: noop3),
     'today': () => const TodayScreen(onOpenTask: noop3),
     'upcoming': () => const UpcomingScreen(onOpenTask: noop3),
