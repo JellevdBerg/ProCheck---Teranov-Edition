@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'data/app_messenger.dart';
 import 'data/hive_setup.dart';
 import 'data/notification_service.dart';
 import 'data/supabase_config.dart';
@@ -42,6 +43,7 @@ class ProcheckApp extends ConsumerWidget {
     final accent = settings.accentColor;
     return MaterialApp(
       title: 'ProCheck',
+      scaffoldMessengerKey: scaffoldMessengerKey,
       debugShowCheckedModeBanner: false,
       themeMode: settings.themeMode,
       theme: buildNocturneTheme(brightness: Brightness.light, accent: accent),

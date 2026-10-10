@@ -1,10 +1,12 @@
 import 'dart:async';
 
+import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../data/app_messenger.dart';
 import '../data/hive_setup.dart';
 import '../data/notification_service.dart';
 import '../data/sound_service.dart';
@@ -17,6 +19,7 @@ import '../models/task_priority.dart';
 import '../models/task_template.dart';
 import 'projects_provider.dart';
 import 'sync_log_provider.dart';
+import 'syncable_notifier.dart';
 import 'undo_provider.dart';
 
 final tasksProvider = StateNotifierProvider<TasksNotifier, List<Task>>((ref) {
@@ -32,150 +35,86 @@ final tasksProvider = StateNotifierProvider<TasksNotifier, List<Task>>((ref) {
 /// fire-and-forget, so a flaky connection never blocks the UI — and a
 /// one-time pull on construction merges in whatever's visible to this
 /// user there (their own tasks, what's assigned to them, their
-/// department's, per the RLS policies). There's no realtime subscription
-/// yet, so a teammate's change shows up on next launch, not live.
-class TasksNotifier extends StateNotifier<List<Task>> {
-  TasksNotifier(Ref ref) : _ref = ref, super(_box.values.toList()) {
+/// department's, per the RLS policies). See [SyncableNotifier] for the
+/// profile-load/pull/realtime plumbing shared with [ProjectsNotifier].
+class TasksNotifier extends StateNotifier<List<Task>>
+    with SyncableNotifier<Task> {
+  TasksNotifier(this.ref) : super(_box.values.toList()) {
     _sortState();
-    unawaited(_loadOwnProfile());
-    unawaited(_pullFromSupabase().then((_) => _subscribeRealtime()));
+    unawaited(profileReady);
+    unawaited(pullFromSupabase().then((_) => subscribeRealtime()));
   }
 
-  final Ref _ref;
-  RealtimeChannel? _channel;
+  @override
+  final Ref ref;
 
   static Box<Task> get _box => Hive.box<Task>(taskBoxName);
 
   @override
+  String get syncTable => 'tasks';
+
+  @override
+  Box<Task> get syncBox => _box;
+
+  @override
+  Task rowFromSupabase(Map<String, dynamic> row) => Task.fromSupabase(row);
+
+  @override
+  String idOf(Task item) => item.id;
+
+  @override
+  void resortState() {
+    state = _box.values.toList();
+    _sortState();
+  }
+
+  @override
   void dispose() {
-    final channel = _channel;
-    if (channel != null) {
-      unawaited(supabase.removeChannel(channel));
-    }
+    disposeSync();
     super.dispose();
-  }
-
-  /// Subscribes to live inserts/updates/deletes on the `tasks` table so a
-  /// teammate's change shows up immediately rather than only on next
-  /// launch. RLS still governs which rows this client actually receives —
-  /// this just reacts to whatever comes through. Best-effort: a failed
-  /// subscribe leaves the app working exactly as it did with only the
-  /// launch-time pull.
-  void _subscribeRealtime() {
-    if (!isSupabaseConfigured) return;
-    if (supabase.auth.currentUser == null) return;
-    _channel = supabase
-        .channel('tasks_changes')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'tasks',
-          callback: _handleRealtimeChange,
-        )
-        .subscribe();
-  }
-
-  void _handleRealtimeChange(PostgresChangePayload payload) {
-    switch (payload.eventType) {
-      case PostgresChangeEvent.delete:
-        // The old row only carries its primary key once deleted.
-        final id = payload.oldRecord['id'] as String?;
-        if (id == null) return;
-        unawaited(_box.delete(id));
-        state = state.where((t) => t.id != id).toList();
-      case PostgresChangeEvent.insert:
-      case PostgresChangeEvent.update:
-        final task = Task.fromSupabase(payload.newRecord);
-        unawaited(_box.put(task.id, task));
-        if (state.any((t) => t.id == task.id)) {
-          _replace(task);
-        } else {
-          state = [task, ...state];
-        }
-        _sortState();
-      case PostgresChangeEvent.all:
-        break;
-    }
   }
 
   /// Every task — used where that's explicitly correct (backup export,
   /// Settings > Wipe All Data already clearing the whole box).
   List<Task> get allValues => _box.values.toList();
 
-  /// Cached from the signed-in user's own `profiles` row — used to stamp
-  /// [ownerId]/[departmentId] on tasks created after this resolves. A task
-  /// created before it resolves (a narrow window right after launch) falls
-  /// back to blank, same as pure local/offline use.
-  String? _ownerId;
-  String? _departmentId;
-
-  /// The signed-in user's display name, cached with [_ownerId]. Written into
-  /// new activity entries and comments so teammates see who acted; falls
-  /// back to 'You' when signed out / not yet loaded (pure local use).
-  String? _authorName;
-  String get authorName =>
-      (_authorName?.isNotEmpty ?? false) ? _authorName! : 'You';
-
-  Future<void> _loadOwnProfile() async {
-    if (!isSupabaseConfigured) return;
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
-    try {
-      final row = await supabase
-          .from('profiles')
-          .select()
-          .eq('id', userId)
-          .single();
-      _ownerId = userId;
-      _departmentId = row['department_id'] as String?;
-      _authorName = row['display_name'] as String?;
-    } catch (_) {
-      // Best-effort — local-only behavior continues if this fails.
-    }
-  }
-
-  /// Pulls every task visible to this user on Supabase (per RLS) into the
-  /// local box, then refreshes [state]. Best-effort: a failed/offline pull
-  /// just leaves the local cache as it was.
-  Future<void> _pullFromSupabase() async {
+  Future<void> _mirrorUpsert(Task task, {Task? previous}) async {
     if (!isSupabaseConfigured) return;
     if (supabase.auth.currentUser == null) return;
-    try {
-      final rows = await supabase.from('tasks').select();
-      for (final row in rows as List) {
-        final task = Task.fromSupabase(row as Map<String, dynamic>);
-        await _box.put(task.id, task);
-      }
-      state = _box.values.toList();
-      _sortState();
-      _ref.read(syncLogProvider.notifier).recordSuccessfulPull();
-    } catch (e) {
-      // Best-effort — local cache stays as it was.
-      _ref
-          .read(syncLogProvider.notifier)
-          .recordError(source: 'tasks', action: 'pull', error: e);
-    }
-  }
-
-  Future<void> _mirrorUpsert(Task task) async {
-    if (!isSupabaseConfigured) return;
-    if (supabase.auth.currentUser == null) return;
-    // ownerId/departmentId are blank for a task created before
-    // _loadOwnProfile resolves — sending that as a uuid column fails
-    // server-side (and a task left pointing at a project that failed to
-    // sync the same way then fails its own foreign key). Treat it as
-    // local-only, same as being offline, instead of sending garbage.
+    // ownerId/departmentId are blank for a task created before the
+    // profile resolves — sending that as a uuid column fails server-side.
+    // The splash screen now gates creation UI behind [profileReady], so
+    // this is only a safety net (e.g. restoring very old local data).
     if (task.ownerId.isEmpty) return;
     try {
       await supabase.from('tasks').upsert(task.toSupabase());
+    } on PostgrestException catch (e) {
+      // The server actively refused this write (most commonly an RLS
+      // policy) — the local optimistic update is now wrong, so roll it
+      // back (or, for a brand-new task with no prior state, remove it)
+      // and tell the user, instead of leaving it silently stuck.
+      ref
+          .read(syncLogProvider.notifier)
+          .recordError(source: 'tasks', action: 'upsert', error: e);
+      _rollback(task, previous, e);
     } catch (e) {
-      // Best-effort — the local Hive copy is still correct; it just hasn't
-      // reached the backend (offline, or an RLS policy refused it, e.g. a
-      // member trying to file a task into a project).
-      _ref
+      // Offline/network failure — stays local-only by design, same as
+      // always; only logged for the dev panel.
+      ref
           .read(syncLogProvider.notifier)
           .recordError(source: 'tasks', action: 'upsert', error: e);
     }
+  }
+
+  void _rollback(Task rejected, Task? previous, PostgrestException e) {
+    if (previous != null) {
+      unawaited(_box.put(previous.id, previous));
+      _replace(previous);
+    } else {
+      unawaited(_box.delete(rejected.id));
+      state = state.where((t) => t.id != rejected.id).toList();
+    }
+    showSyncFailureToast('Couldn\'t save "${rejected.title}": ${e.message}');
   }
 
   Future<void> _mirrorDelete(String taskId) async {
@@ -185,7 +124,7 @@ class TasksNotifier extends StateNotifier<List<Task>> {
       await supabase.from('tasks').delete().eq('id', taskId);
     } catch (e) {
       // Best-effort.
-      _ref
+      ref
           .read(syncLogProvider.notifier)
           .recordError(source: 'tasks', action: 'delete', error: e);
     }
@@ -196,7 +135,7 @@ class TasksNotifier extends StateNotifier<List<Task>> {
   void _logActivity(Task task, ActivityKind kind, String description) {
     final projectId = task.projectId;
     if (projectId == null) return;
-    _ref.read(projectsProvider.notifier).logActivity(
+    ref.read(projectsProvider.notifier).logActivity(
       projectId,
       ActivityEntry(
         kindIndex: kind.index,
@@ -231,8 +170,9 @@ class TasksNotifier extends StateNotifier<List<Task>> {
   /// would mean the "old" and "new" values a selector compares are the
   /// very same object, always equal regardless of what changed.
   void _persist(Task task) {
+    final previous = state.firstWhereOrNull((t) => t.id == task.id);
     unawaited(_box.put(task.id, task));
-    unawaited(_mirrorUpsert(task));
+    unawaited(_mirrorUpsert(task, previous: previous));
     _replace(task);
   }
 
@@ -309,8 +249,8 @@ class TasksNotifier extends StateNotifier<List<Task>> {
       attachments: attachments,
       dueDate: dueDate,
       dueDateEnd: dueDate == null ? null : dueDateEnd,
-      ownerId: _ownerId ?? '',
-      departmentId: _departmentId ?? '',
+      ownerId: ownerId ?? '',
+      departmentId: departmentId ?? '',
     );
     unawaited(_box.put(task.id, task));
     unawaited(_mirrorUpsert(task));
@@ -367,7 +307,7 @@ class TasksNotifier extends StateNotifier<List<Task>> {
     unawaited(_mirrorDelete(taskId));
     state = state.where((t) => t.id != taskId).toList();
     if (task != null) {
-      _ref.read(undoStackProvider.notifier).push(TaskDeletionEntry(task));
+      ref.read(undoStackProvider.notifier).push(TaskDeletionEntry(task));
     }
   }
 
@@ -400,7 +340,7 @@ class TasksNotifier extends StateNotifier<List<Task>> {
       if (task == null) continue;
       final updated = task.copyWith(sortOrder: (n - i).toDouble());
       unawaited(_box.put(updated.id, updated));
-      unawaited(_mirrorUpsert(updated));
+      unawaited(_mirrorUpsert(updated, previous: task));
       updatedById[updated.id] = updated;
     }
     if (updatedById.isEmpty) return;
@@ -579,13 +519,16 @@ class TasksNotifier extends StateNotifier<List<Task>> {
   }
 
   /// Replaces every task with [tasks]. Used when restoring from a backup —
-  /// anything currently stored locally is discarded first.
+  /// anything currently stored locally is discarded first. Mirrors every
+  /// restored row to Supabase too (unlike [clearAll], this isn't meant to
+  /// be local-only — see the `supabase/README.md` note on backup/restore).
   void restoreAll(List<Task> tasks) {
     unawaited(NotificationService.instance.cancelAll());
     unawaited(_replaceBoxContents(tasks));
     state = [...tasks];
     _sortState();
     for (final task in tasks) {
+      unawaited(_mirrorUpsert(task));
       if (task.dueDate != null && !task.isChecked) {
         unawaited(NotificationService.instance.scheduleForTask(task));
       }
