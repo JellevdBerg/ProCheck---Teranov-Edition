@@ -24,8 +24,11 @@ class OutboxEntry extends HiveObject {
     required this.rowId,
     required this.opIndex,
     this.payload,
+    this.baseUpdatedAt,
     this.attempts = 0,
     DateTime? queuedAt,
+    this.failed = false,
+    this.lastError,
   }) : queuedAt = queuedAt ?? DateTime.now();
 
   /// `'tasks'` or `'projects'`.
@@ -51,6 +54,26 @@ class OutboxEntry extends HiveObject {
 
   @HiveField(5)
   DateTime queuedAt;
+
+  /// The row's `updated_at` as last seen locally, at the moment this edit
+  /// was made — used for the optimistic-concurrency check on replay (see
+  /// [SyncableNotifier.upsertWithConflictCheck]). Null for a brand-new row
+  /// that's never been confirmed on the server, which replays as a plain
+  /// insert rather than a conditional update.
+  @HiveField(6)
+  String? baseUpdatedAt;
+
+  /// True once the server has actively refused this entry (an auth/RLS
+  /// rejection) — it stays in the outbox so the status UI can show it as
+  /// failed, but [SyncableNotifier.replayOutbox] never retries it again;
+  /// retrying wouldn't change the outcome. Cleared by the user's own Retry
+  /// action.
+  @HiveField(7, defaultValue: false)
+  bool failed;
+
+  /// Human-readable reason shown in the sync status details list.
+  @HiveField(8)
+  String? lastError;
 
   OutboxOp get op => OutboxOp.fromIndex(opIndex);
 }

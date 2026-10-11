@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 
+import '../../data/app_messenger.dart';
 import '../../data/hive_setup.dart';
 import '../../models/department.dart';
 import '../../models/outbox_entry.dart';
@@ -25,6 +26,7 @@ import '../blurred_dialog.dart';
 import '../panel/panel.dart';
 import '../people_plates.dart';
 import '../project_name_lookup.dart';
+import '../sync_status_indicator.dart';
 import 'mini_calendar.dart';
 
 /// The persistent left navigation column: a sign-out row (once Supabase is
@@ -174,6 +176,16 @@ class AppSidebar extends ConsumerWidget {
                       onTap: () => _confirmSignOut(context, ref),
                     ),
             ),
+            if (expanded) ...[
+              const SizedBox(height: 4),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: SyncStatusIndicator(),
+                ),
+              ),
+            ],
           ],
           const SizedBox(height: 8),
           // The nav sections scroll independently of the calendar/Settings
@@ -412,22 +424,74 @@ class AppSidebar extends ConsumerWidget {
         ],
       ),
     );
-    if (confirmed ?? false) {
-      await ref.read(authControllerProvider).signOut();
-      // Hive boxes live on this device, not per-account — without this,
-      // whoever signs in next on the same machine would see the previous
-      // person's tasks/projects until their own pull replaces them, and
-      // any outbox entries still trying to reach the old account's rows
-      // would keep retrying under the new session.
-      ref.read(tasksProvider.notifier).clearAll();
-      ref.read(projectsProvider.notifier).clearAll();
-      unawaited(Hive.box<OutboxEntry>(outboxBoxName).clear());
+    if (!(confirmed ?? false)) return;
+
+    final pending = Hive.box<OutboxEntry>(outboxBoxName).length;
+    if (pending > 0) {
       if (!context.mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
+      final action = await showBlurredDialog<_PendingSignOutAction>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(
+            '$pending change${pending == 1 ? '' : 's'} not shared yet',
+          ),
+          content: const Text(
+            'These haven\'t reached your team yet. Sync them now, discard '
+            'them and sign out anyway, or stay signed in.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(_PendingSignOutAction.cancel),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(_PendingSignOutAction.discard),
+              child: const Text('Discard and sign out'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(_PendingSignOutAction.sync),
+              child: const Text('Sync now'),
+            ),
+          ],
+        ),
       );
+      switch (action) {
+        case null:
+        case _PendingSignOutAction.cancel:
+          return;
+        case _PendingSignOutAction.discard:
+          unawaited(Hive.box<OutboxEntry>(outboxBoxName).clear());
+        case _PendingSignOutAction.sync:
+          await Future.wait([
+            ref.read(tasksProvider.notifier).replayOutbox(),
+            ref.read(projectsProvider.notifier).replayOutbox(),
+          ]);
+          final stillPending = Hive.box<OutboxEntry>(outboxBoxName).length;
+          if (stillPending > 0) {
+            showSyncFailureToast(
+              '$stillPending change${stillPending == 1 ? '' : 's'} still '
+              'couldn\'t sync — staying signed in.',
+            );
+            return;
+          }
+      }
     }
+
+    await ref.read(authControllerProvider).signOut();
+    // Hive boxes live on this device, not per-account — without this,
+    // whoever signs in next on the same machine would see the previous
+    // person's tasks/projects until their own pull replaces them.
+    ref.read(tasksProvider.notifier).clearAll();
+    ref.read(projectsProvider.notifier).clearAll();
+    unawaited(Hive.box<OutboxEntry>(outboxBoxName).clear());
+    if (!context.mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
   }
 
   static Future<void> _showFavoriteContextMenu(
@@ -463,6 +527,8 @@ class AppSidebar extends ConsumerWidget {
 }
 
 enum _FavoriteAction { unfavorite }
+
+enum _PendingSignOutAction { cancel, discard, sync }
 
 class _Header extends StatelessWidget {
   const _Header({required this.expanded, required this.onToggle});
