@@ -211,7 +211,9 @@ revoke execute on function public.set_department_from_owner() from public, anon,
 -- Postgres standing in for Supabase (e.g. for pgTAP tests) needs those
 -- grants added itself — see supabase/tests/README.md.
 revoke execute on function public.protect_task_project_assignment() from public, anon, authenticated;
-revoke execute on function public.admin_create_department(text) from public, anon;
+-- admin_create_department(text) no longer exists by this point: the
+-- 20261008140000 migration already dropped it in favor of the
+-- (text, boolean) overload, so only that one needs revoking here.
 revoke execute on function public.admin_create_department(text, boolean) from public, anon;
 revoke execute on function public.admin_create_profile(text, text, text, text, uuid) from public, anon;
 revoke execute on function public.admin_delete_department(uuid) from public, anon;
