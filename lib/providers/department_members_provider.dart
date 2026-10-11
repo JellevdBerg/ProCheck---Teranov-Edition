@@ -16,6 +16,7 @@ class DirectoryEntry {
     this.departmentId,
     this.customRoleId,
     this.customRoleName,
+    this.isActive = true,
   });
 
   final String id;
@@ -27,6 +28,10 @@ class DirectoryEntry {
   /// The job title, when this person has one.
   final String? customRoleName;
 
+  /// Deactivated accounts (Phase 4 lifecycle) disappear from assignment
+  /// pickers but keep showing up anywhere their history is read back.
+  final bool isActive;
+
   factory DirectoryEntry.fromJson(Map<String, dynamic> json) => DirectoryEntry(
     id: json['id'] as String,
     displayName: json['display_name'] as String,
@@ -34,6 +39,7 @@ class DirectoryEntry {
     departmentId: json['department_id'] as String?,
     customRoleId: json['custom_role_id'] as String?,
     customRoleName: json['custom_role_name'] as String?,
+    isActive: json['is_active'] as bool? ?? true,
   );
 }
 

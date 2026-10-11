@@ -20,6 +20,7 @@ class Profile {
     this.departmentId,
     this.customRoleId,
     this.createdAt,
+    this.isActive = true,
   });
 
   final String id;
@@ -39,6 +40,11 @@ class Profile {
   final String? customRoleId;
   final DateTime? createdAt;
 
+  /// Deactivated accounts (Phase 4 lifecycle) keep their history but
+  /// disappear from assignment pickers and show greyed out in the org
+  /// chart and Admin screen.
+  final bool isActive;
+
   bool get isManager => role == UserRole.manager;
 
   factory Profile.fromJson(Map<String, dynamic> json) => Profile(
@@ -52,5 +58,6 @@ class Profile {
     createdAt: json['created_at'] == null
         ? null
         : DateTime.tryParse(json['created_at'] as String),
+    isActive: json['is_active'] as bool? ?? true,
   );
 }

@@ -8,10 +8,18 @@ class Department {
     required this.name,
     required this.isOperator,
     required this.isIt,
+    this.archivedAt,
   });
 
   final String id;
   final String name;
+
+  /// Set when the department is archived (Phase 4 lifecycle) — kept
+  /// around with its history, just hidden from new project/member
+  /// assignment. Blocked while it still owns projects.
+  final DateTime? archivedAt;
+
+  bool get isArchived => archivedAt != null;
 
   /// The one department (capped by a DB-side unique index) whose members
   /// bypass every other department's visibility boundary.
@@ -32,5 +40,8 @@ class Department {
     name: json['name'] as String,
     isOperator: json['is_operator'] as bool? ?? false,
     isIt: json['is_it'] as bool? ?? false,
+    archivedAt: json['archived_at'] == null
+        ? null
+        : DateTime.tryParse(json['archived_at'] as String),
   );
 }

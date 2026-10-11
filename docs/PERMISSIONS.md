@@ -32,6 +32,11 @@ project "ProCheck Multi-User".
 ## Tamper-proofing
 `role`, `department_id`, `custom_role_id`, `username` and `email` on `profiles` change only inside the admin functions (they set a transaction flag) or from the SQL editor. This closes a hole where an IT member could move themselves into the Operator department. Department flags (`is_operator`, `is_it`) have no insert/update policy, so only the security-definer functions create departments.
 
+## Account & department lifecycle (Phase 4, `20261011400000_phase4_account_department_lifecycle`)
+- **Deactivate/reactivate an account, reset a password, create an account:** go through the `admin-users` Edge Function (Supabase Auth Admin API — bans via `ban_duration`, never writes `auth.users` by hand). `is_admin()` to act at all; `is_operator()` to touch an account in the Operator or IT department, same split `admin_create_profile` already used. The Operator can't deactivate themself or be deactivated. Deactivating keeps the person's task/project history; `profiles.is_active = false` just drops them out of assignment pickers (`profile_directory()` and `departmentMembersProvider` both carry `is_active`).
+- **Hard delete an account or department:** `admin_delete_profile`/`admin_delete_department` are now **Operator-only** (IT can no longer hard-delete), behind a typed confirmation in the UI. A department can only be hard-deleted once it has no members and no projects left.
+- **Archive a department:** `admin_archive_department` (is_admin; is_operator for the Operator/IT tier) sets `departments.archived_at`, blocked while it still owns any project. Archived departments keep their members and history; IT moves projects out first with the existing owning-department action.
+
 ## Test results (each role impersonated inside a transaction that was rolled back; nothing left behind)
 | Role | Action | Expected | Actual |
 |---|---|---|---|
