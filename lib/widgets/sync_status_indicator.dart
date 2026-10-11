@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -100,6 +101,38 @@ class _SyncDetailsDialog extends ConsumerWidget {
           child: const Text('Close'),
         ),
       ],
+    );
+  }
+}
+
+/// A small "not shared yet" dot shown next to a task/project row that has
+/// an entry in the outbox — renders nothing once that row is no longer
+/// pending. [table] is `'tasks'` or `'projects'`, matching [OutboxEntry.table].
+class PendingSyncMark extends ConsumerWidget {
+  const PendingSyncMark({super.key, required this.table, required this.rowId});
+
+  final String table;
+  final String rowId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final entries = ref.watch(outboxEntriesProvider).valueOrNull ?? const [];
+    final entry = entries
+        .where((e) => e.table == table && e.rowId == rowId)
+        .firstOrNull;
+    if (entry == null) return const SizedBox.shrink();
+    return Tooltip(
+      message: entry.failed
+          ? 'Not shared yet — ${entry.lastError ?? 'rejected'}'
+          : 'Not shared yet — waiting to sync',
+      child: Padding(
+        padding: const EdgeInsets.only(left: 4),
+        child: Icon(
+          Icons.cloud_off,
+          size: 12,
+          color: entry.failed ? Colors.redAccent : Colors.amber,
+        ),
+      ),
     );
   }
 }

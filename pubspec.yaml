@@ -54,6 +54,12 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
+  # Used by test/sync_outbox_http_test.dart's MockClient to fake the
+  # Supabase backend's HTTP responses — already a transitive dependency
+  # via supabase_flutter, declared directly here because it's imported
+  # directly too.
+  http: ^1.6.0
+
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
   # activated in the `analysis_options.yaml` file located at the root of your

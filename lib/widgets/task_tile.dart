@@ -20,6 +20,7 @@ import 'nocturne/nocturne_widgets.dart';
 import 'notes_field.dart';
 import 'panel/panel.dart';
 import 'people_plates.dart';
+import 'sync_status_indicator.dart';
 import 'wobble_checkbox.dart';
 
 /// A single task row: a checkbox + title that expands in place to reveal
@@ -187,14 +188,22 @@ class _TaskTileState extends ConsumerState<TaskTile> {
             ),
             title: LayoutBuilder(
               builder: (context, constraints) {
-                final title = Text(
-                  task.title,
-                  style: TextStyle(
-                    color: task.isChecked ? tokens.neutral500 : tokens.text,
-                    decoration: task.isChecked
-                        ? TextDecoration.lineThrough
-                        : null,
-                  ),
+                final title = Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        task.title,
+                        style: TextStyle(
+                          color: task.isChecked ? tokens.neutral500 : tokens.text,
+                          decoration: task.isChecked
+                              ? TextDecoration.lineThrough
+                              : null,
+                        ),
+                      ),
+                    ),
+                    PendingSyncMark(table: 'tasks', rowId: task.id),
+                  ],
                 );
                 final hasMeta =
                     task.dueDate != null ||
