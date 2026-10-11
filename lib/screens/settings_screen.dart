@@ -13,9 +13,11 @@ import '../models/shortcut_binding.dart';
 import '../models/task_priority.dart';
 import '../providers/auth_provider.dart';
 import '../providers/projects_provider.dart';
+import '../providers/app_info_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/task_templates_provider.dart';
 import '../providers/tasks_provider.dart';
+import '../providers/update_check_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/color_spectrum_picker.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
@@ -63,6 +65,8 @@ class SettingsScreen extends ConsumerWidget {
                           _ShortcutsCard(),
                           SizedBox(height: NocturneSpace.s4),
                           _BackupCard(),
+                          SizedBox(height: NocturneSpace.s4),
+                          _AboutCard(),
                         ],
                       ),
                     ),
@@ -98,6 +102,49 @@ class _AccountCard extends ConsumerWidget {
         ),
       ],
     );
+  }
+}
+
+class _AboutCard extends ConsumerWidget {
+  const _AboutCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final packageInfo = ref.watch(packageInfoProvider).valueOrNull;
+    final checking = ref.watch(updateCheckProvider).isLoading;
+
+    return _SettingsSection(
+      title: 'About',
+      children: [
+        _SettingRow(
+          label: 'Version',
+          help: packageInfo != null
+              ? '${packageInfo.version} (build ${packageInfo.buildNumber})'
+              : null,
+          control: NocturneButton(
+            label: checking ? 'Checking…' : 'Check for updates',
+            icon: Icons.system_update_outlined,
+            onPressed: checking ? null : () => _checkNow(context, ref),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _checkNow(BuildContext context, WidgetRef ref) async {
+    ref.read(updateBannerDismissedProvider.notifier).state = false;
+    String message;
+    try {
+      final update = await ref.refresh(updateCheckProvider.future);
+      message = update != null
+          ? 'ProCheck ${update.version} is available — see the banner above.'
+          : "You're on the latest version.";
+    } catch (_) {
+      message = "Couldn't check for updates right now.";
+    }
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
