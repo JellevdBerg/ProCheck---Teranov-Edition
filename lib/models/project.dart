@@ -27,6 +27,7 @@ class Project extends HiveObject {
     List<ProjectComment>? comments,
     this.ownerId = '',
     this.departmentId = '',
+    this.updatedAt,
   }) : activityLog = activityLog ?? [],
        comments = comments ?? [];
 
@@ -83,6 +84,11 @@ class Project extends HiveObject {
   @HiveField(11, defaultValue: '')
   String departmentId;
 
+  /// This row's `updated_at` as last seen from the server — see the note
+  /// on [Task.updatedAt].
+  @HiveField(12)
+  DateTime? updatedAt;
+
   /// Builds a new [Project] with the given fields replaced — used instead
   /// of mutating this instance's fields so that value-equality-based
   /// Riverpod selectors (see [operator ==]) can tell an edited project
@@ -100,6 +106,7 @@ class Project extends HiveObject {
     String? ownerId,
     String? departmentId,
   }) => Project(
+    updatedAt: updatedAt,
     id: id,
     name: name ?? this.name,
     createdAt: createdAt,
@@ -202,6 +209,9 @@ class Project extends HiveObject {
         .toList(),
     ownerId: row['owner_id'] as String? ?? '',
     departmentId: row['department_id'] as String,
+    updatedAt: row['updated_at'] == null
+        ? null
+        : DateTime.parse(row['updated_at'] as String),
   );
 
   /// Maps this [Project] to a `projects` table row for insert/update. Omits

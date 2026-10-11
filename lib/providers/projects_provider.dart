@@ -41,7 +41,12 @@ class ProjectsNotifier extends StateNotifier<List<Project>>
   ProjectsNotifier(this.ref) : super(_box.values.toList()) {
     _sortState();
     unawaited(profileReady);
-    unawaited(pullFromSupabase().then((_) => subscribeRealtime()));
+    unawaited(
+      pullFromSupabase().then((_) {
+        subscribeRealtime();
+        unawaited(replayOutbox());
+      }),
+    );
   }
 
   @override
@@ -69,6 +74,15 @@ class ProjectsNotifier extends StateNotifier<List<Project>>
   }
 
   @override
+  DateTime? updatedAtOf(Project item) => item.updatedAt;
+
+  @override
+  String describeConflict(Project? remote, UpsertOutcome outcome) =>
+      outcome == UpsertOutcome.deletedRemotely
+          ? 'A project was deleted elsewhere before your change reached it.'
+          : '"${remote?.name ?? 'A project'}" was changed elsewhere — your offline edit wasn\'t applied.';
+
+  @override
   void dispose() {
     disposeSync();
     super.dispose();
@@ -94,26 +108,40 @@ class ProjectsNotifier extends StateNotifier<List<Project>>
     // now gates creation UI behind [profileReady], so this is only a
     // safety net (e.g. restoring very old local data).
     if (project.ownerId.isEmpty) return false;
-    try {
-      await supabase
-          .from('projects')
-          .upsert(project.toSupabase(includeAppendOnly: includeAppendOnly));
-      return true;
-    } on PostgrestException catch (e) {
-      // The server actively refused this write (most commonly an RLS
-      // policy) — roll the optimistic local update back (or remove a
-      // brand-new project with no prior state) and tell the user.
-      ref
-          .read(syncLogProvider.notifier)
-          .recordError(source: 'projects', action: 'upsert', error: e);
-      _rollback(project, previous, e);
-      return false;
-    } catch (e) {
-      // Offline/network failure — stays local-only by design.
-      ref
-          .read(syncLogProvider.notifier)
-          .recordError(source: 'projects', action: 'upsert', error: e);
-      return false;
+    final payload = project.toSupabase(includeAppendOnly: includeAppendOnly);
+    final result = await upsertWithConflictCheck(
+      project.id,
+      payload,
+      baseUpdatedAt: previous?.updatedAt,
+    );
+    switch (result.outcome) {
+      case UpsertOutcome.success:
+        return true;
+      case UpsertOutcome.conflict:
+      case UpsertOutcome.deletedRemotely:
+        ref.read(syncLogProvider.notifier).recordError(
+              source: 'projects',
+              action: 'upsert',
+              error: 'changed elsewhere',
+            );
+        showSyncFailureToast(describeConflict(result.remote, result.outcome));
+        return false;
+      case UpsertOutcome.rejected:
+        // The server actively refused this write (most commonly an RLS
+        // policy) — roll the optimistic local update back (or remove a
+        // brand-new project with no prior state) and tell the user.
+        ref
+            .read(syncLogProvider.notifier)
+            .recordError(source: 'projects', action: 'upsert', error: result.error!);
+        _rollback(project, previous, result.error!);
+        return false;
+      case UpsertOutcome.networkFailure:
+        // Queued for retry (see [SyncableNotifier.replayOutbox]).
+        ref
+            .read(syncLogProvider.notifier)
+            .recordError(source: 'projects', action: 'upsert', error: 'offline');
+        enqueueOutbox(project.id, payload, baseUpdatedAt: previous?.updatedAt);
+        return false;
     }
   }
 
@@ -180,10 +208,11 @@ class ProjectsNotifier extends StateNotifier<List<Project>>
     try {
       await supabase.from('projects').delete().eq('id', projectId);
     } catch (e) {
-      // Best-effort.
+      // Best-effort — queued for retry if this was a network failure.
       ref
           .read(syncLogProvider.notifier)
           .recordError(source: 'projects', action: 'delete', error: e);
+      enqueueOutbox(projectId, null);
     }
   }
 

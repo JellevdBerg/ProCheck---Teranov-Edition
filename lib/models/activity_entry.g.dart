@@ -17,6 +17,7 @@ class ActivityEntryAdapter extends TypeAdapter<ActivityEntry> {
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
     return ActivityEntry(
+      id: fields[3] == null ? '' : fields[3] as String?,
       kindIndex: fields[0] as int,
       description: fields[1] as String,
       timestamp: fields[2] as DateTime,
@@ -26,7 +27,9 @@ class ActivityEntryAdapter extends TypeAdapter<ActivityEntry> {
   @override
   void write(BinaryWriter writer, ActivityEntry obj) {
     writer
+      ..writeByte(4)
       ..writeByte(3)
+      ..write(obj.id)
       ..writeByte(0)
       ..write(obj.kindIndex)
       ..writeByte(1)

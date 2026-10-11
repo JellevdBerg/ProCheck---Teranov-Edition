@@ -42,7 +42,12 @@ class TasksNotifier extends StateNotifier<List<Task>>
   TasksNotifier(this.ref) : super(_box.values.toList()) {
     _sortState();
     unawaited(profileReady);
-    unawaited(pullFromSupabase().then((_) => subscribeRealtime()));
+    unawaited(
+      pullFromSupabase().then((_) {
+        subscribeRealtime();
+        unawaited(replayOutbox());
+      }),
+    );
   }
 
   @override
@@ -69,6 +74,15 @@ class TasksNotifier extends StateNotifier<List<Task>>
   }
 
   @override
+  DateTime? updatedAtOf(Task item) => item.updatedAt;
+
+  @override
+  String describeConflict(Task? remote, UpsertOutcome outcome) =>
+      outcome == UpsertOutcome.deletedRemotely
+          ? 'A task was deleted elsewhere before your change reached it.'
+          : '"${remote?.title ?? 'A task'}" was changed elsewhere — your offline edit wasn\'t applied.';
+
+  @override
   void dispose() {
     disposeSync();
     super.dispose();
@@ -86,23 +100,42 @@ class TasksNotifier extends StateNotifier<List<Task>>
     // The splash screen now gates creation UI behind [profileReady], so
     // this is only a safety net (e.g. restoring very old local data).
     if (task.ownerId.isEmpty) return;
-    try {
-      await supabase.from('tasks').upsert(task.toSupabase());
-    } on PostgrestException catch (e) {
-      // The server actively refused this write (most commonly an RLS
-      // policy) — the local optimistic update is now wrong, so roll it
-      // back (or, for a brand-new task with no prior state, remove it)
-      // and tell the user, instead of leaving it silently stuck.
-      ref
-          .read(syncLogProvider.notifier)
-          .recordError(source: 'tasks', action: 'upsert', error: e);
-      _rollback(task, previous, e);
-    } catch (e) {
-      // Offline/network failure — stays local-only by design, same as
-      // always; only logged for the dev panel.
-      ref
-          .read(syncLogProvider.notifier)
-          .recordError(source: 'tasks', action: 'upsert', error: e);
+    final result = await upsertWithConflictCheck(
+      task.id,
+      task.toSupabase(),
+      baseUpdatedAt: previous?.updatedAt,
+    );
+    switch (result.outcome) {
+      case UpsertOutcome.success:
+        break;
+      case UpsertOutcome.conflict:
+      case UpsertOutcome.deletedRemotely:
+        ref.read(syncLogProvider.notifier).recordError(
+              source: 'tasks',
+              action: 'upsert',
+              error: 'changed elsewhere',
+            );
+        showSyncFailureToast(describeConflict(result.remote, result.outcome));
+      case UpsertOutcome.rejected:
+        // The server actively refused this write (most commonly an RLS
+        // policy) — the local optimistic update is now wrong, so roll it
+        // back (or, for a brand-new task with no prior state, remove it)
+        // and tell the user, instead of leaving it silently stuck.
+        ref
+            .read(syncLogProvider.notifier)
+            .recordError(source: 'tasks', action: 'upsert', error: result.error!);
+        _rollback(task, previous, result.error!);
+      case UpsertOutcome.networkFailure:
+        // Queued for retry (see [SyncableNotifier.replayOutbox]); only
+        // logged here for the dev panel.
+        ref
+            .read(syncLogProvider.notifier)
+            .recordError(source: 'tasks', action: 'upsert', error: 'offline');
+        enqueueOutbox(
+          task.id,
+          task.toSupabase(),
+          baseUpdatedAt: previous?.updatedAt,
+        );
     }
   }
 
@@ -145,6 +178,9 @@ class TasksNotifier extends StateNotifier<List<Task>>
       ref
           .read(syncLogProvider.notifier)
           .recordError(source: 'tasks', action: 'upsert', error: e);
+      for (final task in syncable) {
+        enqueueOutbox(task.id, task.toSupabase());
+      }
     }
   }
 
@@ -154,10 +190,13 @@ class TasksNotifier extends StateNotifier<List<Task>>
     try {
       await supabase.from('tasks').delete().eq('id', taskId);
     } catch (e) {
-      // Best-effort.
+      // Best-effort — queued for retry if this was a network failure
+      // (a server-side rejection of a delete isn't expected here, since
+      // the task is already gone locally either way).
       ref
           .read(syncLogProvider.notifier)
           .recordError(source: 'tasks', action: 'delete', error: e);
+      enqueueOutbox(taskId, null);
     }
   }
 

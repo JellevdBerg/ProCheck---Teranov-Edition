@@ -38,13 +38,14 @@ class TaskAdapter extends TypeAdapter<Task> {
       departmentId: fields[18] == null ? '' : fields[18] as String,
       estimatedMinutes: fields[19] as int?,
       completedBy: fields[20] as String?,
+      updatedAt: fields[21] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Task obj) {
     writer
-      ..writeByte(20)
+      ..writeByte(21)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -84,7 +85,9 @@ class TaskAdapter extends TypeAdapter<Task> {
       ..writeByte(19)
       ..write(obj.estimatedMinutes)
       ..writeByte(20)
-      ..write(obj.completedBy);
+      ..write(obj.completedBy)
+      ..writeByte(21)
+      ..write(obj.updatedAt);
   }
 
   @override

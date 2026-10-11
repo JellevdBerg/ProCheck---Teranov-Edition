@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/activity_entry.dart';
 import '../models/attachment.dart';
+import '../models/outbox_entry.dart';
 import '../models/project.dart';
 import '../models/project_comment.dart';
 import '../models/subtask.dart';
@@ -18,6 +19,13 @@ const taskBoxName = 'tasks';
 const taskTemplateBoxName = 'task_templates';
 const settingsBoxName = 'settings';
 
+/// Pending `tasks`/`projects` writes that a flaky connection kept from
+/// reaching Supabase — see [SyncableNotifier]. Not wiped by
+/// Settings > Wipe All Data (that resets *this device's* cache, not
+/// in-flight syncs) but is cleared on sign-out, same as [taskBoxName]/
+/// [projectBoxName] — see `auth_provider.dart`.
+const outboxBoxName = 'outbox';
+
 /// Hive box files that live directly in the data directory (each has a
 /// matching `.lock` file), used when migrating data to a new location.
 const _boxFileNames = [
@@ -25,6 +33,7 @@ const _boxFileNames = [
   taskBoxName,
   taskTemplateBoxName,
   settingsBoxName,
+  outboxBoxName,
 ];
 
 /// Initializes Hive and opens the app's boxes.
@@ -48,6 +57,7 @@ Future<void> setUpHive({String? testDirectoryPath}) async {
   _registerAdapter(AttachmentAdapter());
   _registerAdapter(ActivityEntryAdapter());
   _registerAdapter(ProjectCommentAdapter());
+  _registerAdapter(OutboxEntryAdapter());
 
   await Future.wait([
     Hive.openBox<Project>(projectBoxName,
@@ -56,6 +66,8 @@ Future<void> setUpHive({String? testDirectoryPath}) async {
     Hive.openBox<TaskTemplate>(taskTemplateBoxName,
         compactionStrategy: _compactionStrategy),
     Hive.openBox(settingsBoxName, compactionStrategy: _compactionStrategy),
+    Hive.openBox<OutboxEntry>(outboxBoxName,
+        compactionStrategy: _compactionStrategy),
   ]);
 }
 

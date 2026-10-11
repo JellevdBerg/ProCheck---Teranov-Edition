@@ -5,6 +5,7 @@ import '../models/task.dart';
 import '../theme/nocturne_theme.dart';
 import 'nocturne/nocturne_widgets.dart';
 import 'panel/panel.dart';
+import 'sync_status_indicator.dart';
 import 'text_prompt_dialog.dart';
 
 /// The Hero tags a [ProjectCard]'s header shares with the thin bar header of
@@ -151,6 +152,7 @@ class _ProjectCardState extends State<ProjectCard> {
             ),
           ),
         ),
+        PendingSyncMark(table: 'projects', rowId: widget.project.id),
         _actionsMenu(context, visible: showActions || _menuOpen),
       ],
     );

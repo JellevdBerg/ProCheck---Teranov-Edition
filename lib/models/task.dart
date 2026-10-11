@@ -41,6 +41,7 @@ class Task extends HiveObject {
     this.departmentId = '',
     this.estimatedMinutes,
     this.completedBy,
+    this.updatedAt,
   }) : subtasks = subtasks ?? [],
        attachments = attachments ?? [],
        sortOrder = sortOrder ?? createdAt.millisecondsSinceEpoch.toDouble();
@@ -143,6 +144,15 @@ class Task extends HiveObject {
   @HiveField(20)
   String? completedBy;
 
+  /// This row's `updated_at` as last seen from the server — set by a
+  /// trigger there, never sent on write. Null for a row never confirmed on
+  /// the server (created offline, or local-only use). Used as the
+  /// optimistic-concurrency check in [SyncableNotifier.upsertWithConflictCheck]
+  /// so a locally-queued edit doesn't blindly overwrite a row someone else
+  /// changed in the meantime.
+  @HiveField(21)
+  DateTime? updatedAt;
+
   TaskPriority get priority => TaskPriority.fromIndex(priorityIndex);
   set priority(TaskPriority value) => priorityIndex = value.index;
 
@@ -181,6 +191,7 @@ class Task extends HiveObject {
     Object? estimatedMinutes = _unset,
     Object? completedBy = _unset,
   }) => Task(
+    updatedAt: updatedAt,
     id: id,
     title: title ?? this.title,
     createdAt: createdAt,
@@ -351,6 +362,9 @@ class Task extends HiveObject {
     departmentId: row['department_id'] as String,
     estimatedMinutes: row['estimated_minutes'] as int?,
     completedBy: row['completed_by'] as String?,
+    updatedAt: row['updated_at'] == null
+        ? null
+        : DateTime.parse(row['updated_at'] as String),
   );
 
   /// Maps this [Task] to a `tasks` table row for insert/update. Omits `id`
