@@ -74,6 +74,25 @@ Deno.serve(async (req) => {
     return Boolean(data?.is_operator || data?.is_it);
   }
 
+  // Phase 5: the same admin_audit table the SQL admin functions log into
+  // (via log_admin_audit()) — inserted directly since this function runs
+  // with the service-role client, outside any user JWT auth.uid() context.
+  async function audit(
+    auditAction: string,
+    targetId: string | null,
+    before: Record<string, unknown> | null,
+    after: Record<string, unknown> | null,
+  ) {
+    await admin.from("admin_audit").insert({
+      actor_id: callerId,
+      action: auditAction,
+      target_type: "profile",
+      target_id: targetId,
+      before,
+      after,
+    });
+  }
+
   try {
     switch (action) {
       case "create": {
@@ -126,6 +145,7 @@ Deno.serve(async (req) => {
           .eq("id", userId);
         if (updateErr) return json({ error: updateErr.message }, 400);
 
+        await audit("create_account", userId, null, { username, role, departmentId });
         return json({ userId });
       }
 
@@ -147,6 +167,8 @@ Deno.serve(async (req) => {
 
         const { error } = await admin.auth.admin.updateUserById(userId, { password });
         if (error) return json({ error: error.message }, 400);
+
+        await audit("reset_password", userId, null, null);
         return json({ ok: true });
       }
 
@@ -180,6 +202,12 @@ Deno.serve(async (req) => {
           .eq("id", userId);
         if (updateErr) return json({ error: updateErr.message }, 400);
 
+        await audit(
+          action === "deactivate" ? "deactivate_account" : "reactivate_account",
+          userId,
+          { is_active: action === "deactivate" },
+          { is_active: action === "reactivate" },
+        );
         return json({ ok: true });
       }
 
