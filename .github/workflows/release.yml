@@ -1,0 +1,130 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify tag matches pubspec.yaml version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pubspec_version=$(grep -m1 '^version:' pubspec.yaml | sed 's/version:[[:space:]]*//')
+          semver="${pubspec_version%%+*}"
+          if [ "$tag" != "$semver" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match pubspec.yaml version $semver" >&2
+            exit 1
+          fi
+
+  build:
+    needs: check-version
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate Hive adapters
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Enable Windows desktop
+        if: matrix.platform == 'windows'
+        run: flutter config --enable-windows-desktop
+
+      - name: Enable macOS desktop
+        if: matrix.platform == 'macos'
+        run: flutter config --enable-macos-desktop
+
+      - name: Build Windows release
+        if: matrix.platform == 'windows'
+        run: >
+          flutter build windows --release
+          --dart-define=SUPABASE_URL=${{ vars.SUPABASE_URL }}
+          --dart-define=SUPABASE_ANON_KEY=${{ vars.SUPABASE_ANON_KEY }}
+
+      - name: Build macOS release
+        if: matrix.platform == 'macos'
+        run: >
+          flutter build macos --release
+          --dart-define=SUPABASE_URL=${{ vars.SUPABASE_URL }}
+          --dart-define=SUPABASE_ANON_KEY=${{ vars.SUPABASE_ANON_KEY }}
+
+      - name: Package Windows build
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $zipName = "procheck-windows-${{ github.ref_name }}.zip"
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath $zipName
+          Get-FileHash -Algorithm SHA256 $zipName | ForEach-Object { "$($_.Hash.ToLower())  $zipName" } |
+            Out-File -Encoding ascii "SHA256SUMS-windows.txt"
+
+      - name: Package macOS build
+        if: matrix.platform == 'macos'
+        run: |
+          zip_name="procheck-macos-${{ github.ref_name }}.zip"
+          ditto -c -k --sequesterRsrc --keepParent build/macos/Build/Products/Release/procheck.app "$zip_name"
+          shasum -a 256 "$zip_name" > SHA256SUMS-macos.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: procheck-${{ matrix.platform }}-${{ github.ref_name }}
+          path: |
+            procheck-${{ matrix.platform }}-${{ github.ref_name }}.zip
+            SHA256SUMS-${{ matrix.platform }}.txt
+          retention-days: 30
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Assemble release files
+        run: |
+          mkdir -p release
+          find dist -name '*.zip' -exec cp {} release/ \;
+          cat dist/*/SHA256SUMS-*.txt > release/SHA256SUMS.txt
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "ProCheck ${{ github.ref_name }}"
+          body: |
+            Built by CI from commit ${{ github.sha }}.
+
+            **macOS:** download the `procheck-macos-*.zip` below, unzip it, and
+            drag `procheck.app` to Applications. This build is not code-signed
+            or notarized, so macOS Gatekeeper will block it on first launch.
+            Right-click (or Control-click) the app, choose "Open", then confirm
+            "Open" in the dialog that appears — you only need to do this once.
+
+            **Windows:** download the `procheck-windows-*.zip` below, unzip it,
+            and run `procheck.exe`.
+
+            `SHA256SUMS.txt` lists the checksum for each zip above.
+          prerelease: false
+          files: release/*
