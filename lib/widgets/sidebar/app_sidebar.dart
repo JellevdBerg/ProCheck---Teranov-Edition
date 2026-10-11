@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive/hive.dart';
 
+import '../../data/hive_setup.dart';
 import '../../models/department.dart';
+import '../../models/outbox_entry.dart';
 import '../../models/project.dart';
 import '../../models/task.dart';
 import '../../providers/auth_provider.dart';
@@ -409,6 +414,14 @@ class AppSidebar extends ConsumerWidget {
     );
     if (confirmed ?? false) {
       await ref.read(authControllerProvider).signOut();
+      // Hive boxes live on this device, not per-account — without this,
+      // whoever signs in next on the same machine would see the previous
+      // person's tasks/projects until their own pull replaces them, and
+      // any outbox entries still trying to reach the old account's rows
+      // would keep retrying under the new session.
+      ref.read(tasksProvider.notifier).clearAll();
+      ref.read(projectsProvider.notifier).clearAll();
+      unawaited(Hive.box<OutboxEntry>(outboxBoxName).clear());
       if (!context.mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),

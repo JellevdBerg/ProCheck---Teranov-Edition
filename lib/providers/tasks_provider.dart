@@ -42,7 +42,12 @@ class TasksNotifier extends StateNotifier<List<Task>>
   TasksNotifier(this.ref) : super(_box.values.toList()) {
     _sortState();
     unawaited(profileReady);
-    unawaited(pullFromSupabase().then((_) => subscribeRealtime()));
+    unawaited(
+      pullFromSupabase().then((_) {
+        subscribeRealtime();
+        unawaited(replayOutbox());
+      }),
+    );
   }
 
   @override
@@ -98,11 +103,13 @@ class TasksNotifier extends StateNotifier<List<Task>>
           .recordError(source: 'tasks', action: 'upsert', error: e);
       _rollback(task, previous, e);
     } catch (e) {
-      // Offline/network failure — stays local-only by design, same as
-      // always; only logged for the dev panel.
+      // Offline/network failure — queued for retry (see
+      // [SyncableNotifier.replayOutbox]); only logged here for the dev
+      // panel.
       ref
           .read(syncLogProvider.notifier)
           .recordError(source: 'tasks', action: 'upsert', error: e);
+      enqueueOutbox(task.id, task.toSupabase());
     }
   }
 
@@ -145,6 +152,9 @@ class TasksNotifier extends StateNotifier<List<Task>>
       ref
           .read(syncLogProvider.notifier)
           .recordError(source: 'tasks', action: 'upsert', error: e);
+      for (final task in syncable) {
+        enqueueOutbox(task.id, task.toSupabase());
+      }
     }
   }
 
@@ -154,10 +164,13 @@ class TasksNotifier extends StateNotifier<List<Task>>
     try {
       await supabase.from('tasks').delete().eq('id', taskId);
     } catch (e) {
-      // Best-effort.
+      // Best-effort — queued for retry if this was a network failure
+      // (a server-side rejection of a delete isn't expected here, since
+      // the task is already gone locally either way).
       ref
           .read(syncLogProvider.notifier)
           .recordError(source: 'tasks', action: 'delete', error: e);
+      enqueueOutbox(taskId, null);
     }
   }
 

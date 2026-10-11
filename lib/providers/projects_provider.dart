@@ -41,7 +41,12 @@ class ProjectsNotifier extends StateNotifier<List<Project>>
   ProjectsNotifier(this.ref) : super(_box.values.toList()) {
     _sortState();
     unawaited(profileReady);
-    unawaited(pullFromSupabase().then((_) => subscribeRealtime()));
+    unawaited(
+      pullFromSupabase().then((_) {
+        subscribeRealtime();
+        unawaited(replayOutbox());
+      }),
+    );
   }
 
   @override
@@ -109,10 +114,15 @@ class ProjectsNotifier extends StateNotifier<List<Project>>
       _rollback(project, previous, e);
       return false;
     } catch (e) {
-      // Offline/network failure — stays local-only by design.
+      // Offline/network failure — queued for retry (see
+      // [SyncableNotifier.replayOutbox]).
       ref
           .read(syncLogProvider.notifier)
           .recordError(source: 'projects', action: 'upsert', error: e);
+      enqueueOutbox(
+        project.id,
+        project.toSupabase(includeAppendOnly: includeAppendOnly),
+      );
       return false;
     }
   }
@@ -180,10 +190,11 @@ class ProjectsNotifier extends StateNotifier<List<Project>>
     try {
       await supabase.from('projects').delete().eq('id', projectId);
     } catch (e) {
-      // Best-effort.
+      // Best-effort — queued for retry if this was a network failure.
       ref
           .read(syncLogProvider.notifier)
           .recordError(source: 'projects', action: 'delete', error: e);
+      enqueueOutbox(projectId, null);
     }
   }
 

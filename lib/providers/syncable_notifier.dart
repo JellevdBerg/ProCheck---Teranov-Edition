@@ -1,16 +1,22 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../data/app_messenger.dart';
+import '../data/hive_setup.dart';
 import '../data/supabase_config.dart';
+import '../models/outbox_entry.dart';
 import 'sync_log_provider.dart';
 
 /// Shared sync plumbing for [TasksNotifier]/[ProjectsNotifier]: loading the
 /// signed-in user's own profile (for stamping new rows), a one-time pull on
-/// construction, and a realtime subscription that keeps [state] current —
-/// previously duplicated near-identically between the two notifiers.
+/// construction, a realtime subscription that keeps [state] current, and a
+/// persistent outbox that retries whatever that pull/mirror plumbing
+/// couldn't reach Supabase with — previously duplicated near-identically
+/// between the two notifiers.
 ///
 /// A mixing class `T` supplies the table name and row mapping; everything
 /// else (profile caching, best-effort error logging, channel lifecycle) is
@@ -33,6 +39,17 @@ mixin SyncableNotifier<T> on StateNotifier<List<T>> {
   void resortState();
 
   RealtimeChannel? _channel;
+  static Box<OutboxEntry> get _outboxBox =>
+      Hive.box<OutboxEntry>(outboxBoxName);
+
+  /// How many replay attempts a queued entry gets on a network failure
+  /// before it's left queued (still counted, still retried on next app
+  /// start) but no longer auto-retried this session.
+  static const _maxOutboxAttempts = 8;
+
+  Timer? _retryTimer;
+
+  String _outboxKey(String rowId) => '$syncTable:$rowId';
 
   /// Cached from the signed-in user's own `profiles` row — used to stamp
   /// `ownerId`/`departmentId` on rows created after this resolves.
@@ -124,7 +141,86 @@ mixin SyncableNotifier<T> on StateNotifier<List<T>> {
     }
   }
 
+  /// Queues [rowId] for retry after a network failure mirroring it —
+  /// [payload] is the row's `toSupabase()` map for an upsert, or null for a
+  /// delete. Coalesces per row: replaces whatever was already queued for
+  /// [rowId], so only the latest local state for it is ever replayed.
+  void enqueueOutbox(String rowId, Map<String, dynamic>? payload) {
+    unawaited(
+      _outboxBox.put(
+        _outboxKey(rowId),
+        OutboxEntry(
+          table: syncTable,
+          rowId: rowId,
+          opIndex: (payload == null ? OutboxOp.delete : OutboxOp.upsert).index,
+          payload: payload,
+        ),
+      ),
+    );
+    _scheduleRetry();
+  }
+
+  void _scheduleRetry() {
+    _retryTimer?.cancel();
+    final pending = _outboxBox.values.where((e) => e.table == syncTable);
+    if (pending.isEmpty) return;
+    final attempts = pending.map((e) => e.attempts).reduce(max);
+    if (attempts >= _maxOutboxAttempts) return;
+    // 2s, 4s, 8s, ... capped at 2 minutes.
+    final delay = Duration(seconds: min(120, 2 << attempts));
+    _retryTimer = Timer(delay, () => unawaited(replayOutbox()));
+  }
+
+  /// Replays every queued local change for [syncTable], oldest first — one
+  /// at a time, so an early failure doesn't abort the rest. Called once
+  /// after the launch-time pull (covering both "app start" and "was
+  /// offline at launch, network came back"), and again on its own backoff
+  /// schedule for as long as entries remain.
+  Future<void> replayOutbox() async {
+    _retryTimer?.cancel();
+    if (!isSupabaseConfigured) return;
+    if (supabase.auth.currentUser == null) return;
+    final entries =
+        _outboxBox.values.where((e) => e.table == syncTable).toList()
+          ..sort((a, b) => a.queuedAt.compareTo(b.queuedAt));
+    for (final entry in entries) {
+      if (entry.attempts >= _maxOutboxAttempts) continue;
+      try {
+        if (entry.op == OutboxOp.delete) {
+          await supabase.from(syncTable).delete().eq('id', entry.rowId);
+        } else {
+          await supabase.from(syncTable).upsert(entry.payload!);
+        }
+        unawaited(_outboxBox.delete(_outboxKey(entry.rowId)));
+      } on PostgrestException catch (e) {
+        // The server actively refused this — retrying won't change that
+        // (RLS, a bad value, the row no longer existing). Drop it rather
+        // than retrying forever; the local copy stays as the user left it
+        // (there's no "previous" snapshot left to roll back to by the
+        // time a *replay* is refused, unlike the original edit's own
+        // same-request rejection), so tell them it never made it up.
+        ref
+            .read(syncLogProvider.notifier)
+            .recordError(source: syncTable, action: 'outbox', error: e);
+        unawaited(_outboxBox.delete(_outboxKey(entry.rowId)));
+        showSyncFailureToast(
+          'A change made while offline couldn\'t be saved: ${e.message}',
+        );
+      } catch (e) {
+        // Still offline/unreachable — leave it queued and count the
+        // attempt, so a permanently-stuck entry eventually stops being
+        // retried every app start.
+        unawaited(
+          _outboxBox.put(_outboxKey(entry.rowId), entry
+            ..attempts += 1),
+        );
+      }
+    }
+    _scheduleRetry();
+  }
+
   void disposeSync() {
+    _retryTimer?.cancel();
     final channel = _channel;
     if (channel != null) {
       unawaited(supabase.removeChannel(channel));
