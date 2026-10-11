@@ -12,6 +12,16 @@ The other ~45 rows in that table are still manual-only — rolled back by
 hand in a Supabase SQL editor transaction — and are not automated here.
 Follow-up work, not covered in this PR.
 
+`database/phase5_audit_and_lifecycle_test.sql` (added in the Phase 5
+hardening PR) covers the four scenarios that PR's spec item asked for:
+a non-admin can't read another department's name (visibility narrowed
+from `using (true)`), a client can't write `admin_audit` directly or via
+`log_admin_audit()` to fake an actor, a deactivated person can't be
+assigned a task, and the Operator can't act on their own account through
+the DB-level admin functions (the matching Edge Function self-action
+guard is TypeScript and needs a deployed-function integration test, out
+of reach here).
+
 ## Running it
 
 ```
@@ -21,23 +31,36 @@ supabase test db
 This needs the Supabase CLI and its local stack (`supabase start`), which
 pulls containers from `ghcr.io` — unavailable in this sandbox, so these
 tests were authored and validated against a hand-built local stand-in
-instead (plain PostgreSQL 16 + pgTAP built from source + a minimal stub of
-`auth.users`/`auth.identities`/`auth.uid()`/`auth.role()`), then confirmed
-green (18/18 assertions) before being committed. They have not been run
-through the real `supabase test db` path, so give it a first real run
-before trusting it blindly in CI.
+instead: plain PostgreSQL 16 + pgTAP (`apt-get install postgresql-server-dev-16
+postgresql-16-pgtap`, both available directly via apt on this sandbox's
+Ubuntu mirror — no build-from-source needed) + a minimal stub of
+`auth.users`/`auth.identities`/`auth.uid()`/`auth.role()`, with every
+migration file under `supabase/migrations/` applied in order on top.
+`permissions_test.sql` was confirmed green (18/18) before being
+committed; `phase5_audit_and_lifecycle_test.sql` the same (6/6), run
+together with it (24/24) to rule out cross-test interference. Neither has
+been run through the real `supabase test db` path, so give both a first
+real run before trusting them blindly in CI.
 
-One thing the stand-in needed that `supabase test db` won't: an explicit
-`grant execute on function public.is_admin() to authenticated;` (and the
-same for `my_department`, `is_dept_manager`, `has_dept_permission`,
-`is_it_manager`, `is_operator`, `current_profile`). These functions are
-revoked from `public`/`anon` in `combined_setup.sql` but never re-granted
-to `authenticated` — on the real Supabase platform that's fine, because
-Supabase grants `authenticated` default schema-level EXECUTE privileges
-outside of any migration (confirmed against the live "ProCheck Multi-User"
-project: `authenticated` already has execute on these). A plain local
-Postgres has no such platform default, so a hand-built stand-in needs
-those grants added itself — not as a migration in this repo.
+Three things the stand-in needed that `supabase test db` won't, because
+they're platform defaults on real Supabase rather than anything a
+migration sets up:
+- `grant execute on function public.is_admin() to authenticated;` (and
+  the same for `my_department`, `is_dept_manager`, `has_dept_permission`,
+  `is_it_manager`, `is_operator`, `current_profile`) — confirmed against
+  the live "ProCheck Multi-User" project that `authenticated` already
+  has execute on these.
+- `grant select, insert, update, delete on all tables in schema public to
+  authenticated;` plus `grant usage on all sequences ... to authenticated;`
+  — Supabase's own project template grants this at creation time, before
+  any migration runs; apply it to the stand-in *before* running the
+  migrations (a migration that explicitly revokes/narrows a table, like
+  `admin_audit`'s, must still run after, to end up as the final state —
+  re-apply that specific revoke if you build the stand-in in this order).
+- `create publication supabase_realtime;` — needed only so
+  `alter publication supabase_realtime add table ...` and `... replica
+  identity full`'s migrations don't error; nothing in these tests
+  exercises realtime itself.
 
 ## CI
 
