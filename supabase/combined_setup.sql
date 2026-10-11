@@ -1545,7 +1545,7 @@ create policy department_roles_delete on public.department_roles
 
 -- A role's department can never change (it would "reach across departments").
 create or replace function public.protect_department_role()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = public as $$
 begin
   if new.department_id is distinct from old.department_id then
     raise exception 'A role cannot be moved to another department';
