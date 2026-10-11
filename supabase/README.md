@@ -53,6 +53,20 @@ about them — see the project memory/chat for the one-time
 it doesn't try to re-run them. `combined_setup.sql` is only there for the
 dashboard path above; keep it in sync with `migrations/` if either changes.
 
+A handful of migrations were also applied by hand (or via a one-off MCP
+`execute_sql` call) with a timestamp different from the one the file was
+later given in `migrations/` — the live project's migration-history table
+and this repo can drift apart that way. Before trusting the CLI/GitHub
+integration to apply the *next* new migration cleanly, confirm the live
+history's versions match `migrations/`'s filenames exactly (`supabase
+migration list` or the Supabase dashboard's migration history); if they
+don't, reconcile with `supabase migration repair --status applied
+<version>` (to relabel a live entry) rather than editing an
+already-applied migration file, and never apply a file through
+`execute_sql` without also inserting its row into
+`supabase_migrations.schema_migrations` — the GitHub integration's own
+drift check relies on that table matching `migrations/` 1:1.
+
 ## Username/password auth, no email in the UI, no self-signup
 
 ProCheck signs people in by username, not email — but Supabase Auth still
@@ -85,21 +99,52 @@ API.
 ### The permanent "Dev" / Operator test account
 
 `20261008101500_username_auth_and_dev_seed.sql` seeds a permanent account
-— username `Dev`, password `testing`, in the Operator department as a
-manager — so you can always sign in and verify how the app looks and
-behaves for any role.
+— username `Dev`, in the Operator department as a manager — so you can
+always sign in and verify how the app looks and behaves for any role. Its
+password is **not written here or in any other committed file** — this
+repo was briefly public with that password documented in plain text, so
+treat it as already compromised: rotate it (Authentication → Users → find
+`Dev` → reset password) before relying on it, and don't re-commit the new
+one anywhere, including chat or a PR description.
 
-**This is dev/testing only.** `testing` is a deliberately weak password on
-a live project. Either remove this account or change its password before
-any real company rollout.
+**This is dev/testing only.** Either remove this account or change its
+password before any real company rollout.
 
 That migration inserts directly into `auth.users`/`auth.identities`,
 which isn't a documented/supported Supabase API — it matches the current
 GoTrue schema, but if a future Supabase upgrade changes that schema, the
 insert may error. If it does, create the account the normal way instead
-(**Authentication → Add user**, email `dev@procheck.local`, password
-`testing`, confirm it), then run just the final `update profiles set
+(**Authentication → Add user**, email `dev@procheck.local`, choose your
+own password, confirm it), then run just the final `update profiles set
 role = 'manager', department_id = ...` statement from that file by hand.
+
+A fresh environment still needs *some* way to get a first Operator
+account without baking a known password into a committed migration again.
+Proposed for a future pass (not done in this PR, since it'd change how
+every existing environment seeds, and the already-applied
+`20261008101500_username_auth_and_dev_seed.sql` is left as-is rather than
+edited after the fact): stop adding new dev/test accounts to
+`migrations/`, which ships to every environment including production, and
+instead add a local-only `supabase/seed.sql` (gitignored, or committed
+with a placeholder password that each developer edits before running
+`supabase db reset`) that only ever runs against a local `supabase start`
+stack. Whoever first provisions a *new* live project creates its first
+Operator account by hand (**Authentication → Add user**, then the
+`update profiles ...` statement above) and rotates that password into
+their own password manager — never into a file.
+
+### Dashboard settings to verify on this project
+
+These are dashboard-only actions Claude sessions working on this repo
+must not change themselves — verify them, don't flip them:
+
+- **Authentication → Providers → Email → "Allow new users to sign up"**
+  is **off**. (`20261010090000_signup_db_backstop.sql` enforces this at
+  the database level too, once applied — see below — but the dashboard
+  toggle is the first line of defense.)
+- **The `Dev` account's password is not `testing`** (or any other value
+  that was ever committed to this repo or pasted in chat/a PR). Rotate it
+  under Authentication → Users if you're not sure.
 
 ## Operator admin provisioning
 
