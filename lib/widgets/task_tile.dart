@@ -872,10 +872,14 @@ class _AssigneeAndEstimateRow extends ConsumerWidget {
         : directory[task.ownerId]?.displayName;
     // Everyone in the task's department, by name (the directory works for
     // roles that can assign tasks but cannot read other profiles directly).
+    // Deactivated people (Phase 4 lifecycle) drop out of the pickable
+    // options — the putIfAbsent below still shows a name if the task is
+    // already assigned to one, so history keeps reading correctly.
     final byId = <String, String>{
-      for (final m in members) m.id: m.displayName,
+      for (final m in members)
+        if (m.isActive) m.id: m.displayName,
       for (final e in directory.values)
-        if (e.departmentId == task.departmentId) e.id: e.displayName,
+        if (e.departmentId == task.departmentId && e.isActive) e.id: e.displayName,
     };
     if (task.assigneeId != null && assignee != null) {
       byId.putIfAbsent(task.assigneeId!, () => assignee);

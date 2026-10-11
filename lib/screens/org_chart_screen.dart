@@ -344,8 +344,15 @@ class _ChartPainter extends CustomPainter {
   final _Node? highlight;
   final Color Function(String) departmentColor;
 
+  /// Whether this node is a deactivated person or an archived department —
+  /// shown greyed out and left out of search highlighting either way.
+  bool _isRetired(_Node n) =>
+      (n.profile != null && !n.profile!.isActive) ||
+      (n.kind == _Kind.department && n.department.isArchived);
+
   bool _matches(_Node n) {
     if (query.isEmpty) return true;
+    if (_isRetired(n)) return false;
     return n.label.toLowerCase().contains(query) ||
         (n.profile?.username.toLowerCase().contains(query) ?? false) ||
         n.department.name.toLowerCase().contains(query) && n.kind == _Kind.department;
@@ -367,8 +374,9 @@ class _ChartPainter extends CustomPainter {
     for (final n in layout.nodes) {
       final p = n.at(t);
       final hue = departmentColor(n.department.name);
-      final dim = !_matches(n);
-      final alpha = dim ? 0.2 : 1.0;
+      final retired = _isRetired(n);
+      final dim = !_matches(n) || retired;
+      final alpha = dim ? (retired ? 0.35 : 0.2) : 1.0;
       final isHot = identical(n, highlight);
       switch (n.kind) {
         case _Kind.department:
@@ -470,9 +478,11 @@ class _DetailCard extends StatelessWidget {
           : node.department.isIt
           ? 'IT department'
           : 'Department'));
+      if (node.department.isArchived) rows.add(('Status', 'Archived'));
       rows.add(('People', node.counts ?? ''));
     } else {
       rows.add(('Role', p.isManager ? 'Manager' : (node.title ?? 'Member')));
+      if (!p.isActive) rows.add(('Status', 'Inactive'));
       rows.add(('Username', p.username));
       rows.add(('Department', node.department.name));
       if (p.createdAt != null) {

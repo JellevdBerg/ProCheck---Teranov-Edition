@@ -93,6 +93,8 @@ class AdminScreen extends ConsumerWidget {
                             data: (departments) => _DepartmentList(
                               departments: departments,
                               isOperator: isOperator,
+                              onArchive: (department) =>
+                                  _archiveDepartment(context, ref, department),
                               onDelete: (department) =>
                                   _deleteDepartment(context, ref, department),
                             ),
@@ -124,6 +126,10 @@ class AdminScreen extends ConsumerWidget {
                                   departmentsAsync.valueOrNull ?? const [],
                               isOperator: isOperator,
                               currentUserId: supabase.auth.currentUser?.id,
+                              onDeactivate: (person) =>
+                                  _deactivateAccount(context, ref, person),
+                              onReactivate: (person) =>
+                                  _reactivateAccount(context, ref, person),
                               onDelete: (person) =>
                                   _deleteAccount(context, ref, person),
                             ),
@@ -201,6 +207,54 @@ class AdminScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _archiveDepartment(
+    BuildContext context,
+    WidgetRef ref,
+    Department department,
+  ) async {
+    final projectRows = await supabase
+        .from('projects')
+        .select('id')
+        .eq('department_id', department.id);
+    final projectCount = (projectRows as List).length;
+    if (projectCount > 0) {
+      if (context.mounted) {
+        _showError(
+          context,
+          '"${department.name}" still owns $projectCount project'
+          '${projectCount == 1 ? '' : 's'} — move them to another '
+          'department first.',
+        );
+      }
+      return;
+    }
+
+    if (!context.mounted) return;
+    final memberCount =
+        ref.read(departmentMembersProvider).valueOrNull
+            ?.where((p) => p.departmentId == department.id)
+            .length ??
+        0;
+    final confirmed = await _confirmDelete(
+      context,
+      title: 'Archive department?',
+      message:
+          '"${department.name}" has $memberCount member'
+          '${memberCount == 1 ? '' : 's'}. Archiving hides it from new '
+          "project or member assignment but keeps its history. It won't "
+          'delete anything.',
+      actionLabel: 'Archive',
+    );
+    if (!confirmed) return;
+
+    try {
+      await ref.read(adminControllerProvider).archiveDepartment(department.id);
+      ref.invalidate(departmentsProvider);
+    } on AuthException catch (e) {
+      if (context.mounted) _showError(context, e.message);
+    }
+  }
+
   Future<void> _deleteDepartment(
     BuildContext context,
     WidgetRef ref,
@@ -209,10 +263,11 @@ class AdminScreen extends ConsumerWidget {
     if (department.isOperator) return; // defence in depth; no button is shown
     final confirmed = await _confirmDelete(
       context,
-      title: 'Delete department?',
+      title: 'Delete department permanently?',
       message:
-          'This removes "${department.name}". Its members stay, just '
-          'unassigned.',
+          'This permanently removes "${department.name}". Only possible '
+          "because it has no members or projects left — there's nothing "
+          'to undo this.',
     );
     if (!confirmed) return;
 
@@ -225,17 +280,66 @@ class AdminScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _deactivateAccount(
+    BuildContext context,
+    WidgetRef ref,
+    Profile person,
+  ) async {
+    final openTaskRows = await supabase
+        .from('tasks')
+        .select('id')
+        .eq('is_checked', false)
+        .or('owner_id.eq.${person.id},assignee_id.eq.${person.id}');
+    final openTasks = (openTaskRows as List).length;
+    if (!context.mounted) return;
+
+    final confirmed = await _confirmDelete(
+      context,
+      title: 'Deactivate account?',
+      message:
+          '@${person.username} has $openTasks open task'
+          '${openTasks == 1 ? '' : 's'} (owned or assigned). Deactivating '
+          'bans sign-in and drops them from new assignment, but keeps '
+          'their history. This can be undone.',
+      actionLabel: 'Deactivate',
+    );
+    if (!confirmed) return;
+
+    try {
+      await ref.read(adminControllerProvider).deactivateAccount(person.id);
+      ref.invalidate(departmentMembersProvider);
+    } on AuthException catch (e) {
+      if (context.mounted) _showError(context, e.message);
+    }
+  }
+
+  Future<void> _reactivateAccount(
+    BuildContext context,
+    WidgetRef ref,
+    Profile person,
+  ) async {
+    try {
+      await ref.read(adminControllerProvider).reactivateAccount(person.id);
+      ref.invalidate(departmentMembersProvider);
+    } on AuthException catch (e) {
+      if (context.mounted) _showError(context, e.message);
+    }
+  }
+
   Future<void> _deleteAccount(
     BuildContext context,
     WidgetRef ref,
     Profile person,
   ) async {
-    final confirmed = await _confirmDelete(
+    final typed = await _typeToConfirm(
       context,
-      title: 'Delete account?',
-      message: 'This permanently removes @${person.username}.',
+      title: 'Delete account permanently?',
+      message:
+          'This permanently removes @${person.username} and cannot be '
+          'undone. Type the username to confirm.',
+      expected: person.username,
     );
-    if (!confirmed) return;
+    if (!typed) return;
 
     try {
       await ref.read(adminControllerProvider).deleteAccount(person.id);
@@ -249,6 +353,7 @@ class AdminScreen extends ConsumerWidget {
     BuildContext context, {
     required String title,
     required String message,
+    String actionLabel = 'Delete',
   }) async {
     final confirmed = await showBlurredDialog<bool>(
       context: context,
@@ -261,11 +366,59 @@ class AdminScreen extends ConsumerWidget {
             onPressed: () => Navigator.of(context).pop(false),
           ),
           NocturneButton(
-            label: 'Delete',
+            label: actionLabel,
             variant: NocturneButtonVariant.primary,
             onPressed: () => Navigator.of(context).pop(true),
           ),
         ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
+  /// A typed-confirmation dialog for the irreversible actions (hard
+  /// delete of an account or a department): the Delete button only
+  /// enables once the typed text matches [expected] exactly.
+  Future<bool> _typeToConfirm(
+    BuildContext context, {
+    required String title,
+    required String message,
+    required String expected,
+  }) async {
+    final controller = TextEditingController();
+    final confirmed = await showBlurredDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text(title),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                decoration: InputDecoration(labelText: expected),
+                onChanged: (_) => setState(() {}),
+              ),
+            ],
+          ),
+          actions: [
+            NocturneButton(
+              label: 'Cancel',
+              onPressed: () => Navigator.of(context).pop(false),
+            ),
+            NocturneButton(
+              label: 'Delete',
+              variant: NocturneButtonVariant.primary,
+              onPressed: controller.text == expected
+                  ? () => Navigator.of(context).pop(true)
+                  : null,
+            ),
+          ],
+        ),
       ),
     );
     return confirmed ?? false;
@@ -530,11 +683,13 @@ class _DepartmentList extends StatelessWidget {
   const _DepartmentList({
     required this.departments,
     required this.isOperator,
+    required this.onArchive,
     required this.onDelete,
   });
 
   final List<Department> departments;
   final bool isOperator;
+  final ValueChanged<Department> onArchive;
   final ValueChanged<Department> onDelete;
 
   @override
@@ -554,37 +709,80 @@ class _DepartmentList extends StatelessWidget {
   }
 
   Widget _row(BuildContext context, Department department) {
-    return Padding(
-      padding: const EdgeInsets.only(
-        left: NocturneSpace.s3,
-        right: NocturneSpace.s1,
-      ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 44),
-        child: Row(
-          children: [
-            // Hue dot (ordinary) or glyph (Operator / IT) + name.
-            Flexible(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: DepartmentPlate(
-                  name: department.name,
-                  isOperator: department.isOperator,
-                  isIt: department.isIt,
+    final tokens = context.nocturne;
+    final canManage = !department.isOperator &&
+        (isOperator || !department.isAdminTier);
+    final canDeleteEmpty = canManage; // the backend only allows it if empty
+    return Opacity(
+      opacity: department.isArchived ? 0.55 : 1,
+      child: Padding(
+        padding: const EdgeInsets.only(
+          left: NocturneSpace.s3,
+          right: NocturneSpace.s1,
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Row(
+            children: [
+              // Hue dot (ordinary) or glyph (Operator / IT) + name.
+              Flexible(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: DepartmentPlate(
+                          name: department.name,
+                          isOperator: department.isOperator,
+                          isIt: department.isIt,
+                        ),
+                      ),
+                      if (department.isArchived) ...[
+                        const SizedBox(width: NocturneSpace.s2),
+                        Text(
+                          'Archived',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: tokens.neutral500,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-            // The Operator department can never be removed; only an Operator
-            // can remove the IT department — same asymmetry as creating one.
-            if (!department.isOperator &&
-                (isOperator || !department.isAdminTier))
-              IconButton(
-                icon: const Icon(Icons.delete_outline, size: 18),
-                onPressed: () => onDelete(department),
-              )
-            else
-              const SizedBox(width: _kActionWidth),
-          ],
+              // The Operator department can never be touched; only an
+              // Operator can archive/delete the IT department — same
+              // asymmetry as creating one.
+              if (canManage)
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, size: 18),
+                  onSelected: (action) {
+                    switch (action) {
+                      case 'archive':
+                        onArchive(department);
+                      case 'delete':
+                        onDelete(department);
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    if (!department.isArchived)
+                      const PopupMenuItem(
+                        value: 'archive',
+                        child: Text('Archive'),
+                      ),
+                    if (canDeleteEmpty)
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Text('Delete permanently…'),
+                      ),
+                  ],
+                )
+              else
+                const SizedBox(width: _kActionWidth),
+            ],
+          ),
         ),
       ),
     );
@@ -597,6 +795,8 @@ class _PeopleList extends StatelessWidget {
     required this.departments,
     required this.isOperator,
     required this.currentUserId,
+    required this.onDeactivate,
+    required this.onReactivate,
     required this.onDelete,
   });
 
@@ -604,6 +804,8 @@ class _PeopleList extends StatelessWidget {
   final List<Department> departments;
   final bool isOperator;
   final String? currentUserId;
+  final ValueChanged<Profile> onDeactivate;
+  final ValueChanged<Profile> onReactivate;
   final ValueChanged<Profile> onDelete;
 
   @override
@@ -668,10 +870,24 @@ class _PeopleList extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          person.displayName,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodyLarge,
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                person.displayName,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+            ),
+            if (!person.isActive) ...[
+              const SizedBox(width: NocturneSpace.s2),
+              Text(
+                'Inactive',
+                style: TextStyle(fontSize: 12, color: tokens.neutral500),
+              ),
+            ],
+          ],
         ),
         Text(
           '@${person.username}',
@@ -689,42 +905,106 @@ class _PeopleList extends StatelessWidget {
   );
 
   Widget _action(Profile person) {
-    if (_canDelete(person)) {
-      return IconButton(
-        icon: const Icon(Icons.delete_outline, size: 18),
-        onPressed: () => onDelete(person),
-      );
+    if (!_canManage(person)) {
+      // Keeps the columns aligned when there is no action menu.
+      return const SizedBox(width: _kActionWidth);
     }
-    // Keeps the columns aligned when there is no delete icon.
-    return const SizedBox(width: _kActionWidth);
+    final canHardDelete = isOperator && person.username.toLowerCase() != 'dev';
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert, size: 18),
+      onSelected: (action) {
+        switch (action) {
+          case 'deactivate':
+            onDeactivate(person);
+          case 'reactivate':
+            onReactivate(person);
+          case 'delete':
+            onDelete(person);
+        }
+      },
+      itemBuilder: (context) => [
+        if (person.isActive)
+          const PopupMenuItem(value: 'deactivate', child: Text('Deactivate'))
+        else
+          const PopupMenuItem(value: 'reactivate', child: Text('Reactivate')),
+        if (canHardDelete)
+          const PopupMenuItem(
+            value: 'delete',
+            child: Text('Delete permanently…'),
+          ),
+      ],
+    );
   }
 
   Widget _tableRow(BuildContext context, Profile person) {
     final department = _departmentOf(person);
-    return Padding(
-      padding: const EdgeInsets.only(
-        left: NocturneSpace.s3,
-        right: NocturneSpace.s1,
+    return Opacity(
+      opacity: person.isActive ? 1 : 0.55,
+      child: Padding(
+        padding: const EdgeInsets.only(
+          left: NocturneSpace.s3,
+          right: NocturneSpace.s1,
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Row(
+            children: [
+              _avatar(person),
+              const SizedBox(width: NocturneSpace.s3),
+              Expanded(child: _name(context, person)),
+              SizedBox(
+                width: 96,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: RolePlate(isManager: person.isManager),
+                ),
+              ),
+              SizedBox(
+                width: 200,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: department == null ? null : _plate(department),
+                ),
+              ),
+              _action(person),
+            ],
+          ),
+        ),
       ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48),
+    );
+  }
+
+  Widget _stackedRow(BuildContext context, Profile person) {
+    final department = _departmentOf(person);
+    return Opacity(
+      opacity: person.isActive ? 1 : 0.55,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          NocturneSpace.s3,
+          NocturneSpace.s2,
+          NocturneSpace.s1,
+          NocturneSpace.s2,
+        ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _avatar(person),
             const SizedBox(width: NocturneSpace.s3),
-            Expanded(child: _name(context, person)),
-            SizedBox(
-              width: 96,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: RolePlate(isManager: person.isManager),
-              ),
-            ),
-            SizedBox(
-              width: 200,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: department == null ? null : _plate(department),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _name(context, person),
+                  const SizedBox(height: NocturneSpace.s1),
+                  Wrap(
+                    spacing: NocturneSpace.s2,
+                    runSpacing: NocturneSpace.s1,
+                    children: [
+                      RolePlate(isManager: person.isManager),
+                      if (department != null) _plate(department),
+                    ],
+                  ),
+                ],
               ),
             ),
             _action(person),
@@ -734,49 +1014,11 @@ class _PeopleList extends StatelessWidget {
     );
   }
 
-  Widget _stackedRow(BuildContext context, Profile person) {
-    final department = _departmentOf(person);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        NocturneSpace.s3,
-        NocturneSpace.s2,
-        NocturneSpace.s1,
-        NocturneSpace.s2,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _avatar(person),
-          const SizedBox(width: NocturneSpace.s3),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _name(context, person),
-                const SizedBox(height: NocturneSpace.s1),
-                Wrap(
-                  spacing: NocturneSpace.s2,
-                  runSpacing: NocturneSpace.s1,
-                  children: [
-                    RolePlate(isManager: person.isManager),
-                    if (department != null) _plate(department),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          _action(person),
-        ],
-      ),
-    );
-  }
-
-  bool _canDelete(Profile person) {
+  bool _canManage(Profile person) {
     if (person.id == currentUserId) return false;
-    if (person.username.toLowerCase() == 'dev') return false;
     final department = _departmentOf(person);
-    // Only an Operator can remove someone from the Operator/IT department —
-    // same asymmetry as creating an account there.
+    // Only an Operator can deactivate/delete someone in the Operator/IT
+    // department — same asymmetry as creating an account there.
     if (department?.isAdminTier ?? false) return isOperator;
     return true;
   }
