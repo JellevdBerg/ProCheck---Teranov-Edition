@@ -16,6 +16,7 @@ import '../widgets/create_task_sheet.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
 import '../widgets/sidebar/app_sidebar.dart';
 import '../widgets/text_prompt_dialog.dart';
+import '../widgets/update_banner.dart';
 import 'admin_screen.dart';
 import 'app_screen.dart';
 import 'archived_screen.dart';
@@ -364,35 +365,42 @@ class _AppShellState extends ConsumerState<AppShell>
               }
 
               final main = Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return Stack(
-                      key: _mainAreaKey,
-                      children: [
-                        Positioned.fill(child: _buildScreen()),
-                        if (_detailProjectId != null)
-                          _buildDetailOverlay(constraints),
-                        if (_pendingUndo != null)
-                          Positioned(
-                            right: 16,
-                            bottom: 16,
-                            child: _UndoButton(
-                              label: _pendingUndo!.label,
-                              onPressed: _resolveUndo,
-                            ),
-                          ),
-                        if (_toastMessage != null)
-                          Positioned(
-                            bottom: 20,
-                            left: 0,
-                            right: 0,
-                            child: Center(
-                              child: _Toast(message: _toastMessage!),
-                            ),
-                          ),
-                      ],
-                    );
-                  },
+                child: Column(
+                  children: [
+                    const UpdateBanner(),
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return Stack(
+                            key: _mainAreaKey,
+                            children: [
+                              Positioned.fill(child: _buildScreen()),
+                              if (_detailProjectId != null)
+                                _buildDetailOverlay(constraints),
+                              if (_pendingUndo != null)
+                                Positioned(
+                                  right: 16,
+                                  bottom: 16,
+                                  child: _UndoButton(
+                                    label: _pendingUndo!.label,
+                                    onPressed: _resolveUndo,
+                                  ),
+                                ),
+                              if (_toastMessage != null)
+                                Positioned(
+                                  bottom: 20,
+                                  left: 0,
+                                  right: 0,
+                                  child: Center(
+                                    child: _Toast(message: _toastMessage!),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               );
 
