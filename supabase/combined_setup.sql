@@ -1653,6 +1653,14 @@ revoke execute on function public.enforce_single_operator() from public, anon, a
 revoke execute on function public.protect_department_role() from public, anon, authenticated;
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
 revoke execute on function public.set_department_from_owner() from public, anon, authenticated;
+-- None of the helpers below (current_profile, is_admin, is_operator,
+-- my_department, is_dept_manager, has_dept_permission, is_it_manager) gets
+-- an explicit `grant ... to authenticated` here or anywhere else in this
+-- file. That's intentional, not an oversight: Supabase grants authenticated
+-- default schema-level EXECUTE outside of any migration, so revoking from
+-- public/anon alone is enough on the real platform. A hand-rolled local
+-- Postgres standing in for Supabase (e.g. for pgTAP tests) needs those
+-- grants added itself — see supabase/tests/README.md.
 revoke execute on function public.protect_task_project_assignment() from public, anon, authenticated;
 revoke execute on function public.admin_create_department(text) from public, anon;
 revoke execute on function public.admin_create_department(text, boolean) from public, anon;
@@ -2154,3 +2162,219 @@ revoke execute on function public.protect_task_changes() from public, anon, auth
 -- The one-argument overload made `admin_create_department('x')` ambiguous
 -- (the two-argument version has a default). The app always passes both.
 drop function if exists public.admin_create_department(text);
+
+-- ===== 20261010090000_signup_db_backstop.sql =====
+-- P1 #5: public self-signup had no DB-level backstop — the only
+-- protection was a Supabase dashboard toggle (Authentication > Providers
+-- > Email > "Enable email signup") the README asks you to flip off by
+-- hand. handle_new_user() created a profiles row for ANY insert into
+-- auth.users, admin-provisioned or not, so a direct supabase.auth.signUp()
+-- call got a working account even with the toggle left on.
+--
+-- Fix: admin_create_profile now stamps a marker in the new auth user's
+-- raw_app_meta_data (a column only a security-definer function —  never
+-- the client — can set); handle_new_user() rejects any auth.users insert
+-- missing that marker, aborting the whole signup transaction.
+--
+-- Also fixes P1 #6 while touching this function: the duplicate-username
+-- check compared the (lower-cased) candidate against the stored username
+-- as-is, missing the mixed-case seeded "Dev" account — "dev"/"DEV" could
+-- be created alongside it. Now compares lower(username) on both sides.
+
+create or replace function public.admin_create_profile(
+  p_username text, p_password text, p_display_name text,
+  p_role text default 'member', p_department_id uuid default null)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  me public.profiles;
+  dept public.departments;
+  new_user_id uuid;
+  synthetic_email text;
+  clean_username text;
+begin
+  select * into me from public.profiles where id = auth.uid();
+  if me.id is null then raise exception 'Not signed in'; end if;
+
+  select * into dept from public.departments where id = p_department_id;
+  if dept.id is null then raise exception 'Pick a department'; end if;
+  if p_role not in ('member', 'manager') then
+    raise exception 'role must be ''member'' or ''manager''';
+  end if;
+  if dept.is_operator then
+    raise exception 'The Operator department has exactly one user';
+  end if;
+
+  if public.is_operator() then
+    null;
+  elsif dept.is_it then
+    if not public.is_it_manager() then
+      raise exception 'Only the Operator or an IT manager can add IT accounts';
+    end if;
+    if p_role = 'manager' then
+      raise exception 'Only the Operator can assign IT managers';
+    end if;
+  elsif public.is_admin() then
+    null;
+  elsif me.role = 'manager' and me.department_id = dept.id then
+    if p_role <> 'member' then
+      raise exception 'Managers can add members only';
+    end if;
+  else
+    raise exception 'You are not allowed to create accounts in this department';
+  end if;
+
+  clean_username := lower(trim(p_username));
+  if length(clean_username) = 0 then raise exception 'Username cannot be empty'; end if;
+  if length(p_password) < 6 then raise exception 'Password must be at least 6 characters'; end if;
+  -- lower(username): the seeded "Dev" account's username was inserted with
+  -- its original case (P1 #6) — compare case-insensitively so "dev"/"DEV"
+  -- are still caught as the same name, not just rows already stored
+  -- lowercase.
+  if exists (select 1 from public.profiles where lower(username) = clean_username) then
+    raise exception 'Username "%" is already taken', clean_username;
+  end if;
+
+  synthetic_email := clean_username || '@procheck.local';
+  new_user_id := gen_random_uuid();
+
+  insert into auth.users (
+    instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, email_change, email_change_token_new, recovery_token
+  ) values (
+    '00000000-0000-0000-0000-000000000000', new_user_id, 'authenticated', 'authenticated',
+    synthetic_email, extensions.crypt(p_password, extensions.gen_salt('bf')), now(),
+    '{"provider":"email","providers":["email"],"procheck_provisioned":true}'::jsonb,
+    jsonb_build_object('username', clean_username, 'display_name', trim(p_display_name)),
+    now(), now(), '', '', '', ''
+  );
+
+  insert into auth.identities (
+    id, user_id, provider_id, identity_data, provider,
+    last_sign_in_at, created_at, updated_at
+  ) values (
+    gen_random_uuid(), new_user_id, new_user_id::text,
+    jsonb_build_object('sub', new_user_id::text, 'email', synthetic_email),
+    'email', now(), now(), now()
+  );
+
+  perform set_config('procheck.rpc', 'on', true);
+  update public.profiles
+     set role = p_role::user_role, department_id = dept.id
+   where id = new_user_id;
+
+  return new_user_id;
+end;
+$$;
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if coalesce(new.raw_app_meta_data ->> 'procheck_provisioned', 'false') <> 'true' then
+    raise exception 'Self-service sign-up is disabled for ProCheck — accounts are created by an administrator';
+  end if;
+  insert into public.profiles (id, email, username, display_name)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data ->> 'username', split_part(new.email, '@', 1)),
+    coalesce(new.raw_user_meta_data ->> 'display_name', new.email)
+  );
+  return new;
+end;
+$$;
+
+revoke execute on function public.admin_create_profile(text, text, text, text, uuid) from public, anon, authenticated;
+grant execute on function public.admin_create_profile(text, text, text, text, uuid) to authenticated;
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+
+-- ===== 20261010091000_comment_author_and_replica_identity.sql =====
+-- P1 #7: append_project_comment validated the comment's jsonb shape but
+-- never checked p_comment->>'author' against the caller — any signed-in
+-- user could pass any author string and have it stored as if someone else
+-- wrote it. The author is now always derived from the caller's own
+-- profile, overriding whatever the client sent.
+create or replace function public.append_project_comment(
+  p_project_id uuid,
+  p_comment jsonb
+)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  real_comment jsonb;
+begin
+  if jsonb_typeof(p_comment) is distinct from 'object'
+      or not (p_comment ?& array['id', 'author', 'text', 'timestamp']) then
+    raise exception 'invalid comment';
+  end if;
+
+  real_comment := p_comment || jsonb_build_object(
+    'author', (select display_name from public.current_profile())
+  );
+
+  update projects
+     set comments = comments || jsonb_build_array(real_comment)
+   where id = p_project_id;
+
+  if not found then
+    raise exception 'project not found or not permitted';
+  end if;
+end;
+$$;
+
+-- P1 #8: tasks/projects were added to the supabase_realtime publication
+-- (20261008091500_realtime.sql) without REPLICA IDENTITY FULL. Without it,
+-- a DELETE's replication payload carries only the primary key, so
+-- Supabase's realtime layer can't evaluate row-level visibility for the
+-- deleted row and broadcasts the delete to every subscriber regardless of
+-- RLS — leaking that a row with that id existed to clients who should
+-- never have seen it.
+alter table tasks replica identity full;
+alter table projects replica identity full;
+
+-- ===== 20261010092000_restore_dev_pin.sql =====
+-- P5: the explicit "Dev account is pinned to Operator" guard
+-- (20261008180000_dev_pin_case_insensitive.sql) was silently dropped when
+-- protect_profile_privileges() was rewritten in 20261009160000_department_roles.sql
+-- for the new role-tier model — the rewrite kept the general
+-- "role/department/username/etc can only change via an admin RPC" check but
+-- never carried over the Dev-specific case. Not exploitable today (the
+-- admin RPCs that can change role/department — set_user_role,
+-- admin_delete_profile — already refuse to touch the `dev` account by
+-- username, independently), but this was defense-in-depth against any
+-- future RPC that touches department_id/role without its own Dev check,
+-- and docs (supabase/README.md's "Protecting role/department from
+-- self-escalation") already claim it exists. Restoring it, checked before
+-- the procheck.rpc bypass so it applies even to RPC-mediated changes.
+
+create or replace function public.protect_profile_privileges()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if lower(old.username) = 'dev'
+      and (new.department_id is distinct from old.department_id
+           or new.role is distinct from old.role) then
+    raise exception 'The Dev account is pinned to Operator and cannot be reassigned';
+  end if;
+
+  if auth.uid() is null or current_setting('procheck.rpc', true) = 'on' then
+    return new;
+  end if;
+  if new.id is distinct from old.id
+     or new.role is distinct from old.role
+     or new.department_id is distinct from old.department_id
+     or new.custom_role_id is distinct from old.custom_role_id
+     or new.username is distinct from old.username
+     or new.email is distinct from old.email
+     or new.created_at is distinct from old.created_at then
+    raise exception 'Role, department and username can only be changed by an admin';
+  end if;
+  return new;
+end;
+$$;

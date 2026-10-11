@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/supabase_config.dart';
 import '../models/department.dart';
 import '../models/task.dart';
 import '../providers/auth_provider.dart';
@@ -46,7 +45,7 @@ const _keep = Object();
 typedef TaskFilterOptions = ({String? userId, List<Department> departments});
 
 final taskFilterOptionsProvider = Provider<TaskFilterOptions>((ref) {
-  final signedIn = isSupabaseConfigured && supabase.auth.currentUser != null;
+  final signedIn = ref.watch(signedInProvider);
   if (!signedIn) return (userId: null, departments: const <Department>[]);
   final isAdmin = ref.watch(isAdminProvider).valueOrNull ?? false;
   final departments = ref.watch(departmentsProvider).valueOrNull ?? const [];

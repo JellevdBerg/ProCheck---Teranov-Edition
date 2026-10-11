@@ -44,8 +44,6 @@ class NocturneColors {
     required this.neutral800,
     required this.neutral900,
     required this.well,
-    required this.hi,
-    required this.lo,
     required this.edge,
     required this.raised,
     required this.borderStrong,
@@ -79,11 +77,6 @@ class NocturneColors {
   /// Input / field fill.
   final Color well;
 
-  /// Legacy bevel pair, kept only so old call sites compile; the design has
-  /// no bevels. Prefer [edge] / [borderStrong].
-  final Color hi;
-  final Color lo;
-
   /// Default 1px border.
   final Color edge;
 
@@ -115,8 +108,6 @@ class NocturneColors {
     neutral800: Color(0xFF2A2F39),
     neutral900: Color(0xFF1D2128),
     well: Color(0xFF12151A),
-    hi: Color(0xFF2A2F39),
-    lo: Color(0xFF0B0C0F),
     edge: Color(0xFF2A2F39),
     raised: Color(0xFF1D2128),
     borderStrong: Color(0xFF3A4150),
@@ -143,8 +134,6 @@ class NocturneColors {
     neutral800: Color(0xFFE1E4EA),
     neutral900: Color(0xFFF0F1F4),
     well: Color(0xFFFFFFFF),
-    hi: Color(0xFFFFFFFF),
-    lo: Color(0xFFC9CED8),
     edge: Color(0xFFE1E4EA),
     raised: Color(0xFFF0F1F4),
     borderStrong: Color(0xFFC9CED8),

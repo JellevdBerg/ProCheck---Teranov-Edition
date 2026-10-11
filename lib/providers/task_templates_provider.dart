@@ -68,14 +68,22 @@ class TaskTemplatesNotifier extends StateNotifier<List<TaskTemplate>> {
   }) {
     final template = _box.get(id);
     if (template == null) return;
-    template.name = name;
-    template.subtasks = subtasks;
-    template.notes = notes;
-    template.attachments = attachments ?? [];
-    unawaited(template.save());
+    // A fresh instance, never the same object already in the box/state —
+    // matches the copy-on-write convention TasksNotifier/ProjectsNotifier
+    // use (see TasksNotifier._persist), instead of mutating the Hive
+    // object in place.
+    final updated = TaskTemplate(
+      id: template.id,
+      name: name,
+      subtasks: subtasks,
+      createdAt: template.createdAt,
+      notes: notes,
+      attachments: attachments ?? [],
+    );
+    unawaited(_box.put(id, updated));
     state = [
       for (final t in state)
-        if (t.id == id) template else t,
+        if (t.id == id) updated else t,
     ];
     _sortState();
   }

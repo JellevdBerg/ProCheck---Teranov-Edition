@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/supabase_config.dart';
 import '../../models/department.dart';
 import '../../models/project.dart';
 import '../../models/task.dart';
@@ -75,7 +74,7 @@ class AppSidebar extends ConsumerWidget {
     void toggle() => onToggle != null
         ? onToggle!()
         : ref.read(settingsProvider.notifier).setSidebarExpanded(!expanded);
-    final signedIn = isSupabaseConfigured && supabase.auth.currentUser != null;
+    final signedIn = ref.watch(signedInProvider);
     final profile = signedIn
         ? ref.watch(currentProfileProvider).valueOrNull
         : null;
@@ -220,6 +219,15 @@ class AppSidebar extends ConsumerWidget {
                             active: currentScreen == AppScreen.admin,
                             accent: accent,
                             onTap: () => onScreenSelected(AppScreen.admin),
+                          ),
+                          const SizedBox(height: 1),
+                          _NavRow(
+                            icon: Icons.account_tree_outlined,
+                            label: 'Organization',
+                            expanded: expanded,
+                            active: currentScreen == AppScreen.orgChart,
+                            accent: accent,
+                            onTap: () => onScreenSelected(AppScreen.orgChart),
                           ),
                         ],
                         const SizedBox(height: 1),

@@ -15,4 +15,5 @@ enum AppScreen {
   dashboard,
   team,
   admin,
+  orgChart,
 }

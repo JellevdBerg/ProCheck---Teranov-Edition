@@ -84,6 +84,7 @@ class Permissions {
   const Permissions({
     this.isManager = false,
     this.isAdmin = false,
+    this.isOperator = false,
     this.createProjects = false,
     this.editProjects = false,
     this.manageTasks = false,
@@ -94,6 +95,7 @@ class Permissions {
   static const everything = Permissions(
     isManager: true,
     isAdmin: true,
+    isOperator: true,
     createProjects: true,
     editProjects: true,
     manageTasks: true,
@@ -101,7 +103,17 @@ class Permissions {
   );
 
   final bool isManager;
+
+  /// Operator or IT — the same broad check `is_admin()` makes server-side.
+  /// A few call sites used to call this "isAdminTier"; same fact, one name.
   final bool isAdmin;
+
+  /// The Operator department specifically, not IT — gates the narrower
+  /// admin actions only Operator can do. Previously fetched separately
+  /// from [isOperatorProvider] at each call site instead of living here
+  /// alongside the other role-tier facts.
+  final bool isOperator;
+
   final bool createProjects;
   final bool editProjects;
   final bool manageTasks;
@@ -115,8 +127,10 @@ final permissionsProvider = Provider<Permissions>((ref) {
   final profile = ref.watch(currentProfileProvider).valueOrNull;
   if (profile == null) return const Permissions();
   final admin = ref.watch(isAdminProvider).valueOrNull ?? false;
+  final operator = ref.watch(isOperatorProvider).valueOrNull ?? false;
   if (admin || profile.isManager) {
     return Permissions(isManager: profile.isManager, isAdmin: admin,
+        isOperator: operator,
         createProjects: true, editProjects: true, manageTasks: true, viewTeam: true);
   }
   final role = ref
@@ -125,6 +139,7 @@ final permissionsProvider = Provider<Permissions>((ref) {
       ?.where((r) => r.id == profile.customRoleId)
       .firstOrNull;
   return Permissions(
+    isOperator: operator,
     createProjects: role?.createProjects ?? false,
     editProjects: role?.editProjects ?? false,
     manageTasks: role?.manageTasks ?? false,

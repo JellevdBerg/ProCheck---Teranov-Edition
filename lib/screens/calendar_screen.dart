@@ -1507,36 +1507,21 @@ Widget _taskBarContentRow({
     ],
   ];
 
-  return LayoutBuilder(
-    builder: (context, constraints) {
-      // Too narrow for "project  title": drop the project label (its folder
-      // icon stays, in the project's colour) and give the room to the title.
-      final narrow = constraints.maxWidth < 150;
-      return Row(
-        children: [
-          ...lead,
-          project,
-          if (!narrow) ...[
-            Expanded(
-              flex: 2,
-              child: Text(
-                style.originLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: style.originColor,
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-          ],
-          Expanded(flex: 3, child: titleText()),
-          ...tail,
-        ],
-      );
-    },
+  // The project name used to get its own truncating label next to the
+  // title, so a narrow cell double-truncated both ("Unfi... Submit...").
+  // The folder icon (in the project's colour) already carries that info
+  // per DESIGN.md; the full name is one tap/hover away via this tooltip,
+  // or always visible in the full day view. The title gets the full width.
+  return Tooltip(
+    message: style.originLabel,
+    child: Row(
+      children: [
+        ...lead,
+        project,
+        Expanded(child: titleText()),
+        ...tail,
+      ],
+    ),
   );
 }
 

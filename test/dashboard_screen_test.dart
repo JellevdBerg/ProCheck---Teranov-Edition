@@ -269,7 +269,7 @@ void main() {
 
       await tester.pumpWidget(
         wrap(
-          DashboardScreen(onOpenProject: (_, _) {}, onOpenTask: (_, _, _) {}),
+          DashboardScreen(onOpenProject: (_, _) {}, onOpenTask: (_, _, _) {}, onOpenOrgChart: () {}),
           container,
         ),
       );
@@ -315,7 +315,7 @@ void main() {
 
         await tester.pumpWidget(
           wrap(
-            DashboardScreen(onOpenProject: (_, _) {}, onOpenTask: (_, _, _) {}),
+            DashboardScreen(onOpenProject: (_, _) {}, onOpenTask: (_, _, _) {}, onOpenOrgChart: () {}),
             container,
           ),
         );
@@ -366,7 +366,7 @@ void main() {
 
         await tester.pumpWidget(
           wrap(
-            DashboardScreen(onOpenProject: (_, _) {}, onOpenTask: (_, _, _) {}),
+            DashboardScreen(onOpenProject: (_, _) {}, onOpenTask: (_, _, _) {}, onOpenOrgChart: () {}),
             container,
           ),
         );
@@ -412,6 +412,7 @@ void main() {
         await tester.pumpWidget(
           wrap(
             DashboardScreen(
+              onOpenOrgChart: () {},
               onOpenProject: (_, _) {},
               onOpenTask: (projectId, taskId, _) {
                 openedProjectId = projectId;
@@ -445,6 +446,7 @@ void main() {
         await tester.pumpWidget(
           wrap(
             DashboardScreen(
+              onOpenOrgChart: () {},
               onOpenProject: (projectId, _) => openedProjectId = projectId,
               onOpenTask: (_, _, _) {},
             ),
@@ -482,7 +484,7 @@ void main() {
 
         await tester.pumpWidget(
           wrap(
-            DashboardScreen(onOpenProject: (_, _) {}, onOpenTask: (_, _, _) {}),
+            DashboardScreen(onOpenProject: (_, _) {}, onOpenTask: (_, _, _) {}, onOpenOrgChart: () {}),
             container,
           ),
         );
@@ -518,7 +520,7 @@ void main() {
 
         await tester.pumpWidget(
           wrap(
-            DashboardScreen(onOpenProject: (_, _) {}, onOpenTask: (_, _, _) {}),
+            DashboardScreen(onOpenProject: (_, _) {}, onOpenTask: (_, _, _) {}, onOpenOrgChart: () {}),
             container,
           ),
         );
@@ -552,7 +554,7 @@ void main() {
 
         await tester.pumpWidget(
           wrap(
-            DashboardScreen(onOpenProject: (_, _) {}, onOpenTask: (_, _, _) {}),
+            DashboardScreen(onOpenProject: (_, _) {}, onOpenTask: (_, _, _) {}, onOpenOrgChart: () {}),
             container,
           ),
         );
@@ -599,7 +601,7 @@ void main() {
 
         await tester.pumpWidget(
           wrap(
-            DashboardScreen(onOpenProject: (_, _) {}, onOpenTask: (_, _, _) {}),
+            DashboardScreen(onOpenProject: (_, _) {}, onOpenTask: (_, _, _) {}, onOpenOrgChart: () {}),
             container,
           ),
         );

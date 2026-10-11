@@ -11,6 +11,7 @@ import '../providers/app_info_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/department_members_provider.dart';
 import '../providers/departments_provider.dart';
+import '../providers/roles_provider.dart';
 import '../providers/sync_log_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/blurred_dialog.dart';
@@ -22,7 +23,7 @@ import '../widgets/people_plates.dart';
 /// from the sidebar's Admin nav item, itself gated on [isAdminProvider] —
 /// but the real access control is server-side (every RPC this screen
 /// calls re-checks `is_admin()`/`is_operator()` itself), so this screen
-/// being visible is a convenience, not a permission grant. [isOperatorProvider]
+/// being visible is a convenience, not a permission grant. [Permissions.isOperator]
 /// additionally gates the handful of actions only Operator (not IT) can
 /// do — marking a department as IT, and placing an account into Operator
 /// or IT itself.
@@ -34,7 +35,7 @@ class AdminScreen extends ConsumerWidget {
     final tokens = context.nocturne;
     final departmentsAsync = ref.watch(departmentsProvider);
     final peopleAsync = ref.watch(departmentMembersProvider);
-    final isOperator = ref.watch(isOperatorProvider).valueOrNull ?? false;
+    final isOperator = ref.watch(permissionsProvider).isOperator;
 
     return LayoutBuilder(
       builder: (context, constraints) {

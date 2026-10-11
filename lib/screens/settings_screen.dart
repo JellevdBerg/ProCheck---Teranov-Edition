@@ -11,6 +11,7 @@ import '../data/backup_service.dart';
 import '../data/test_data_seed.dart';
 import '../models/shortcut_binding.dart';
 import '../models/task_priority.dart';
+import '../providers/auth_provider.dart';
 import '../providers/projects_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/task_templates_provider.dart';
@@ -55,6 +56,8 @@ class SettingsScreen extends ConsumerWidget {
                         children: [
                           _AppearanceCard(),
                           SizedBox(height: NocturneSpace.s4),
+                          _AccountCard(),
+                          SizedBox(height: NocturneSpace.s4),
                           _TaskDefaultsCard(),
                           SizedBox(height: NocturneSpace.s4),
                           _ShortcutsCard(),
@@ -70,6 +73,30 @@ class SettingsScreen extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Company edition only: there's no self-service password change in the
+/// UI anywhere (accounts are admin/manager-provisioned, matching the
+/// no-self-signup philosophy — see supabase/README.md) — this says so
+/// explicitly rather than leaving it looking like a missing feature.
+class _AccountCard extends ConsumerWidget {
+  const _AccountCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(signedInProvider)) return const SizedBox.shrink();
+    return const _SettingsSection(
+      title: 'Account',
+      children: [
+        _SettingRow(
+          label: 'Password',
+          help:
+              "Password changes are handled by your department's manager.",
+          control: SizedBox.shrink(),
+        ),
+      ],
     );
   }
 }
