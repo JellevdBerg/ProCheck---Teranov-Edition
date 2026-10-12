@@ -6,4 +6,4 @@
 /// into the SQL editor rather than via the CLI at all) — this is what the
 /// *code* shipped with, not a live read of the database. Update this
 /// alongside adding a new migration file.
-const latestMigration = '20261011400000_phase4_account_department_lifecycle.sql';
+const latestMigration = '20261012090000_fix_comment_author_spoofing_regression.sql';
