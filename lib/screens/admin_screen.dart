@@ -6,6 +6,7 @@ import '../data/latest_migration.dart';
 import '../data/supabase_config.dart';
 import '../models/department.dart';
 import '../models/profile.dart';
+import '../providers/admin_audit_provider.dart';
 import '../providers/admin_provider.dart';
 import '../providers/app_info_provider.dart';
 import '../providers/auth_provider.dart';
@@ -37,8 +38,10 @@ class AdminScreen extends ConsumerWidget {
     final peopleAsync = ref.watch(departmentMembersProvider);
     final isOperator = ref.watch(permissionsProvider).isOperator;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
+    return DefaultTabController(
+      length: 2,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
         final gutter = constraints.maxWidth < NocturneBreakpoints.compact
             ? NocturneSpace.s4
             : NocturneSpace.s6;
@@ -60,10 +63,17 @@ class AdminScreen extends ConsumerWidget {
                     'Create departments and accounts for the company.',
                     style: TextStyle(color: tokens.neutral500),
                   ),
-                  const SizedBox(height: NocturneSpace.s6),
+                  const SizedBox(height: NocturneSpace.s4),
+                  const TabBar(
+                    isScrollable: true,
+                    tabs: [Tab(text: 'People & departments'), Tab(text: 'Audit')],
+                  ),
+                  const SizedBox(height: NocturneSpace.s4),
                   Expanded(
-                    child: SingleChildScrollView(
-                      child: Column(
+                    child: TabBarView(
+                      children: [
+                        SingleChildScrollView(
+                          child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _SectionHeader(
@@ -139,7 +149,10 @@ class AdminScreen extends ConsumerWidget {
                             const _DevPanel(),
                           ],
                         ],
-                      ),
+                          ),
+                        ),
+                        const _AuditTab(),
+                      ],
                     ),
                   ),
                 ],
@@ -147,7 +160,8 @@ class AdminScreen extends ConsumerWidget {
             ),
           ),
         );
-      },
+        },
+      ),
     );
   }
 
@@ -1200,6 +1214,224 @@ class _DevRow extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// Phase 5: a read-only log of what the admin functions and the
+/// admin-users Edge Function have done, plus a few warnings worth an
+/// admin's attention — reuses the people/department data the rest of
+/// this screen already loads rather than fetching it again.
+class _AuditTab extends ConsumerStatefulWidget {
+  const _AuditTab();
+
+  @override
+  ConsumerState<_AuditTab> createState() => _AuditTabState();
+}
+
+class _AuditTabState extends ConsumerState<_AuditTab> {
+  String? _actorFilter;
+  String? _actionFilter;
+  Duration? _sinceFilter = const Duration(days: 7);
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.nocturne;
+    final entriesAsync = ref.watch(auditLogProvider);
+    final people = ref.watch(departmentMembersProvider).valueOrNull ?? const [];
+    final namesById = {for (final p in people) p.id: p.displayName};
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Needs attention', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: NocturneSpace.s2),
+          const _WarningsStrip(),
+          const SizedBox(height: NocturneSpace.s6),
+          Row(
+            children: [
+              Text('Audit log', style: Theme.of(context).textTheme.titleMedium),
+              const Spacer(),
+            ],
+          ),
+          const SizedBox(height: NocturneSpace.s2),
+          Wrap(
+            spacing: NocturneSpace.s2,
+            runSpacing: NocturneSpace.s2,
+            children: [
+              DropdownButton<Duration?>(
+                value: _sinceFilter,
+                hint: const Text('All time'),
+                items: const [
+                  DropdownMenuItem(value: null, child: Text('All time')),
+                  DropdownMenuItem(
+                    value: Duration(hours: 24),
+                    child: Text('Last 24h'),
+                  ),
+                  DropdownMenuItem(
+                    value: Duration(days: 7),
+                    child: Text('Last 7 days'),
+                  ),
+                  DropdownMenuItem(
+                    value: Duration(days: 30),
+                    child: Text('Last 30 days'),
+                  ),
+                ],
+                onChanged: (value) => setState(() => _sinceFilter = value),
+              ),
+              DropdownButton<String?>(
+                value: _actorFilter,
+                hint: const Text('Anyone'),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('Anyone')),
+                  for (final p in people)
+                    DropdownMenuItem(value: p.id, child: Text(p.displayName)),
+                ],
+                onChanged: (value) => setState(() => _actorFilter = value),
+              ),
+              entriesAsync.when(
+                data: (entries) {
+                  final actions = entries.map((e) => e.action).toSet().toList()
+                    ..sort();
+                  return DropdownButton<String?>(
+                    value: _actionFilter,
+                    hint: const Text('Any action'),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('Any action')),
+                      for (final a in actions)
+                        DropdownMenuItem(value: a, child: Text(a)),
+                    ],
+                    onChanged: (value) => setState(() => _actionFilter = value),
+                  );
+                },
+                loading: () => const SizedBox.shrink(),
+                error: (_, _) => const SizedBox.shrink(),
+              ),
+            ],
+          ),
+          const SizedBox(height: NocturneSpace.s4),
+          entriesAsync.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.all(NocturneSpace.s2),
+              child: LinearProgressIndicator(),
+            ),
+            error: (error, _) => PanelNotice(
+              'Could not load the audit log: $error',
+              isError: true,
+            ),
+            data: (entries) {
+              final cutoff = _sinceFilter == null
+                  ? null
+                  : DateTime.now().subtract(_sinceFilter!);
+              final filtered = entries.where((e) {
+                if (cutoff != null && e.createdAt.isBefore(cutoff)) return false;
+                if (_actorFilter != null && e.actorId != _actorFilter) return false;
+                if (_actionFilter != null && e.action != _actionFilter) return false;
+                return true;
+              }).toList();
+              if (filtered.isEmpty) {
+                return const PanelNotice('No matching audit entries.');
+              }
+              return PanelCard(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  children: [
+                    for (var i = 0; i < filtered.length; i++) ...[
+                      if (i > 0) const Divider(),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: NocturneSpace.s3,
+                          vertical: NocturneSpace.s2,
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: 140,
+                              child: Text(
+                                filtered[i].createdAt.toLocal().toString(),
+                                style: TextStyle(fontSize: 12, color: tokens.neutral500),
+                              ),
+                            ),
+                            SizedBox(
+                              width: 140,
+                              child: Text(
+                                namesById[filtered[i].actorId] ?? 'Unknown',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                '${filtered[i].action} · ${filtered[i].targetType}'
+                                '${filtered[i].targetId != null ? ' (${filtered[i].targetId!.substring(0, 8)})' : ''}',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WarningsStrip extends ConsumerWidget {
+  const _WarningsStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final people = ref.watch(departmentMembersProvider).valueOrNull ?? const [];
+    final departments = ref.watch(departmentsProvider).valueOrNull ?? const [];
+    final openTasksByUser =
+        ref.watch(inactiveWithOpenTasksProvider).valueOrNull ?? const {};
+    final projectsWithoutDept =
+        ref.watch(projectsWithoutDepartmentProvider).valueOrNull ?? 0;
+
+    final inactiveWithWork = people.where(
+      (p) => !p.isActive && (openTasksByUser[p.id] ?? 0) > 0,
+    );
+    final archivedDepartments = departments.where((d) => d.isArchived);
+
+    final warnings = <String>[
+      for (final p in inactiveWithWork)
+        '@${p.username} is inactive with ${openTasksByUser[p.id]} open task'
+            '${openTasksByUser[p.id] == 1 ? '' : 's'}',
+      for (final d in archivedDepartments)
+        if (people.any((p) => p.departmentId == d.id))
+          '"${d.name}" is archived but still has members',
+      if (projectsWithoutDept > 0)
+        '$projectsWithoutDept project${projectsWithoutDept == 1 ? '' : 's'} '
+            'with no department',
+    ];
+
+    if (warnings.isEmpty) {
+      return const PanelNotice('Nothing needs attention.');
+    }
+    return PanelCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final w in warnings)
+            Padding(
+              padding: const EdgeInsets.only(bottom: NocturneSpace.s1),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.warning_amber, size: 16),
+                  const SizedBox(width: NocturneSpace.s2),
+                  Expanded(child: Text(w)),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
