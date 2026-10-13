@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../data/update_installer.dart';
 import '../providers/update_check_provider.dart';
 import '../theme/nocturne_theme.dart';
 
 /// A dismissible banner pinned to the top of the main content area when a
 /// newer release is available on GitHub. Checked once per session; a
-/// dismissal lasts until the app is relaunched.
+/// dismissal lasts until the app is relaunched. "Update and restart"
+/// downloads, verifies and installs the new build, then relaunches.
 class UpdateBanner extends ConsumerWidget {
   const UpdateBanner({super.key});
 
@@ -37,11 +39,8 @@ class UpdateBanner extends ConsumerWidget {
             ),
             const SizedBox(width: 10),
             TextButton(
-              onPressed: () => launchUrl(
-                Uri.parse(update.releaseUrl),
-                mode: LaunchMode.externalApplication,
-              ),
-              child: const Text('Download'),
+              onPressed: () => _updateNow(context, update),
+              child: const Text('Update and restart'),
             ),
             IconButton(
               tooltip: 'Dismiss',
@@ -52,6 +51,47 @@ class UpdateBanner extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+Future<void> _updateNow(BuildContext context, UpdateInfo update) async {
+  final progress = ValueNotifier<double?>(null);
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => PopScope(
+      canPop: false,
+      child: AlertDialog(
+        title: Text('Updating to ${update.version}'),
+        content: ValueListenableBuilder<double?>(
+          valueListenable: progress,
+          builder: (_, value, _) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              LinearProgressIndicator(value: value),
+              const SizedBox(height: 12),
+              const Text('ProCheck will restart when the update is installed.'),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+  final navigator = Navigator.of(context, rootNavigator: true);
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  try {
+    // Exits the process on success; only returns by throwing.
+    await installUpdate(update, onProgress: (p) => progress.value = p);
+  } on UpdateUnsupported catch (e) {
+    navigator.pop();
+    messenger?.showSnackBar(SnackBar(content: Text('$e Opening the download page.')));
+    await launchUrl(Uri.parse(update.releaseUrl), mode: LaunchMode.externalApplication);
+  } catch (e) {
+    navigator.pop();
+    messenger?.showSnackBar(
+      const SnackBar(content: Text("Couldn't download the update. Try again later.")),
     );
   }
 }
