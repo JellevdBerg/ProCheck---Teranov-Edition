@@ -97,10 +97,17 @@ class ProjectsNotifier extends StateNotifier<List<Project>>
 
   /// Returns whether the row reached the server (false when skipped or
   /// failed), so a first-time insert can be followed by its append calls.
+  ///
+  /// [quiet] is for bookkeeping any department member triggers just by
+  /// looking around (opening a project, favouriting, logging activity): the
+  /// row is only writable with edit rights, so a refusal, conflict or
+  /// offline failure is dropped (and the local value kept) instead of
+  /// rolling back, toasting or queuing a write that can never land.
   Future<bool> _mirrorUpsert(
     Project project, {
     bool includeAppendOnly = false,
     Project? previous,
+    bool quiet = false,
   }) async {
     if (!isSupabaseConfigured) return false;
     if (supabase.auth.currentUser == null) return false;
@@ -125,7 +132,9 @@ class ProjectsNotifier extends StateNotifier<List<Project>>
               action: 'upsert',
               error: 'changed elsewhere',
             );
-        showSyncFailureToast(describeConflict(result.remote, result.outcome));
+        if (!quiet) {
+          showSyncFailureToast(describeConflict(result.remote, result.outcome));
+        }
         return false;
       case UpsertOutcome.rejected:
         // The server actively refused this write (most commonly an RLS
@@ -134,14 +143,16 @@ class ProjectsNotifier extends StateNotifier<List<Project>>
         ref
             .read(syncLogProvider.notifier)
             .recordError(source: 'projects', action: 'upsert', error: result.error!);
-        _rollback(project, previous, result.error!);
+        if (!quiet) _rollback(project, previous, result.error!);
         return false;
       case UpsertOutcome.networkFailure:
         // Queued for retry (see [SyncableNotifier.replayOutbox]).
         ref
             .read(syncLogProvider.notifier)
             .recordError(source: 'projects', action: 'upsert', error: 'offline');
-        enqueueOutbox(project.id, payload, baseUpdatedAt: previous?.updatedAt);
+        if (!quiet) {
+          enqueueOutbox(project.id, payload, baseUpdatedAt: previous?.updatedAt);
+        }
         return false;
     }
   }
@@ -193,7 +204,14 @@ class ProjectsNotifier extends StateNotifier<List<Project>>
       if (missingFunction || missingRow) {
         final latest = _box.get(projectId);
         if (latest != null) {
-          await _mirrorUpsert(latest, includeAppendOnly: true);
+          // previous: latest keeps an existing row on the update path (an
+          // upsert is checked as an INSERT, which a plain member fails).
+          await _mirrorUpsert(
+            latest,
+            includeAppendOnly: true,
+            previous: latest,
+            quiet: true,
+          );
         }
         return;
       }
@@ -269,10 +287,10 @@ class ProjectsNotifier extends StateNotifier<List<Project>>
   /// in place. See [TasksNotifier._persist] for why a new instance (rather
   /// than mutating the box's cached one) is required for value-equality
   /// selectors to detect the edit.
-  void _persist(Project project) {
+  void _persist(Project project, {bool quiet = false}) {
     final previous = state.firstWhereOrNull((p) => p.id == project.id);
     unawaited(_box.put(project.id, project));
-    unawaited(_mirrorUpsert(project, previous: previous));
+    unawaited(_mirrorUpsert(project, previous: previous, quiet: quiet));
     state = [
       for (final p in state)
         if (p.id == project.id) project else p,
@@ -296,7 +314,7 @@ class ProjectsNotifier extends StateNotifier<List<Project>>
   void touchProject(String id) {
     final project = _box.get(id);
     if (project == null) return;
-    _persist(project.copyWith(lastOpenedAt: DateTime.now()));
+    _persist(project.copyWith(lastOpenedAt: DateTime.now()), quiet: true);
     _sortState();
   }
 
@@ -319,7 +337,7 @@ class ProjectsNotifier extends StateNotifier<List<Project>>
   void toggleFavorite(String id) {
     final project = _box.get(id);
     if (project == null) return;
-    _persist(project.copyWith(favorite: !project.favorite));
+    _persist(project.copyWith(favorite: !project.favorite), quiet: true);
   }
 
   /// Appends an entry to [id]'s Activity log — called by [TasksNotifier] for
@@ -343,6 +361,7 @@ class ProjectsNotifier extends StateNotifier<List<Project>>
             ? log.sublist(log.length - _maxActivityLogEntries)
             : log,
       ),
+      quiet: true,
     );
     unawaited(
       _appendRemote('append_project_activity', 'p_entry', id, entry.toJson()),
@@ -358,7 +377,10 @@ class ProjectsNotifier extends StateNotifier<List<Project>>
       text: text,
       timestamp: DateTime.now(),
     );
-    _persist(project.copyWith(comments: [...project.comments, comment]));
+    _persist(
+      project.copyWith(comments: [...project.comments, comment]),
+      quiet: true,
+    );
     unawaited(
       _appendRemote(
         'append_project_comment',

@@ -311,6 +311,19 @@ mixin SyncableNotifier<T> on StateNotifier<List<T>> {
       final remote = rowFromSupabase(rows.first);
       await syncBox.put(idOf(remote), remote);
       resortState();
+      // Still exactly the version this edit was based on, yet nothing was
+      // updated: nobody beat us to it — RLS let us read the row (a
+      // department-mate's) but not change it. Not a conflict.
+      final remoteAt = updatedAtOf(remote);
+      if (remoteAt != null && remoteAt.isAtSameMomentAs(baseUpdatedAt!)) {
+        return SyncWriteResult(
+          UpsertOutcome.rejected,
+          error: PostgrestException(
+            message: "You don't have permission to change this",
+            code: '42501',
+          ),
+        );
+      }
       return SyncWriteResult(UpsertOutcome.conflict, remote: remote);
     } on PostgrestException catch (e) {
       return SyncWriteResult(UpsertOutcome.rejected, error: e);
