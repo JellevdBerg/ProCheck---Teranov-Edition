@@ -40,6 +40,7 @@ class ProjectsNotifier extends StateNotifier<List<Project>>
     with SyncableNotifier<Project> {
   ProjectsNotifier(this.ref) : super(_box.values.toList()) {
     _sortState();
+    listenForSignIn();
     unawaited(profileReady);
     unawaited(
       pullFromSupabase().then((_) {

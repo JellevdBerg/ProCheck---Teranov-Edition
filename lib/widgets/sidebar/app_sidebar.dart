@@ -487,11 +487,6 @@ class AppSidebar extends ConsumerWidget {
     ref.read(tasksProvider.notifier).clearAll();
     ref.read(projectsProvider.notifier).clearAll();
     unawaited(Hive.box<OutboxEntry>(outboxBoxName).clear());
-    // The notifiers pull/subscribe/resolve the profile only in their
-    // constructors — rebuild them so the next sign-in starts with a fresh
-    // pull instead of an empty, session-less cache.
-    ref.invalidate(tasksProvider);
-    ref.invalidate(projectsProvider);
     if (!context.mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),

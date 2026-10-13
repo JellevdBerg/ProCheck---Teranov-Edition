@@ -37,6 +37,18 @@ enum UpsertOutcome {
   networkFailure,
 }
 
+/// Whether an auth event should trigger a fresh sync: someone signed in
+/// whose data this notifier hasn't synced yet (first sign-in, or signing back
+/// in after a sign-out wiped the local cache).
+bool needsResync({
+  required AuthChangeEvent event,
+  required String? sessionUserId,
+  required String? syncedUserId,
+}) {
+  if (event == AuthChangeEvent.signedOut) return false;
+  return sessionUserId != null && sessionUserId != syncedUserId;
+}
+
 class SyncWriteResult<T> {
   const SyncWriteResult(this.outcome, {this.remote, this.error});
 
@@ -107,7 +119,47 @@ mixin SyncableNotifier<T> on StateNotifier<List<T>> {
   /// to load) finishes — the splash screen awaits this on every notifier
   /// before handing off to the app shell, so task/project creation never
   /// races ahead of [ownerId] being set. See `splash_screen.dart`.
-  late final Future<void> profileReady = _loadOwnProfile();
+  late Future<void> profileReady = _loadOwnProfile();
+
+  StreamSubscription<AuthState>? _authSub;
+  String? _syncedUserId;
+
+  /// Re-runs the profile load, pull and realtime subscription whenever a
+  /// different/new session appears. The constructor-time sync only covers
+  /// the user signed in at launch; without this, signing out (which clears
+  /// the local cache) and back in left the notifiers empty and session-less
+  /// until the app was restarted. Call once from the notifier's constructor.
+  void listenForSignIn() {
+    if (!isSupabaseConfigured) return;
+    _syncedUserId = supabase.auth.currentUser?.id;
+    _authSub = supabase.auth.onAuthStateChange.listen((auth) {
+      if (auth.event == AuthChangeEvent.signedOut) _syncedUserId = null;
+      final userId = auth.session?.user.id;
+      if (!needsResync(
+        event: auth.event,
+        sessionUserId: userId,
+        syncedUserId: _syncedUserId,
+      )) {
+        return;
+      }
+      _syncedUserId = userId;
+      unawaited(_resyncForNewSession());
+    });
+  }
+
+  Future<void> _resyncForNewSession() async {
+    ownerId = null;
+    departmentId = null;
+    _authorName = null;
+    final channel = _channel;
+    _channel = null;
+    if (channel != null) await supabase.removeChannel(channel);
+    profileReady = _loadOwnProfile();
+    await profileReady;
+    await pullFromSupabase();
+    subscribeRealtime();
+    await replayOutbox();
+  }
 
   Future<void> _loadOwnProfile() async {
     if (!isSupabaseConfigured) return;
@@ -401,6 +453,7 @@ mixin SyncableNotifier<T> on StateNotifier<List<T>> {
   }
 
   void disposeSync() {
+    _authSub?.cancel();
     _retryTimer?.cancel();
     final channel = _channel;
     if (channel != null) {

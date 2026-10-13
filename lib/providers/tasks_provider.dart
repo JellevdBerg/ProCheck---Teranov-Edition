@@ -41,6 +41,7 @@ class TasksNotifier extends StateNotifier<List<Task>>
     with SyncableNotifier<Task> {
   TasksNotifier(this.ref) : super(_box.values.toList()) {
     _sortState();
+    listenForSignIn();
     unawaited(profileReady);
     unawaited(
       pullFromSupabase().then((_) {
