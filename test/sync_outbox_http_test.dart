@@ -224,6 +224,35 @@ void main() {
   );
 
   test(
+    'an update RLS silently refuses (row still at the base version) is '
+    'rejected, not reported as changed elsewhere',
+    () async {
+      handler = (request) async {
+        // PATCH matched no row; the follow-up read shows it untouched.
+        if (request.method == 'PATCH') return rowsResponse(request, []);
+        return rowsResponse(request, [
+          {
+            'id': 'row-ro',
+            'title': 'theirs',
+            'updated_at': '2026-10-11T00:00:00Z',
+          },
+        ]);
+      };
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(_fakeRowProvider.notifier);
+
+      final result = await notifier.upsertWithConflictCheck(
+        'row-ro',
+        {'id': 'row-ro', 'title': 'mine'},
+        baseUpdatedAt: DateTime.parse('2026-10-11T00:00:00Z'),
+      );
+      expect(result.outcome, UpsertOutcome.rejected);
+    },
+  );
+
+  test(
     '403/RLS rejection marks the outbox entry failed and it is never '
     'retried automatically',
     () async {

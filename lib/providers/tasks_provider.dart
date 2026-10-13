@@ -153,8 +153,11 @@ class TasksNotifier extends StateNotifier<List<Task>>
     }
   }
 
-  /// Mirrors several tasks in one upsert call — used by [reorderTasks] so
-  /// dragging N tasks fires one request instead of N.
+  /// Mirrors a reorder's new `sort_order`s — used by [reorderTasks].
+  /// Plain updates, not an upsert: an upsert is checked as an INSERT first,
+  /// which RLS refuses for any task the member doesn't own ("new row
+  /// violates row-level security"). An update RLS can't reach simply
+  /// changes nothing, so a teammate's task keeps its server order silently.
   Future<void> _mirrorBatchUpsert(
     List<Task> tasks,
     Map<String, Task> previousById,
@@ -164,9 +167,13 @@ class TasksNotifier extends StateNotifier<List<Task>>
     final syncable = tasks.where((t) => t.ownerId.isNotEmpty).toList();
     if (syncable.isEmpty) return;
     try {
-      await supabase.from('tasks').upsert(
-        syncable.map((t) => t.toSupabase()).toList(),
-      );
+      await Future.wait([
+        for (final t in syncable)
+          supabase
+              .from('tasks')
+              .update({'sort_order': t.sortOrder})
+              .eq('id', t.id),
+      ]);
     } on PostgrestException catch (e) {
       ref
           .read(syncLogProvider.notifier)
@@ -180,7 +187,11 @@ class TasksNotifier extends StateNotifier<List<Task>>
           .read(syncLogProvider.notifier)
           .recordError(source: 'tasks', action: 'upsert', error: e);
       for (final task in syncable) {
-        enqueueOutbox(task.id, task.toSupabase());
+        enqueueOutbox(
+          task.id,
+          task.toSupabase(),
+          baseUpdatedAt: previousById[task.id]?.updatedAt,
+        );
       }
     }
   }
