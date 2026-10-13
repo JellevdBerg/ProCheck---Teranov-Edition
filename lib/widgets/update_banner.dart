@@ -86,8 +86,13 @@ Future<void> _updateNow(BuildContext context, UpdateInfo update) async {
     await installUpdate(update, onProgress: (p) => progress.value = p);
   } on UpdateUnsupported catch (e) {
     navigator.pop();
-    messenger?.showSnackBar(SnackBar(content: Text('$e Opening the download page.')));
-    await launchUrl(Uri.parse(update.releaseUrl), mode: LaunchMode.externalApplication);
+    final download = update.assetUrl;
+    messenger?.showSnackBar(SnackBar(
+      content: Text(download == null ? '$e' : '$e Downloading it instead.'),
+    ));
+    if (download != null) {
+      await launchUrl(Uri.parse(download), mode: LaunchMode.externalApplication);
+    }
   } catch (e) {
     navigator.pop();
     messenger?.showSnackBar(
