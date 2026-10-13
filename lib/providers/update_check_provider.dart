@@ -17,13 +17,48 @@ class UpdateInfo {
     required this.version,
     required this.releaseNotes,
     required this.releaseUrl,
+    this.assetName,
+    this.assetUrl,
+    this.checksumsUrl,
   });
 
   /// The new version's number (no leading "v"), e.g. "1.1.0".
   final String version;
   final String releaseNotes;
   final String releaseUrl;
+
+  /// This platform's build zip and the release's `SHA256SUMS.txt` — null when
+  /// the release has no matching asset (the updater then falls back to
+  /// opening [releaseUrl]).
+  final String? assetName;
+  final String? assetUrl;
+  final String? checksumsUrl;
 }
+
+/// Picks this platform's zip and the checksums file out of a release's
+/// `assets` array (names are set in `.github/workflows/release.yml`).
+({String? name, String? url, String? checksums}) pickReleaseAssets(
+  Object? assets,
+  String platform,
+) {
+  String? name, url, checksums;
+  if (assets is List) {
+    for (final a in assets.whereType<Map<String, dynamic>>()) {
+      final n = a['name'];
+      final u = a['browser_download_url'];
+      if (n is! String || u is! String) continue;
+      if (n == 'SHA256SUMS.txt') checksums = u;
+      if (n.startsWith('procheck-$platform-') && n.endsWith('.zip')) {
+        name = n;
+        url = u;
+      }
+    }
+  }
+  return (name: name, url: url, checksums: checksums);
+}
+
+String? get _updatePlatform =>
+    Platform.isWindows ? 'windows' : (Platform.isMacOS ? 'macos' : null);
 
 /// Whether the user has dismissed this session's update banner — reset on
 /// every app launch, never persisted.
@@ -68,7 +103,14 @@ final updateCheckProvider = FutureProvider<UpdateInfo?>((ref) async {
 
     final notes = json['body'];
     final url = json['html_url'];
+    final platform = _updatePlatform;
+    final assets = platform == null
+        ? null
+        : pickReleaseAssets(json['assets'], platform);
     return UpdateInfo(
+      assetName: assets?.name,
+      assetUrl: assets?.url,
+      checksumsUrl: assets?.checksums,
       version: latestVersion,
       releaseNotes: notes is String ? notes : '',
       releaseUrl: url is String
