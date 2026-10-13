@@ -16,7 +16,7 @@ class UpdateUnsupported implements Exception {
 }
 
 /// Downloads [update]'s build for this platform, checks it against the
-/// release's `SHA256SUMS.txt`, unpacks it, then hands off to a small detached
+/// manifest's SHA-256, unpacks it, then hands off to a small detached
 /// script that waits for this process to exit, swaps the install in place and
 /// relaunches. Everything that can fail runs before the app closes; on
 /// success this never returns (the process exits).
@@ -27,9 +27,8 @@ Future<void> installUpdate(
   void Function(double? progress)? onProgress,
 }) async {
   final assetUrl = update.assetUrl;
-  final assetName = update.assetName;
-  final checksumsUrl = update.checksumsUrl;
-  if (assetUrl == null || assetName == null || checksumsUrl == null) {
+  final expected = update.sha256;
+  if (assetUrl == null || expected == null) {
     throw const UpdateUnsupported('This release has no build for this platform.');
   }
   if (!Platform.isWindows && !Platform.isMacOS) {
@@ -48,19 +47,13 @@ Future<void> installUpdate(
   );
 
   final work = await Directory.systemTemp.createTemp('procheck-update-');
-  final zip = File('${work.path}${Platform.pathSeparator}$assetName');
+  final zip = File('${work.path}${Platform.pathSeparator}update.zip');
   await _download(assetUrl, zip, onProgress);
 
-  final sums = await _fetchText(checksumsUrl);
-  final expected = expectedHashFor(sums, assetName);
-  if (expected == null) {
-    throw const UpdateUnsupported('No checksum published for this build.');
-  }
   final actual = (await sha256.bind(zip.openRead()).first).toString();
   if (actual != expected) {
-    throw const UpdateUnsupported(
-      'The downloaded update failed its checksum — not installing it.',
-    );
+    // Not UpdateUnsupported: that falls back to opening the same zip.
+    throw StateError('The downloaded update failed its checksum.');
   }
 
   final unpacked = '${work.path}${Platform.pathSeparator}unpacked';
@@ -142,32 +135,6 @@ Future<void> _download(
   } finally {
     client.close();
   }
-}
-
-Future<String> _fetchText(String url) async {
-  final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
-  try {
-    final request = await client.getUrl(Uri.parse(url));
-    request.headers.set(HttpHeaders.userAgentHeader, 'ProCheck-App');
-    final response = await request.close();
-    if (response.statusCode != 200) {
-      throw HttpException('Checksum fetch failed: ${response.statusCode}');
-    }
-    return await response.transform(const SystemEncoding().decoder).join();
-  } finally {
-    client.close();
-  }
-}
-
-/// Finds [assetName]'s SHA-256 in `SHA256SUMS.txt` (`<hash>  <name>` lines).
-String? expectedHashFor(String sums, String assetName) {
-  for (final line in sums.split(RegExp(r'\r?\n'))) {
-    final parts = line.trim().split(RegExp(r'\s+'));
-    if (parts.length == 2 && parts[1].replaceFirst('*', '') == assetName) {
-      return parts[0].toLowerCase();
-    }
-  }
-  return null;
 }
 
 // Waits for the app to exit, copies the new build over the install folder,

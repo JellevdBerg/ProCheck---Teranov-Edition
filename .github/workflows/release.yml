@@ -108,6 +108,35 @@ jobs:
           find dist -name '*.zip' -exec cp {} release/ \;
           cat dist/*/SHA256SUMS-*.txt > release/SHA256SUMS.txt
 
+      # The in-app updater reads latest.json from this public bucket (the repo
+      # is private, so GitHub Releases can't be read anonymously). Zips go up
+      # first so the manifest never points at a missing file.
+      - name: Publish to Supabase Storage (in-app updater)
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [ -z "$SERVICE_KEY" ]; then
+            echo "::warning::SUPABASE_SERVICE_ROLE_KEY secret is not set; skipping in-app updater publish"
+            exit 0
+          fi
+          auth=(-H "apikey: $SERVICE_KEY")
+          case "$SERVICE_KEY" in sb_*) ;; *) auth+=(-H "Authorization: Bearer $SERVICE_KEY") ;; esac
+          upload() {
+            curl -fsS -X POST "$SUPABASE_URL/storage/v1/object/updates/$1"               "${auth[@]}" -H "x-upsert: true" -H "Content-Type: $3" --data-binary "@$2" > /dev/null
+          }
+          public="$SUPABASE_URL/storage/v1/object/public/updates"
+          for z in release/*.zip; do
+            upload "$TAG/$(basename "$z")" "$z" application/zip
+          done
+          sha() { grep " procheck-$1-" release/SHA256SUMS.txt | head -1 | cut -d' ' -f1; }
+          jq -n             --arg version "${TAG#v}"             --arg wurl "$public/$TAG/procheck-windows-$TAG.zip" --arg wsha "$(sha windows)"             --arg murl "$public/$TAG/procheck-macos-$TAG.zip" --arg msha "$(sha macos)"             '{version: $version, notes: "",
+              windows: {url: $wurl, sha256: $wsha},
+              macos: {url: $murl, sha256: $msha}}' > latest.json
+          cat latest.json
+          upload latest.json latest.json application/json
+
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:

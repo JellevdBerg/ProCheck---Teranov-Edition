@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:procheck/data/update_installer.dart';
 import 'package:procheck/providers/update_check_provider.dart';
 
 void main() {
@@ -25,29 +24,45 @@ void main() {
     });
   });
 
-  group('update assets', () {
-    test('picks this platform zip and the checksums file', () {
-      final picked = pickReleaseAssets([
-        {'name': 'procheck-macos-v1.2.0.zip', 'browser_download_url': 'm'},
-        {'name': 'procheck-windows-v1.2.0.zip', 'browser_download_url': 'w'},
-        {'name': 'SHA256SUMS.txt', 'browser_download_url': 's'},
-      ], 'windows');
-      expect(picked.name, 'procheck-windows-v1.2.0.zip');
-      expect(picked.url, 'w');
-      expect(picked.checksums, 's');
+  group('parseUpdateManifest', () {
+    const manifest = '''
+{"version":"1.2.2","notes":"Fixes",
+ "windows":{"url":"https://x/w.zip","sha256":"ABC123"},
+ "macos":{"url":"https://x/m.zip","sha256":"def456"}}''';
+
+    test('returns this platform build with a lower-cased hash', () {
+      final u = parseUpdateManifest(
+        manifest,
+        currentVersion: '1.2.1',
+        platform: 'windows',
+      )!;
+      expect(u.version, '1.2.2');
+      expect(u.assetUrl, 'https://x/w.zip');
+      expect(u.sha256, 'abc123');
     });
 
-    test('missing assets yield nulls', () {
-      final picked = pickReleaseAssets(null, 'windows');
-      expect(picked.url, isNull);
-      expect(picked.checksums, isNull);
+    test('null when the installed version is current or newer', () {
+      expect(
+        parseUpdateManifest(manifest, currentVersion: '1.2.2', platform: 'windows'),
+        isNull,
+      );
     });
 
-    test('finds a zip hash in SHA256SUMS.txt, case-insensitively', () {
-      const sums = 'ABC123  procheck-windows-v1.2.0.zip\r\n'
-          'def456  procheck-macos-v1.2.0.zip\n';
-      expect(expectedHashFor(sums, 'procheck-windows-v1.2.0.zip'), 'abc123');
-      expect(expectedHashFor(sums, 'procheck-linux-v1.2.0.zip'), isNull);
+    test('an unsupported platform still reports the version, no asset', () {
+      final u = parseUpdateManifest(
+        manifest,
+        currentVersion: '1.0.0',
+        platform: null,
+      )!;
+      expect(u.assetUrl, isNull);
+      expect(u.sha256, isNull);
+    });
+
+    test('a malformed manifest throws', () {
+      expect(
+        () => parseUpdateManifest('[]', currentVersion: '1.0.0', platform: 'windows'),
+        throwsFormatException,
+      );
     });
   });
 }
