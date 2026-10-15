@@ -86,6 +86,7 @@ class _WobbleCheckboxState extends State<WobbleCheckbox>
                   checked: widget.value,
                   progress: _controller.value,
                   done: t.done,
+                  tickColor: onColor(t.done),
                   border: t.borderStrong,
                   idleFill: t.well,
                   hover: _hover,
@@ -129,6 +130,7 @@ class _TickPainter extends CustomPainter {
     required this.checked,
     required this.progress,
     required this.done,
+    required this.tickColor,
     required this.border,
     required this.idleFill,
     required this.hover,
@@ -139,6 +141,7 @@ class _TickPainter extends CustomPainter {
   final bool checked;
   final double progress; // 0..1 over WobbleCheckbox.duration
   final Color done;
+  final Color tickColor;
   final Color border;
   final Color idleFill;
   final bool hover;
@@ -230,7 +233,7 @@ class _TickPainter extends CustomPainter {
         ..strokeWidth = 2
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round
-        ..color = Colors.white,
+        ..color = tickColor,
     );
   }
 
@@ -239,6 +242,7 @@ class _TickPainter extends CustomPainter {
       old.checked != checked ||
       old.progress != progress ||
       old.done != done ||
+      old.tickColor != tickColor ||
       old.border != border ||
       old.idleFill != idleFill ||
       old.hover != hover ||

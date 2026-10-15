@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 /// Design tokens for the enterprise design (see `docs/DESIGN.md`). The class
@@ -86,7 +88,7 @@ class NocturneColors {
   /// Inputs and anything that must read as interactive.
   final Color borderStrong;
 
-  /// Text-safe status colors. Green means done (and the Low priority tag).
+  /// Text-safe status colors. Green means done; [low] is the Low-priority tag.
   final Color done;
   final Color danger;
   final Color warn;
@@ -137,9 +139,9 @@ class NocturneColors {
     edge: Color(0xFFE1E4EA),
     raised: Color(0xFFF0F1F4),
     borderStrong: Color(0xFFC9CED8),
-    done: Color(0xFF1E8A4C),
+    done: Color(0xFF1C8046),
     danger: Color(0xFFC7372F),
-    warn: Color(0xFFBD5200),
+    warn: Color(0xFFBA5100),
     low: Color(0xFF3F7F2A),
     isDark: false,
   );
@@ -157,8 +159,6 @@ class NocturnePriority {
 /// Success/"done" and destructive-action colors. Green = done only.
 class NocturneStatus {
   static const done = Color(0xFF2FA066);
-  static const dangerBorder = Color(0xFFD14343);
-  static const dangerText = Color(0xFFE5636A);
 }
 
 /// The 8 preset accent swatches (Settings > Appearance). Mid-tones: the
@@ -175,15 +175,38 @@ const List<Color> nocturneAccentPalette = [
   Color(0xFFA0845C), // sand
 ];
 
-/// Same hue and saturation as [accent], with lightness pinned to a range
-/// that keeps 4.5:1+ against the theme's surface (accent is also used as
-/// text and as a fill under white text).
+/// WCAG contrast ratio between two colours (1 to 21).
+double contrastRatio(Color a, Color b) {
+  final la = a.computeLuminance(), lb = b.computeLuminance();
+  return (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05);
+}
+
+/// Black or white, whichever reads better on [fill].
+Color onColor(Color fill) =>
+    contrastRatio(fill, Colors.black) > contrastRatio(fill, Colors.white)
+    ? Colors.black
+    : Colors.white;
+
+/// Same hue and saturation as [accent], with lightness pinned to a range and
+/// then pushed (darker on light, lighter on dark) until it holds 4.5:1
+/// against the theme's surface, since accent is also used as text.
 Color tuneAccent(Color accent, Brightness brightness) {
+  final dark = brightness == Brightness.dark;
+  final surface = dark
+      ? NocturneColors.dark.surface
+      : NocturneColors.light.surface;
   final hsl = HSLColor.fromColor(accent);
-  final l = brightness == Brightness.dark
-      ? hsl.lightness.clamp(0.68, 0.80)
-      : hsl.lightness.clamp(0.28, 0.46);
-  return hsl.withLightness(l.toDouble()).toColor();
+  var l = (dark
+          ? hsl.lightness.clamp(0.68, 0.80)
+          : hsl.lightness.clamp(0.28, 0.46))
+      .toDouble();
+  var c = hsl.withLightness(l).toColor();
+  // Terminates: lightness 0 (black) or 1 (white) clears 4.5:1 on either surface.
+  while (contrastRatio(c, surface) < 4.5) {
+    l = (dark ? l + 0.01 : l - 0.01).clamp(0.0, 1.0).toDouble();
+    c = hsl.withLightness(l).toColor();
+  }
+  return c;
 }
 
 /// Categorical hues for departments, per theme. Always paired with the
@@ -234,9 +257,7 @@ ThemeData buildNocturneTheme({
       ? NocturneColors.dark
       : NocturneColors.light;
   accent = tuneAccent(accent, brightness);
-  final onAccent = accent.computeLuminance() > 0.5
-      ? Colors.black
-      : Colors.white;
+  final onAccent = onColor(accent);
 
   final colorScheme = ColorScheme(
     brightness: brightness,
