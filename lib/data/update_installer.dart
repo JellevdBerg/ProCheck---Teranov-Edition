@@ -66,7 +66,14 @@ Future<void> installUpdate(
     if (r.exitCode != 0) throw UpdateUnsupported('Unpack failed: ${r.stderr}');
     final script = File('${work.path}\\apply.ps1');
     await script.writeAsString(_windowsScript);
-    await Process.start('powershell', [
+    // Via cmd's `start`: Dart's detached mode uses DETACHED_PROCESS, under
+    // which powershell.exe dies silently and the swap never runs.
+    await Process.start('cmd', [
+      '/c',
+      'start',
+      '',
+      '/b',
+      'powershell',
       '-NoProfile',
       '-ExecutionPolicy',
       'Bypass',
