@@ -1,4 +1,5 @@
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart' show ServicesBinding;
 
 /// Plays short, one-off UI sound effects. A completed task has nothing to
@@ -39,10 +40,13 @@ class SoundService {
     try {
       final player = _player ??= AudioPlayer()
         ..setReleaseMode(ReleaseMode.stop);
-      await player.stop();
+      // play() on a ReleaseMode.stop player already restarts from the top; a
+      // preceding stop() on a not-yet-loaded player throws on Windows and
+      // aborted the whole call, so the sound never played.
       await player.play(AssetSource(_checkoffAsset), volume: _checkoffVolume);
-    } catch (_) {
+    } catch (e) {
       // Best-effort: no audio output, unsupported platform, etc.
+      debugPrint('check-off sound failed: $e');
     }
   }
 }

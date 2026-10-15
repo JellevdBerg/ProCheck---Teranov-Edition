@@ -26,7 +26,7 @@ class UpcomingScreen extends ConsumerStatefulWidget {
   ConsumerState<UpcomingScreen> createState() => _UpcomingScreenState();
 }
 
-class _UpcomingScreenState extends ConsumerState<UpcomingScreen> {
+class _UpcomingScreenState extends ConsumerState<UpcomingScreen> with CheckedLinger {
   TaskFilter _filter = const TaskFilter();
 
   @override
@@ -43,7 +43,7 @@ class _UpcomingScreenState extends ConsumerState<UpcomingScreen> {
         tasks
             .where(
               (t) =>
-                  !t.isChecked &&
+                  (!t.isChecked || lingers(t.id)) &&
                   t.dueDate != null &&
                   t.dueDate!.isAfter(endOfToday),
             )
@@ -124,8 +124,10 @@ class _UpcomingScreenState extends ConsumerState<UpcomingScreen> {
                     itemBuilder: (context, index) {
                       final task = upcomingTasks[index];
                       return SmartViewTaskRow(
+                        key: ValueKey(task.id),
                         task: task,
                         reduceMotion: reduceMotion,
+                        onChecked: lingerChecked,
                         projectName: projectNameFor(
                           projectNames,
                           task.projectId,
