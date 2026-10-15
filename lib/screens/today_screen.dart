@@ -36,7 +36,7 @@ class TodayScreen extends ConsumerStatefulWidget {
   ConsumerState<TodayScreen> createState() => _TodayScreenState();
 }
 
-class _TodayScreenState extends ConsumerState<TodayScreen> {
+class _TodayScreenState extends ConsumerState<TodayScreen> with CheckedLinger {
   TaskFilter _filter = const TaskFilter();
 
   @override
@@ -56,6 +56,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
         tasks
             .where(
               (t) =>
+                  (!t.isChecked || lingers(t.id)) &&
                   t.dueDate != null &&
                   (_isSameDay(t.dueDate!, now) || t.dueDate!.isBefore(now)),
             )
@@ -137,8 +138,10 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                     itemBuilder: (context, index) {
                       final task = todayTasks[index];
                       return SmartViewTaskRow(
+                        key: ValueKey(task.id),
                         task: task,
                         reduceMotion: reduceMotion,
+                        onChecked: lingerChecked,
                         projectName: projectNameFor(
                           projectNames,
                           task.projectId,

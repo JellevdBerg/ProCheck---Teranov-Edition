@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,6 +10,22 @@ import '../theme/nocturne_theme.dart';
 import '../providers/settings_provider.dart';
 import 'task_tile.dart' show TaskMeta, TaskRowFocus;
 import 'wobble_checkbox.dart';
+
+/// For smart views that hide checked tasks: keeps a just-checked row listed
+/// until its check-off animation has played, then lets it drop out — the same
+/// beat the project list gives a completed task.
+mixin CheckedLinger<T extends StatefulWidget> on State<T> {
+  final _lingering = <String>{};
+
+  bool lingers(String taskId) => _lingering.contains(taskId);
+
+  void lingerChecked(String taskId) {
+    setState(() => _lingering.add(taskId));
+    Timer(WobbleCheckbox.duration, () {
+      if (mounted) setState(() => _lingering.remove(taskId));
+    });
+  }
+}
 
 /// A read-mostly task row for the Today/Upcoming/Day smart views: checkbox,
 /// title, its project's name, priority tag, due tag. No expand/subtasks —
@@ -21,11 +39,16 @@ class SmartViewTaskRow extends ConsumerWidget {
     required this.projectName,
     required this.onOpenTask,
     this.reduceMotion = false,
+    this.onChecked,
   });
 
   final Task task;
   final String projectName;
   final bool reduceMotion;
+
+  /// Called just before an unchecked task is checked, so the screen can keep
+  /// the row up for the animation (see [CheckedLinger]).
+  final ValueChanged<String>? onChecked;
   final void Function(String? projectId, String taskId, BuildContext rowContext)
   onOpenTask;
 
@@ -74,8 +97,13 @@ class SmartViewTaskRow extends ConsumerWidget {
     // available width of the task rather than stopping short at the
     // checkbox or the tags. The checkbox keeps its own tap target for
     // toggling; only taps elsewhere on the row open the task.
+    void toggle() {
+      if (!task.isChecked && !reduceMotion) onChecked?.call(task.id);
+      ref.read(tasksProvider.notifier).toggleTask(task.id);
+    }
+
     return TaskRowFocus(
-      onToggle: () => ref.read(tasksProvider.notifier).toggleTask(task.id),
+      onToggle: toggle,
       child: Builder(
         builder: (rowContext) => Material(
           color: Colors.transparent,
@@ -96,8 +124,7 @@ class SmartViewTaskRow extends ConsumerWidget {
                   final checkbox = WobbleCheckbox(
                     value: task.isChecked,
                     reduceMotion: reduceMotion,
-                    onChanged: (_) =>
-                        ref.read(tasksProvider.notifier).toggleTask(task.id),
+                    onChanged: (_) => toggle(),
                   );
                   // Meta sits at the right when there is room; otherwise it
                   // drops under the title so nothing is squeezed or clipped.
