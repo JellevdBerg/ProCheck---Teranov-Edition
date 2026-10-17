@@ -4,8 +4,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/department.dart';
+import '../models/profile.dart';
 import '../models/project.dart';
 import '../models/task.dart';
+import '../providers/department_members_provider.dart';
+import '../providers/departments_provider.dart';
 import '../providers/projects_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/tasks_provider.dart';
@@ -14,8 +18,11 @@ import '../providers/roles_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/create_task_sheet.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
+import '../widgets/panel/panel.dart';
+import '../widgets/people_plates.dart';
 import '../widgets/pop_out_removal.dart';
 import '../widgets/project_card.dart';
+import '../widgets/task_filter_bar.dart';
 import '../widgets/task_tile.dart';
 import '../widgets/text_prompt_dialog.dart';
 import 'app_shell.dart';
@@ -45,11 +52,14 @@ class ProjectsScreen extends ConsumerStatefulWidget {
 }
 
 class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
-  static const _featuredCardHeight = 256.0;
-  static const _featuredCardMinWidth = 240.0;
+  static const _featuredCardMinWidth = 280.0;
+  static const _featuredCardMaxWidth = 400.0;
 
   final _searchController = TextEditingController();
   String _query = '';
+
+  /// Department filter, offered to Operator/IT only; null = all.
+  String? _departmentId;
 
   final Map<String, GlobalKey> _unfiledTaskKeys = {};
   String? _highlightedTaskId;
@@ -143,11 +153,14 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
     _scrollToHighlightIfNeeded();
 
     final query = _query.trim().toLowerCase();
-    final projects = query.isEmpty
-        ? allProjects
-        : allProjects
-              .where((p) => p.name.toLowerCase().contains(query))
-              .toList();
+    // Operator/IT see every department, so they get a department filter.
+    final filterDepartments = ref.watch(taskFilterOptionsProvider).departments;
+    final departmentId =
+        filterDepartments.any((d) => d.id == _departmentId) ? _departmentId : null;
+    final projects = allProjects
+        .where((p) => departmentId == null || p.departmentId == departmentId)
+        .where((p) => query.isEmpty || p.name.toLowerCase().contains(query))
+        .toList();
 
     // Grouped once per build rather than once per card — each card
     // re-scanning the full task list itself turns the grid into an
@@ -174,55 +187,73 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
             NocturneSpace.s6,
           ),
           children: [
-            Row(
+            // Title left, search and "New project" right; they drop under the
+            // title when the window is too narrow for one line.
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: NocturneSpace.s3,
+              runSpacing: NocturneSpace.s3,
               children: [
-                // A single Expanded — rather than a Flexible competing for flex
-                // space with a separate Spacer — is what keeps the trailing
-                // controls flush against the right edge as the window widens;
-                // two same-priority flexible children split the leftover space
-                // between them instead of handing it all to the Spacer.
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 360),
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (value) => setState(() => _query = value),
-                        decoration: const InputDecoration(
-                          hintText: 'Search projects',
+                Text(
+                  'Projects',
+                  style: Theme.of(context).textTheme.displaySmall,
+                ),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: constraints.maxWidth - 2 * gutter,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: SizedBox(
+                          width: 280,
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: (value) => setState(() => _query = value),
+                            decoration: const InputDecoration(
+                              hintText: 'Search projects',
+                              prefixIcon: Icon(Icons.search, size: 18),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      // Only people the database lets create projects see the button.
+                      if (ref.watch(permissionsProvider).createProjects) ...[
+                        const SizedBox(width: NocturneSpace.s2),
+                        NocturneButton(
+                          label: 'New project',
+                          minWidth: 132,
+                          icon: Icons.add,
+                          variant: NocturneButtonVariant.primary,
+                          onPressed: () => _createProject(context),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                // Only people the database lets create projects see the button.
-                if (ref.watch(permissionsProvider).createProjects) ...[
-                  const SizedBox(width: NocturneSpace.s3),
-                  NocturneButton(
-                    label: 'New project',
-                    minWidth: 132,
-                    icon: Icons.add,
-                    variant: NocturneButtonVariant.primary,
-                    onPressed: () => _createProject(context),
-                  ),
-                ],
               ],
             ),
-            const SizedBox(height: NocturneSpace.s4),
+            const SizedBox(height: NocturneSpace.s6),
             if (allProjects.isNotEmpty) ...[
-              const NocturneSectionLabel('PROJECTS'),
+              if (filterDepartments.isEmpty)
+                const NocturneSectionLabel('PROJECTS')
+              else
+                ..._departmentFilter(context, allProjects, filterDepartments, departmentId),
               if (projects.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24),
                   child: Text(
-                    'No projects match "${_query.trim()}".',
+                    query.isEmpty
+                        ? 'No projects in this department.'
+                        : 'No projects match "${_query.trim()}".',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 )
               else
                 _buildGrid(context, projects, tasksByProject, reduceMotion),
-              const SizedBox(height: NocturneSpace.s4),
+              const SizedBox(height: NocturneSpace.s6),
             ],
             // Same cap as the task list below, so the button sits at the
             // list's right edge instead of the window's on wide screens.
@@ -232,29 +263,33 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                 constraints: const BoxConstraints(maxWidth: double.infinity),
                 child: Row(
                   children: [
-                    const Expanded(child: NocturneSectionLabel('PERSONAL')),
+                    const StampLabel('PERSONAL'),
+                    const SizedBox(width: NocturneSpace.s2),
+                    // Clarifies this pool's scope now that the company edition
+                    // also has project-filed tasks — these are personal errands
+                    // with no project, not "every task", muted to read as a
+                    // secondary grouping rather than the main list.
+                    Expanded(
+                      child: Text(
+                        'Not tied to any project — everyone has their own.',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: context.nocturne.neutral400,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: NocturneSpace.s2),
                     NocturneButton(
                       label: 'New task',
-                  minWidth: 132,
                       icon: Icons.add,
-                      variant: NocturneButtonVariant.primary,
                       onPressed: () => showCreateTaskSheet(context),
                     ),
                   ],
                 ),
               ),
             ),
-            // Clarifies this pool's scope now that the company edition
-            // also has project-filed tasks — these are personal errands
-            // with no project, not "every task", muted to read as a
-            // secondary grouping rather than the main list.
-            Text(
-              'Not tied to any project — everyone has their own.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: context.nocturne.neutral500,
-              ),
-            ),
-            const SizedBox(height: 8),
+            const SizedBox(height: NocturneSpace.s3),
             if (unfiledTasks.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 24),
@@ -368,17 +403,57 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
     Map<String, List<Task>> tasksByProject,
     bool reduceMotion,
   ) {
+    final departments = ref.watch(departmentsProvider).valueOrNull ?? const <Department>[];
+    final members = ref.watch(departmentMembersProvider).valueOrNull ?? const <Profile>[];
+    final directory = ref.watch(profileDirectoryProvider).valueOrNull ??
+        const <String, DirectoryEntry>{};
+    final dateFormat = ref.watch(settingsProvider).dateFormat;
+    final tokens = context.nocturne;
+
+    Widget? plateFor(Project project) {
+      final d = departments.where((d) => d.id == project.departmentId).firstOrNull;
+      return d == null
+          ? null
+          : DepartmentPlate(name: d.name, isOperator: d.isOperator, isIt: d.isIt);
+    }
+
+    List<String> assigneesFor(List<Task>? tasks) => {
+      for (final t in tasks ?? const <Task>[])
+        if (t.assigneeId != null)
+          members.where((m) => m.id == t.assigneeId).firstOrNull?.displayName ??
+              directory[t.assigneeId]?.displayName,
+    }.nonNulls.toList();
+
+    // The soonest due date among the project's open tasks.
+    Widget? dueTagFor(List<Task>? tasks) {
+      final open = (tasks ?? const <Task>[])
+          .where((t) => !t.isChecked && t.dueDate != null)
+          .toList()
+        ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
+      if (open.isEmpty) return null;
+      final tone = dueTone(open.first, tokens);
+      return NocturneTag(
+        label: formatDueLabel(open.first, dateFormat),
+        icon: Icons.access_time,
+        color: tone,
+        outline: tone == null,
+      );
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        const gap = NocturneSpace.s3;
-        // Never more columns than projects, so a few projects stretch to
-        // fill the row instead of huddling at the left.
-        final columnCapacity = (constraints.maxWidth / _featuredCardMinWidth)
-            .floor()
-            .clamp(1, math.max(1, projects.length));
-        final cardWidth =
-            (constraints.maxWidth - gap * (columnCapacity - 1)) /
-            columnCapacity;
+        const gap = NocturneSpace.s4;
+        // As many columns as fit at the minimum width; cards then share the
+        // row but never grow past the maximum, so a few projects keep a card
+        // shape instead of stretching across a wide window.
+        final columns = math.max(
+          1,
+          ((constraints.maxWidth + gap) / (_featuredCardMinWidth + gap)).floor(),
+        );
+        final cardWidth = math.min(
+          _featuredCardMaxWidth,
+          (constraints.maxWidth - gap * (columns - 1)) / columns,
+        );
 
         Widget buildCard(Project project) => PopOutRemoval(
           key: ValueKey(project.id),
@@ -387,13 +462,15 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
               ref.read(projectsProvider.notifier).deleteProject(project.id),
           builder: (context, triggerRemoval) => SizedBox(
             width: cardWidth,
-            height: _featuredCardHeight,
             child: Builder(
               builder: (cardContext) => ProjectCard(
                 project: project,
                 featured: true,
                 reduceMotion: reduceMotion,
                 tasks: tasksByProject[project.id] ?? const [],
+                departmentPlate: plateFor(project),
+                assigneeNames: assigneesFor(tasksByProject[project.id]),
+                dueTag: dueTagFor(tasksByProject[project.id]),
                 onTap: () => widget.onOpenProject(project.id, cardContext),
                 onDelete: triggerRemoval,
                 onArchive: () => _archiveProject(project),
@@ -408,10 +485,56 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
         return Wrap(
           spacing: gap,
           runSpacing: gap,
+          crossAxisAlignment: WrapCrossAlignment.start,
           children: [for (final project in projects) buildCard(project)],
         );
       },
     );
+  }
+
+  /// The "All departments" heading and the Operator/IT department filter,
+  /// one segment per department that owns a project, with counts.
+  List<Widget> _departmentFilter(
+    BuildContext context,
+    List<Project> projects,
+    List<Department> departments,
+    String? selectedId,
+  ) {
+    int count(String? id) =>
+        projects.where((p) => id == null || p.departmentId == id).length;
+    final options = <String?>[
+      null,
+      for (final d in departments)
+        if (count(d.id) > 0) d.id,
+    ];
+    final selected = departments.where((d) => d.id == selectedId).firstOrNull;
+    return [
+      Wrap(
+        spacing: NocturneSpace.s2,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          StampLabel(selected == null ? 'ALL DEPARTMENTS' : selected.name.toUpperCase()),
+          Text(
+            "You can see every department's projects.",
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: context.nocturne.neutral400,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: NocturneSpace.s3),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: NocturneSegmented<String?>(
+          options: options,
+          value: selectedId,
+          labelBuilder: (id) =>
+              '${id == null ? 'All' : departments.firstWhere((d) => d.id == id).name}  ${count(id)}',
+          onChanged: (id) => setState(() => _departmentId = id),
+        ),
+      ),
+      const SizedBox(height: NocturneSpace.s3),
+    ];
   }
 
   void _archiveProject(Project project) {

@@ -5,7 +5,9 @@ import '../models/task.dart';
 import '../theme/nocturne_theme.dart';
 import 'nocturne/nocturne_widgets.dart';
 import 'panel/panel.dart';
+import 'people_plates.dart';
 import 'sync_status_indicator.dart';
+import 'task_tile.dart' show initialsFor;
 import 'text_prompt_dialog.dart';
 
 /// The Hero tags a [ProjectCard]'s header shares with the thin bar header of
@@ -66,9 +68,10 @@ HeroFlightShuttleBuilder projectNameHeroFlightShuttleBuilder(
   };
 }
 
-/// A project tile for the home screen grid. [featured] gives the tall card
-/// with a preview of up to 4 tasks; otherwise it's a compact, name-only
-/// chip. Both reveal a delete button on hover.
+/// A project tile for the home screen grid. [featured] gives the card with
+/// its department, progress, the first open tasks and a footer of who is on
+/// it and the next due date; otherwise it's a compact, name-only chip. Both
+/// reveal an actions button on hover.
 enum _ProjectCardAction { archive, remove, favorite }
 
 class ProjectCard extends StatefulWidget {
@@ -82,6 +85,9 @@ class ProjectCard extends StatefulWidget {
     required this.onToggleFavorite,
     this.featured = false,
     this.reduceMotion = false,
+    this.departmentPlate,
+    this.assigneeNames = const [],
+    this.dueTag,
   });
 
   final Project project;
@@ -92,6 +98,15 @@ class ProjectCard extends StatefulWidget {
   final VoidCallback onToggleFavorite;
   final bool featured;
   final bool reduceMotion;
+
+  /// The owning department, shown under the name (signed-in only).
+  final Widget? departmentPlate;
+
+  /// Everyone assigned to a task in this project, shown as avatars.
+  final List<String> assigneeNames;
+
+  /// The next open task's due date, as a tag.
+  final Widget? dueTag;
 
   @override
   State<ProjectCard> createState() => _ProjectCardState();
@@ -249,11 +264,19 @@ class _ProjectCardState extends State<ProjectCard> {
   Widget _buildFeatured(BuildContext context) {
     final theme = Theme.of(context);
     final tokens = context.nocturne;
-    final preview = widget.tasks.take(4).toList();
+    // Open tasks first, so the card shows what is still to do.
+    final ordered = [
+      ...widget.tasks.where((t) => !t.isChecked),
+      ...widget.tasks.where((t) => t.isChecked),
+    ];
+    final preview = ordered.take(3).toList();
     final extra = widget.tasks.length - preview.length;
     final doneCount = widget.tasks.where((t) => t.isChecked).length;
     final totalCount = widget.tasks.length;
     final progress = totalCount == 0 ? 0.0 : doneCount / totalCount;
+    final color = context.projectColor(widget.project.colorIndex);
+    final meta = theme.textTheme.bodySmall?.copyWith(color: tokens.neutral400);
+    final avatars = widget.assigneeNames.take(4).toList();
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -263,64 +286,74 @@ class _ProjectCardState extends State<ProjectCard> {
         child: DecoratedBox(
           // The project's own colour, as a tinted edge on the plate.
           decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(
-                color: context.projectColor(widget.project.colorIndex),
-                width: 4,
-              ),
-            ),
+            border: Border(left: BorderSide(color: color, width: 3)),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(NocturneSpace.s3),
+            padding: const EdgeInsets.fromLTRB(
+              NocturneSpace.s4,
+              NocturneSpace.s3,
+              NocturneSpace.s3,
+              NocturneSpace.s3,
+            ),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _header(context, showActions: _hovering),
-                if (totalCount > 0) ...[
-                  const SizedBox(height: NocturneSpace.s2),
-                  GaugeBar(
-                    value: progress,
-                    color: context.projectColor(widget.project.colorIndex),
-                    height: 4,
-                  ),
+                if (widget.departmentPlate != null) ...[
                   const SizedBox(height: NocturneSpace.s1),
-                  Text(
-                    '$doneCount/$totalCount done',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: tokens.neutral400,
-                    ),
-                  ),
+                  widget.departmentPlate!,
                 ],
-                const SizedBox(height: NocturneSpace.s1),
-                const Divider(height: 1),
-                const SizedBox(height: NocturneSpace.s2),
-                Expanded(
-                  child: preview.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No tasks yet',
-                            style: theme.textTheme.bodySmall,
-                            textAlign: TextAlign.center,
-                          ),
-                        )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            for (final task in preview)
-                              _TaskPreviewRow(task: task),
-                            if (extra > 0)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  '+$extra more',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.hintColor,
-                                  ),
+                const SizedBox(height: NocturneSpace.s3),
+                if (totalCount > 0) ...[
+                  Row(
+                    children: [
+                      Expanded(child: GaugeBar(value: progress, color: color)),
+                      const SizedBox(width: NocturneSpace.s3),
+                      Text('$doneCount/$totalCount done', style: meta),
+                    ],
+                  ),
+                  const SizedBox(height: NocturneSpace.s3),
+                  const Divider(height: 1),
+                  for (final task in preview) _TaskPreviewRow(task: task),
+                  if (extra > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: NocturneSpace.s1),
+                      child: Text('$extra more', style: meta),
+                    ),
+                ] else
+                  Text('No tasks yet.', style: meta),
+                if (avatars.isNotEmpty || widget.dueTag != null) ...[
+                  const SizedBox(height: NocturneSpace.s3),
+                  Row(
+                    children: [
+                      for (var i = 0; i < avatars.length; i++)
+                        Align(
+                          widthFactor: i == avatars.length - 1 ? 1 : 0.75,
+                          child: Tooltip(
+                            message: avatars[i],
+                            child: DecoratedBox(
+                              // A ring in the card colour separates overlapping avatars.
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: theme.cardTheme.color ?? tokens.surface,
+                                  width: 2,
                                 ),
                               ),
-                          ],
+                              child: AvatarWell(
+                                initial: initialsFor(avatars[i]),
+                                size: 22,
+                              ),
+                            ),
+                          ),
                         ),
-                ),
+                      const Spacer(),
+                      // ignore: use_null_aware_elements (hive_generator pins analyzer <7, which can't parse `?element`)
+                      if (widget.dueTag != null) widget.dueTag!,
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

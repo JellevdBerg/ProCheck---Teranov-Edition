@@ -436,7 +436,7 @@ class _RowAssignee extends ConsumerWidget {
     return Tooltip(
       message: name ?? 'Unassigned',
       child: AvatarWell(
-        initial: _initials(name),
+        initial: initialsFor(name),
         size: 20,
         dashed: name == null,
       ),
@@ -455,7 +455,8 @@ String? _assigneeName(
   return directory[assigneeId]?.displayName;
 }
 
-String _initials(String? name) {
+/// Up to two initials for an avatar; empty for a missing name.
+String initialsFor(String? name) {
   final parts = (name ?? '')
       .trim()
       .split(RegExp(r'\s+'))
@@ -896,7 +897,7 @@ class _AssigneeAndEstimateRow extends ConsumerWidget {
     final assigneeOptions = byId.entries.toList()
       ..sort((a, b) => a.value.toLowerCase().compareTo(b.value.toLowerCase()));
     final avatar = AvatarWell(
-      initial: _initials(assignee),
+      initial: initialsFor(assignee),
       size: 24,
       dashed: assignee == null,
     );
@@ -989,7 +990,7 @@ class _AssigneeAndEstimateRow extends ConsumerWidget {
               Text('Owner', style: TextStyle(color: theme.hintColor)),
               const SizedBox(width: NocturneSpace.s2),
               AvatarWell(
-                initial: _initials(ownerName == 'You' ? null : ownerName),
+                initial: initialsFor(ownerName == 'You' ? null : ownerName),
                 size: 24,
               ),
               const SizedBox(width: 6),
