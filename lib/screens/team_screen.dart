@@ -14,6 +14,7 @@ import '../providers/roles_provider.dart';
 import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/blurred_dialog.dart';
+import '../widgets/motion_widgets.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
 import '../widgets/panel/panel.dart';
 import '../widgets/people_plates.dart';
@@ -127,7 +128,10 @@ class _TeamScreenState extends ConsumerState<TeamScreen> {
                         children: [
                           for (var i = 0; i < rows.length; i++) ...[
                             if (i > 0) const Divider(),
-                            _TeamMemberRow(
+                            StaggerIn(
+                              key: ValueKey(rows[i].member.id),
+                              index: i,
+                              child: _TeamMemberRow(
                               row: rows[i],
                               roles: roles,
                               department: multiDept
@@ -138,6 +142,7 @@ class _TeamScreenState extends ConsumerState<TeamScreen> {
                               me: me,
                               perms: perms,
                               onChanged: () => ref.invalidate(departmentMembersProvider),
+                            ),
                             ),
                           ],
                         ],

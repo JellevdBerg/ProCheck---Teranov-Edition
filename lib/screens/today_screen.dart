@@ -7,6 +7,7 @@ import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/panel/panel.dart';
 import '../widgets/project_name_lookup.dart';
+import '../widgets/motion_widgets.dart';
 import '../widgets/smart_view_task_row.dart';
 import '../widgets/task_filter_bar.dart';
 
@@ -137,8 +138,10 @@ class _TodayScreenState extends ConsumerState<TodayScreen> with CheckedLinger {
                     itemCount: todayTasks.length,
                     itemBuilder: (context, index) {
                       final task = todayTasks[index];
-                      return SmartViewTaskRow(
+                      return StaggerIn(
                         key: ValueKey(task.id),
+                        index: index,
+                        child: SmartViewTaskRow(
                         task: task,
                         reduceMotion: reduceMotion,
                         onChecked: lingerChecked,
@@ -147,6 +150,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> with CheckedLinger {
                           task.projectId,
                         ),
                         onOpenTask: onOpenTask,
+                      ),
                       );
                     },
                   ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/task_priority.dart';
 import '../../theme/nocturne_theme.dart';
+import '../motion_widgets.dart';
 import '../panel/panel.dart';
 
 /// Three button voices: `primary` (accent fill), `secondary` (outlined),
@@ -74,7 +75,9 @@ class NocturneButton extends StatelessWidget {
       ],
     );
 
-    return Opacity(
+    return PressScale(
+      enabled: onPressed != null,
+      child: Opacity(
       opacity: onPressed == null ? 0.45 : 1,
       child: Material(
         color: primary
@@ -108,6 +111,7 @@ class NocturneButton extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
   }
 }

@@ -10,9 +10,11 @@ import '../providers/projects_provider.dart';
 import '../providers/roles_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/undo_provider.dart';
+import '../theme/motion.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/command_palette.dart';
 import '../widgets/create_task_sheet.dart';
+import '../widgets/motion_widgets.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
 import '../widgets/sidebar/app_sidebar.dart';
 import '../widgets/text_prompt_dialog.dart';
@@ -111,6 +113,7 @@ class _AppShellState extends ConsumerState<AppShell>
   }
 
   void _switchScreen(AppScreen screen) {
+    Motion.screenShownAt = DateTime.now();
     setState(() {
       _screen = screen;
       _highlightUnfiledTaskId = null;
@@ -374,7 +377,12 @@ class _AppShellState extends ConsumerState<AppShell>
                           return Stack(
                             key: _mainAreaKey,
                             children: [
-                              Positioned.fill(child: _buildScreen()),
+                              Positioned.fill(
+                                child: PageSwitch(
+                                  switchKey: _screen,
+                                  child: _buildScreen(),
+                                ),
+                              ),
                               if (_detailProjectId != null)
                                 _buildDetailOverlay(constraints),
                               if (_pendingUndo != null)

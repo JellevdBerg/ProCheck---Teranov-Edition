@@ -7,6 +7,7 @@ import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/panel/panel.dart';
 import '../widgets/project_name_lookup.dart';
+import '../widgets/motion_widgets.dart';
 import '../widgets/smart_view_task_row.dart';
 import '../widgets/task_filter_bar.dart';
 import 'today_screen.dart' show screenGutter;
@@ -123,8 +124,10 @@ class _UpcomingScreenState extends ConsumerState<UpcomingScreen> with CheckedLin
                     itemCount: upcomingTasks.length,
                     itemBuilder: (context, index) {
                       final task = upcomingTasks[index];
-                      return SmartViewTaskRow(
+                      return StaggerIn(
                         key: ValueKey(task.id),
+                        index: index,
+                        child: SmartViewTaskRow(
                         task: task,
                         reduceMotion: reduceMotion,
                         onChecked: lingerChecked,
@@ -133,6 +136,7 @@ class _UpcomingScreenState extends ConsumerState<UpcomingScreen> with CheckedLin
                           task.projectId,
                         ),
                         onOpenTask: onOpenTask,
+                      ),
                       );
                     },
                   ),
