@@ -141,6 +141,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> with CheckedLinger {
                       return StaggerIn(
                         key: ValueKey(task.id),
                         index: index,
+                        isNew: isJustAdded(task.createdAt),
                         child: SmartViewTaskRow(
                         task: task,
                         reduceMotion: reduceMotion,

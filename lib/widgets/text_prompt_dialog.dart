@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../providers/settings_provider.dart';
 import 'blurred_dialog.dart';
+import 'motion_widgets.dart';
 import 'nocturne/nocturne_widgets.dart';
 
 /// A simple dialog that prompts for a single line of text.
@@ -13,18 +14,26 @@ Future<String?> showTextPromptDialog(
   String confirmLabel = 'Save',
 }) {
   final controller = TextEditingController(text: initialValue);
+  final nudge = GlobalKey<NudgeState>();
+  void submit(BuildContext context) {
+    final trimmed = controller.text.trim();
+    trimmed.isEmpty
+        ? nudge.currentState?.nudge()
+        : Navigator.of(context).pop(trimmed);
+  }
+
   return showBlurredDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
       title: Text(title),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        decoration: const InputDecoration(),
-        onSubmitted: (value) {
-          final trimmed = value.trim();
-          if (trimmed.isNotEmpty) Navigator.of(context).pop(trimmed);
-        },
+      content: Nudge(
+        key: nudge,
+        child: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(),
+          onSubmitted: (_) => submit(context),
+        ),
       ),
       actions: [
         NocturneButton(
@@ -34,10 +43,7 @@ Future<String?> showTextPromptDialog(
         NocturneButton(
           label: confirmLabel,
           variant: NocturneButtonVariant.primary,
-          onPressed: () {
-            final trimmed = controller.text.trim();
-            if (trimmed.isNotEmpty) Navigator.of(context).pop(trimmed);
-          },
+          onPressed: () => submit(context),
         ),
       ],
     ),
@@ -56,6 +62,7 @@ Future<(String, int)?> showProjectPromptDialog(
 }) {
   final controller = TextEditingController(text: initialValue);
   var selectedColor = initialColorIndex;
+  final nudge = GlobalKey<NudgeState>();
   return showBlurredDialog<(String, int)>(
     context: context,
     builder: (context) => StatefulBuilder(
@@ -65,10 +72,13 @@ Future<(String, int)?> showProjectPromptDialog(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: const InputDecoration(),
+            Nudge(
+              key: nudge,
+              child: TextField(
+                controller: controller,
+                autofocus: true,
+                decoration: const InputDecoration(),
+              ),
             ),
             const SizedBox(height: 16),
             Wrap(
@@ -106,6 +116,8 @@ Future<(String, int)?> showProjectPromptDialog(
               final trimmed = controller.text.trim();
               if (trimmed.isNotEmpty) {
                 Navigator.of(context).pop((trimmed, selectedColor));
+              } else {
+                nudge.currentState?.nudge();
               }
             },
           ),

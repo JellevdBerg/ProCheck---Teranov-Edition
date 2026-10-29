@@ -127,6 +127,7 @@ class _UpcomingScreenState extends ConsumerState<UpcomingScreen> with CheckedLin
                       return StaggerIn(
                         key: ValueKey(task.id),
                         index: index,
+                        isNew: isJustAdded(task.createdAt),
                         child: SmartViewTaskRow(
                         task: task,
                         reduceMotion: reduceMotion,

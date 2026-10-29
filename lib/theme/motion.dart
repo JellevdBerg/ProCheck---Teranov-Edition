@@ -13,6 +13,9 @@ class Motion {
   static const slow = Duration(milliseconds: 320);
   static const out = Cubic(0, 0, 0.2, 1);
 
+  /// The theme switch's circle reveal.
+  static const reveal = Duration(milliseconds: 560);
+
   /// Stiffness 840, damping ratio 0.6: about 9% overshoot, settled by 394ms.
   static const spring = SpringCurve(
     stiffness: 840,

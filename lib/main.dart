@@ -9,6 +9,7 @@ import 'data/supabase_config.dart';
 import 'providers/settings_provider.dart';
 import 'screens/splash_screen.dart';
 import 'theme/nocturne_theme.dart';
+import 'widgets/motion_widgets.dart';
 
 /// The default [MaterialScrollBehavior] only lets touch/stylus pointers
 /// drag-to-scroll — a mouse click-and-drag is deliberately excluded, since
@@ -49,6 +50,9 @@ class ProcheckApp extends ConsumerWidget {
       theme: buildNocturneTheme(brightness: Brightness.light, accent: accent),
       darkTheme: buildNocturneTheme(brightness: Brightness.dark, accent: accent),
       scrollBehavior: const AppScrollBehavior(),
+      // ThemeReveal animates the switch; a blend here would spoil its snapshot.
+      themeAnimationDuration: Duration.zero,
+      builder: (context, child) => ThemeReveal(child: child!),
       home: const SplashScreen(),
     );
   }

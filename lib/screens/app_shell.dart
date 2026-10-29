@@ -112,6 +112,10 @@ class _AppShellState extends ConsumerState<AppShell>
     super.dispose();
   }
 
+  /// Lets the drawer and scrim keep the full height their Positioned gives.
+  static Widget _passthrough(Widget? current, List<Widget> previous) =>
+      Stack(fit: StackFit.passthrough, children: [...previous, ?current]);
+
   void _switchScreen(AppScreen screen) {
     Motion.screenShownAt = DateTime.now();
     setState(() {
@@ -125,7 +129,7 @@ class _AppShellState extends ConsumerState<AppShell>
   void _showToast(String message) {
     setState(() => _toastMessage = message);
     _toastTimer?.cancel();
-    _toastTimer = Timer(const Duration(milliseconds: 1600), () {
+    _toastTimer = Timer(_Toast.life, () {
       if (mounted) setState(() => _toastMessage = null);
     });
   }
@@ -332,6 +336,7 @@ class _AppShellState extends ConsumerState<AppShell>
             builder: (context, box) {
               final compact = box.maxWidth < NocturneBreakpoints.compact;
               final drawer = compact && _drawerOpen;
+              final motionOff = Motion.reduced(context);
 
               Widget sidebar({
                 bool? forced,
@@ -394,15 +399,25 @@ class _AppShellState extends ConsumerState<AppShell>
                                     onPressed: _resolveUndo,
                                   ),
                                 ),
-                              if (_toastMessage != null)
-                                Positioned(
-                                  bottom: 20,
-                                  left: 0,
-                                  right: 0,
-                                  child: Center(
-                                    child: _Toast(message: _toastMessage!),
+                              Positioned(
+                                bottom: 20,
+                                left: 0,
+                                right: 0,
+                                child: Center(
+                                  child: AnimatedSwitcher(
+                                    duration: motionOff
+                                        ? Duration.zero
+                                        : Motion.base,
+                                    transitionBuilder: popTransition,
+                                    child: _toastMessage == null
+                                        ? const SizedBox.shrink()
+                                        : _Toast(
+                                            key: ValueKey(_toastMessage),
+                                            message: _toastMessage!,
+                                          ),
                                   ),
                                 ),
+                              ),
                             ],
                           );
                         },
@@ -430,29 +445,48 @@ class _AppShellState extends ConsumerState<AppShell>
                       main,
                     ],
                   ),
-                  if (drawer) ...[
-                    Positioned.fill(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _drawerOpen = false),
-                        child: ColoredBox(
-                          color: Colors.black.withValues(alpha: 0.4),
-                        ),
-                      ),
+                  Positioned.fill(
+                    child: AnimatedSwitcher(
+                      duration: motionOff ? Duration.zero : Motion.base,
+                      layoutBuilder: _passthrough,
+                      child: drawer
+                          ? GestureDetector(
+                              onTap: () => setState(() => _drawerOpen = false),
+                              child: ColoredBox(
+                                color: Colors.black.withValues(alpha: 0.4),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
                     ),
-                    Positioned(
-                      left: 0,
-                      top: 0,
-                      bottom: 0,
-                      child: Material(
-                        elevation: 12,
-                        child: sidebar(
-                          forced: true,
-                          closeAfter: true,
-                          onToggle: () => setState(() => _drawerOpen = false),
-                        ),
+                  ),
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    child: AnimatedSwitcher(
+                      duration: motionOff ? Duration.zero : Motion.slow,
+                      reverseDuration: motionOff ? Duration.zero : Motion.base,
+                      layoutBuilder: _passthrough,
+                      transitionBuilder: (child, animation) => SlideTransition(
+                        position: Tween(
+                          begin: const Offset(-1, 0),
+                          end: Offset.zero,
+                        ).animate(CurvedAnimation(parent: animation, curve: Motion.out)),
+                        child: child,
                       ),
+                      child: drawer
+                          ? Material(
+                              elevation: 12,
+                              child: sidebar(
+                                forced: true,
+                                closeAfter: true,
+                                onToggle: () =>
+                                    setState(() => _drawerOpen = false),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
                     ),
-                  ],
+                  ),
                 ],
               );
             },
@@ -569,7 +603,9 @@ class _UndoButton extends StatelessWidget {
 }
 
 class _Toast extends StatelessWidget {
-  const _Toast({required this.message});
+  const _Toast({super.key, required this.message});
+
+  static const life = Duration(milliseconds: 1600);
 
   final String message;
 
@@ -580,14 +616,24 @@ class _Toast extends StatelessWidget {
       color: tokens.isDark ? tokens.neutral800 : tokens.neutral100,
       elevation: 6,
       borderRadius: BorderRadius.circular(NocturneRadius.md),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        child: Text(
-          '$message (shortcut)',
-          style: TextStyle(
-            fontSize: 13,
-            color: tokens.isDark ? tokens.text : tokens.surface,
-          ),
+      clipBehavior: Clip.antiAlias,
+      child: IntrinsicWidth(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Text(
+                '$message (shortcut)',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: tokens.isDark ? tokens.text : tokens.surface,
+                ),
+              ),
+            ),
+            DrainBar(duration: life, color: context.nocturneAccent),
+          ],
         ),
       ),
     );

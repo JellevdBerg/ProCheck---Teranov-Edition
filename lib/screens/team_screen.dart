@@ -52,7 +52,24 @@ class _TeamScreenState extends ConsumerState<TeamScreen> {
     final departments = ref.watch(departmentsProvider).valueOrNull ?? const [];
 
     return membersAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => ListView(
+        padding: const EdgeInsets.all(NocturneSpace.s6),
+        children: [
+          for (var i = 0; i < 5; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: NocturneSpace.s3),
+              child: Row(
+                children: [
+                  const Skeleton(width: 28, height: 28),
+                  const SizedBox(width: NocturneSpace.s3),
+                  Skeleton(width: 120.0 + 24 * (i % 3)),
+                  const Spacer(),
+                  const Skeleton(width: 64),
+                ],
+              ),
+            ),
+        ],
+      ),
       error: (error, _) => Center(
         child: PanelNotice('Could not load team: $error', isError: true),
       ),

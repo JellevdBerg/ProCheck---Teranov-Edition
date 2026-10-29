@@ -335,11 +335,15 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                         itemBuilder: (context, i) {
                           final task = unfiledTasks[i];
                           final highlighted = task.id == _highlightedTaskId;
-                          return PopOutRemoval(
+                          // The list item key moves to StaggerIn, the outermost widget.
+                          return StaggerIn(
                             key: _unfiledTaskKeys.putIfAbsent(
                               task.id,
                               () => GlobalKey(),
                             ),
+                            index: i,
+                            isNew: isJustAdded(task.createdAt),
+                            child: PopOutRemoval(
                             reduceMotion: reduceMotion,
                             shrinkWidth: false,
                             onRemoved: () => ref
@@ -382,6 +386,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                                     }),
                                   ),
                                 ),
+                            ),
                           );
                         },
                       ),
