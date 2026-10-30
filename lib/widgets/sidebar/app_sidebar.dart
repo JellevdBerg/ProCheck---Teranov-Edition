@@ -23,6 +23,7 @@ import '../../screens/login_screen.dart';
 import '../../theme/nocturne_theme.dart';
 import '../app_logo.dart';
 import '../blurred_dialog.dart';
+import '../motion_widgets.dart';
 import '../panel/panel.dart';
 import '../people_plates.dart';
 import '../project_name_lookup.dart';
@@ -194,7 +195,11 @@ class AppSidebar extends ConsumerWidget {
           // variable-height part of an otherwise fixed sidebar.
           Expanded(
             child: SingleChildScrollView(
-              child: Column(
+              child: SlidingHighlight(
+                activeId: currentScreen,
+                color: accent.withValues(alpha: tokens.isDark ? 0.16 : 0.10),
+                radius: BorderRadius.circular(NocturneRadius.md),
+                child: Column(
                 children: [
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -354,6 +359,7 @@ class AppSidebar extends ConsumerWidget {
                     calendar,
                   ],
                 ],
+              ),
               ),
             ),
           ),
@@ -920,12 +926,14 @@ class _NavRow extends StatelessWidget {
       ],
     );
 
-    return GestureDetector(
+    // Inside a SlidingHighlight the active row's fill is the shared highlight.
+    final highlightKey = lit ? SlidingHighlight.keyOf(context) : null;
+    final tile = GestureDetector(
       onSecondaryTapDown: onSecondaryTapDown,
       child: Tooltip(
         message: expanded ? '' : label,
         child: Material(
-          color: lit
+          color: lit && highlightKey == null
               ? accent!.withValues(alpha: tokens.isDark ? 0.16 : 0.10)
               : Colors.transparent,
           borderRadius: radius,
@@ -944,5 +952,9 @@ class _NavRow extends StatelessWidget {
         ),
       ),
     );
+    final pressable = PressScale(child: tile);
+    return highlightKey == null
+        ? pressable
+        : KeyedSubtree(key: highlightKey, child: pressable);
   }
 }

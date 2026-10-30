@@ -19,6 +19,7 @@ import 'due_date_calendar_dialog.dart';
 import 'nocturne/nocturne_widgets.dart';
 import 'notes_field.dart';
 import 'panel/panel.dart';
+import 'motion_widgets.dart';
 import 'people_plates.dart';
 import 'sync_status_indicator.dart';
 import 'wobble_checkbox.dart';
@@ -192,13 +193,11 @@ class _TaskTileState extends ConsumerState<TaskTile> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Flexible(
-                      child: Text(
+                      child: AnimatedStrike(
                         task.title,
+                        struck: task.isChecked,
                         style: TextStyle(
                           color: task.isChecked ? tokens.neutral500 : tokens.text,
-                          decoration: task.isChecked
-                              ? TextDecoration.lineThrough
-                              : null,
                         ),
                       ),
                     ),

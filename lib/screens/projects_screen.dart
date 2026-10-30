@@ -17,6 +17,7 @@ import '../providers/undo_provider.dart';
 import '../providers/roles_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../widgets/create_task_sheet.dart';
+import '../widgets/motion_widgets.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
 import '../widgets/panel/panel.dart';
 import '../widgets/people_plates.dart';
@@ -334,11 +335,15 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                         itemBuilder: (context, i) {
                           final task = unfiledTasks[i];
                           final highlighted = task.id == _highlightedTaskId;
-                          return PopOutRemoval(
+                          // The list item key moves to StaggerIn, the outermost widget.
+                          return StaggerIn(
                             key: _unfiledTaskKeys.putIfAbsent(
                               task.id,
                               () => GlobalKey(),
                             ),
+                            index: i,
+                            isNew: isJustAdded(task.createdAt),
+                            child: PopOutRemoval(
                             reduceMotion: reduceMotion,
                             shrinkWidth: false,
                             onRemoved: () => ref
@@ -381,6 +386,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                                     }),
                                   ),
                                 ),
+                            ),
                           );
                         },
                       ),
@@ -486,7 +492,14 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
           spacing: gap,
           runSpacing: gap,
           crossAxisAlignment: WrapCrossAlignment.start,
-          children: [for (final project in projects) buildCard(project)],
+          children: [
+            for (var i = 0; i < projects.length; i++)
+              StaggerIn(
+                key: ValueKey(projects[i].id),
+                index: i,
+                child: buildCard(projects[i]),
+              ),
+          ],
         );
       },
     );

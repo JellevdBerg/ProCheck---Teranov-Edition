@@ -9,6 +9,7 @@ import '../providers/tasks_provider.dart';
 import '../theme/nocturne_theme.dart';
 import '../providers/settings_provider.dart';
 import 'task_tile.dart' show TaskMeta, TaskRowFocus;
+import 'motion_widgets.dart';
 import 'wobble_checkbox.dart';
 
 /// For smart views that hide checked tasks: keeps a just-checked row listed
@@ -61,15 +62,15 @@ class SmartViewTaskRow extends ConsumerWidget {
         task.priority != TaskPriority.none ||
         task.hasSubtasks ||
         task.assigneeId != null;
-    final titleText = Text(
+    final titleText = AnimatedStrike(
       task.title,
+      struck: task.isChecked,
       maxLines: compact ? 1 : null,
       overflow: compact ? TextOverflow.ellipsis : null,
       style: TextStyle(
         fontSize: 13,
         height: 20 / 13,
         color: task.isChecked ? tokens.neutral500 : tokens.text,
-        decoration: task.isChecked ? TextDecoration.lineThrough : null,
       ),
     );
     final projectText = Text(

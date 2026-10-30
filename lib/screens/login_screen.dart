@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/auth_provider.dart';
 import '../widgets/app_logo.dart';
+import '../widgets/motion_widgets.dart';
 import '../widgets/nocturne/nocturne_widgets.dart';
 import '../widgets/panel/panel.dart';
 import 'app_shell.dart';
@@ -22,6 +23,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _nudge = GlobalKey<NudgeState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
 
@@ -36,7 +38,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      _nudge.currentState?.nudge();
+      return;
+    }
     setState(() {
       _isSubmitting = true;
       _errorText = null;
@@ -53,6 +58,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .pushReplacement(MaterialPageRoute(builder: (_) => const AppShell()));
     } on AuthException catch (e) {
       setState(() => _errorText = e.message);
+      _nudge.currentState?.nudge();
     } catch (e) {
       // supabase_flutter can throw its own exception types here (e.g. a
       // network-level AuthException that isn't an AuthApiException, or a
@@ -60,6 +66,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // this, those fell through silently: the spinner reset and nothing
       // else happened, with no indication anything had gone wrong.
       setState(() => _errorText = 'Sign-in failed: $e');
+      _nudge.currentState?.nudge();
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -74,7 +81,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           padding: const EdgeInsets.all(16),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
-            child: PanelCard(
+            child: Nudge(
+              key: _nudge,
+              child: PanelCard(
               padding: const EdgeInsets.all(32),
               child: Form(
                 key: _formKey,
@@ -130,21 +139,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         NocturneButton(
                           label: 'Sign in',
                           variant: NocturneButtonVariant.primary,
-                          onPressed: _isSubmitting ? null : _submit,
+                          loading: _isSubmitting,
+                          onPressed: _submit,
                         ),
-                        if (_isSubmitting) ...[
-                          const SizedBox(width: 12),
-                          const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ],
                       ],
                     ),
                   ],
                 ),
               ),
+            ),
             ),
           ),
         ),

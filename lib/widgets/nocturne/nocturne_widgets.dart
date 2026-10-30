@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../models/task_priority.dart';
 import '../../theme/nocturne_theme.dart';
+import '../../theme/motion.dart';
+import '../motion_widgets.dart';
 import '../panel/panel.dart';
 
 /// Three button voices: `primary` (accent fill), `secondary` (outlined),
@@ -19,7 +21,11 @@ class NocturneButton extends StatelessWidget {
     this.color,
     this.dense = false,
     this.minWidth,
+    this.loading = false,
   });
+
+  /// Swaps the label for a spinner (same width) and ignores taps.
+  final bool loading;
 
   /// Optional minimum width so sibling actions (New project / New task /
   /// New template) come out the same size.
@@ -50,7 +56,7 @@ class NocturneButton extends StatelessWidget {
     final fg = primary ? onAccent : (ghost && color != null ? accent : tokens.text);
     final radius = BorderRadius.circular(NocturneRadius.md);
 
-    final child = Row(
+    Widget child = Row(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -74,7 +80,37 @@ class NocturneButton extends StatelessWidget {
       ],
     );
 
-    return Opacity(
+    final labelled = child;
+    child = Stack(
+      alignment: Alignment.center,
+      children: [
+        AnimatedOpacity(
+          opacity: loading ? 0 : 1,
+          duration: Motion.base,
+          curve: Motion.out,
+          child: labelled,
+        ),
+        // Built only while loading: an idle spinner would tick forever.
+        if (loading)
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: 1),
+            duration: Motion.base,
+            curve: Motion.out,
+            builder: (context, t, spinner) => Opacity(
+              opacity: t,
+              child: Transform.scale(scale: 0.6 + 0.4 * t, child: spinner),
+            ),
+            child: SizedBox.square(
+              dimension: 14,
+              child: CircularProgressIndicator(strokeWidth: 2, color: fg),
+            ),
+          ),
+      ],
+    );
+
+    return PressScale(
+      enabled: onPressed != null && !loading,
+      child: Opacity(
       opacity: onPressed == null ? 0.45 : 1,
       child: Material(
         color: primary
@@ -87,7 +123,7 @@ class NocturneButton extends StatelessWidget {
               : BorderSide(color: tokens.borderStrong),
         ),
         child: InkWell(
-          onTap: onPressed,
+          onTap: loading ? null : onPressed,
           borderRadius: radius,
           hoverColor: primary
               ? Colors.white.withValues(alpha: 0.12)
@@ -108,6 +144,7 @@ class NocturneButton extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
   }
 }
@@ -239,12 +276,21 @@ class NocturneSegmented<T> extends StatelessWidget {
         // every option.
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var i = 0; i < options.length; i++)
-                _segment(context, tokens, accent, options[i]),
-            ],
+          child: SlidingHighlight(
+            activeId: value,
+            color: accent.withValues(alpha: tokens.isDark ? 0.18 : 0.12),
+            radius: BorderRadius.circular(NocturneRadius.sm + 1),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < options.length; i++)
+                  // Builder: the segment needs a context under the highlight.
+                  Builder(
+                    builder: (context) =>
+                        _segment(context, tokens, accent, options[i]),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -259,10 +305,9 @@ class NocturneSegmented<T> extends StatelessWidget {
   ) {
     final selected = value == option;
     final fg = selected ? accent : tokens.neutral300;
-    return Material(
-      color: selected
-          ? accent.withValues(alpha: tokens.isDark ? 0.18 : 0.12)
-          : Colors.transparent,
+    // The selected fill is the SlidingHighlight behind the row.
+    final segment = Material(
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(NocturneRadius.sm + 1),
       child: InkWell(
         onTap: () => onChanged(option),
@@ -292,6 +337,10 @@ class NocturneSegmented<T> extends StatelessWidget {
         ),
       ),
     );
+    final pressable = PressScale(child: segment);
+    return selected
+        ? KeyedSubtree(key: SlidingHighlight.keyOf(context), child: pressable)
+        : pressable;
   }
 }
 
