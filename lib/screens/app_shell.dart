@@ -114,7 +114,11 @@ class _AppShellState extends ConsumerState<AppShell>
 
   /// Lets the drawer and scrim keep the full height their Positioned gives.
   static Widget _passthrough(Widget? current, List<Widget> previous) =>
-      Stack(fit: StackFit.passthrough, children: [...previous, ?current]);
+      Stack(
+        fit: StackFit.passthrough,
+        // ignore: use_null_aware_elements, CI's hive_generator analyzer can't parse `?element`
+        children: [...previous, if (current != null) current],
+      );
 
   void _switchScreen(AppScreen screen) {
     Motion.screenShownAt = DateTime.now();

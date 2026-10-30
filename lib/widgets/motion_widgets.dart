@@ -145,7 +145,11 @@ class PageSwitch extends StatelessWidget {
       switchInCurve: Motion.out,
       switchOutCurve: Curves.easeIn,
       layoutBuilder: (current, previous) =>
-          Stack(fit: StackFit.expand, children: [...previous, ?current]),
+          Stack(
+            fit: StackFit.expand,
+            // ignore: use_null_aware_elements, CI's hive_generator analyzer can't parse `?element`
+            children: [...previous, if (current != null) current],
+          ),
       transitionBuilder: (child, animation) => FadeTransition(
         opacity: animation,
         child: AnimatedBuilder(
